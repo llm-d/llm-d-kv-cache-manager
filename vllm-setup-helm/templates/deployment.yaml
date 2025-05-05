@@ -28,8 +28,10 @@ spec:
       volumes:
         - name: vllm-p2p-storage
           persistentVolumeClaim:
-            claimName: {{ include "chart.pvcName" . }}
+            claimName: {{ if .Values.persistence.name }}{{ .Values.persistence.name }}{{ else }}{{ include "chart.pvcName" . }}{{ end }}
     {{- end }}
+      affinity:
+        {{- toYaml .Values.vllm.affinity | nindent 6 }}
       containers:
         - name: vllm
           image: {{ include "chart.vllmImage" . }}
@@ -44,9 +46,12 @@ spec:
               --host 0.0.0.0 \
               --port 8000 \
               --trust-remote-code \
-              --enable-chunked-prefill \
-              --max_num_batched_tokens 1024 \
-              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+              {{- if .Values.vllm.enableChunkedPrefill }}--enable-chunked-prefill{{- else }}--no-enable-chunked-prefill{{- end }} \
+              --max_num_batched_tokens {{ .Values.vllm.maxNumBatchedTokens }} \
+              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}' \
+              {{- if .Values.vllm.gpuMemoryUtilization }}--gpu-memory-utilization {{ .Values.vllm.gpuMemoryUtilization }} {{- end }} \
+              {{- if .Values.vllm.tensorParallelSize }}--tensor-parallel-size {{ .Values.vllm.tensorParallelSize }} {{- end }} \
+              {{- if .Values.vllm.model.maxModelLen }}--max_model_len {{ .Values.vllm.model.maxModelLen }}{{- end }}
           ports:
             - name: http
               containerPort: 8000

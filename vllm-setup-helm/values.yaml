@@ -24,7 +24,18 @@ vllm:
     # -- Label used for Kubernetes resources related to this model instance
     label: llama3-8b-instruct
     # -- Maximum model length parameter for VLLM
-    maxModelLen: 16384
+    maxModelLen: null
+
+  # -- Maximum number of batched tokens for VLLM
+  maxNumBatchedTokens: 1024
+
+  # -- Enable or disable chunked prefill
+  enableChunkedPrefill: true
+
+  # -- GPU memory utilization (optional, e.g., 0.95)
+  gpuMemoryUtilization: null
+  # -- Tensor parallel size (optional, e.g., 2)
+  tensorParallelSize: null
 
   # -- VLLM container resource requests and limits
   resources:
@@ -38,6 +49,9 @@ vllm:
       memory: 40Gi
       # -- GPU request (must match limit for whole GPUs)
       nvidia.com/gpu: '1'
+
+  # -- Node affinity configuration
+  affinity: {}
 
   # -- Liveness probe configuration
   livenessProbe:
@@ -70,7 +84,6 @@ vllm:
     LMCACHE_LOCAL_CPU: 'True'
     LMCACHE_ENABLE_DEBUG: 'True'
     LMCACHE_MAX_LOCAL_CPU_SIZE: '40'
-    LMCACHE_ENABLE_P2P: 'True'
     # LMCACHE_LOOKUP_URL will be set automatically based on redis service name
     # LMCACHE_DISTRIBUTED_URL will be set automatically based on pod IP
 
@@ -91,8 +104,8 @@ secret:
 persistence:
   # -- Enable persistence using a PersistentVolumeClaim
   enabled: false
-  # -- PVC name (will be templated)
-  # name: vllm-p2p-mistral-1-storage-claim
+  # -- PVC name (if not set, it will be templated)
+  name: ""
   # -- PVC access mode
   accessModes:
     - ReadWriteOnce
@@ -100,7 +113,7 @@ persistence:
   size: 50Gi
   # -- Optional: Storage class name for the PVC
   storageClassName: "ibmc-vpc-block-10iops-tier"
-  # -- Mount path inside the VLLM container
+  # -- Mount path inside the VLLM container for Hugging Face cache
   mountPath: /data
 
 # -- Redis Lookup Server Configuration
