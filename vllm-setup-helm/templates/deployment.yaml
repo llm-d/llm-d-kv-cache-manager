@@ -46,12 +46,20 @@ spec:
               --host 0.0.0.0 \
               --port 8000 \
               --trust-remote-code \
-              {{- if .Values.vllm.enableChunkedPrefill }}--enable-chunked-prefill{{- else }}--no-enable-chunked-prefill{{- end }} \
+              {{- if .Values.vllm.enableChunkedPrefill }}
+              --enable-chunked-prefill{{- else }}--no-enable-chunked-prefill \
+              {{- end }}
               --max_num_batched_tokens {{ .Values.vllm.maxNumBatchedTokens }} \
-              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}' \
-              {{- if .Values.vllm.gpuMemoryUtilization }}--gpu-memory-utilization {{ .Values.vllm.gpuMemoryUtilization }} {{- end }} \
-              {{- if .Values.vllm.tensorParallelSize }}--tensor-parallel-size {{ .Values.vllm.tensorParallelSize }} {{- end }} \
-              {{- if .Values.vllm.model.maxModelLen }}--max_model_len {{ .Values.vllm.model.maxModelLen }}{{- end }}
+              {{- if .Values.vllm.gpuMemoryUtilization }}
+              --gpu-memory-utilization {{ .Values.vllm.gpuMemoryUtilization }} \
+              {{- end }}
+              {{- if .Values.vllm.tensorParallelSize }}
+              --tensor-parallel-size {{ .Values.vllm.tensorParallelSize }} \
+              {{- end }}
+              {{- if .Values.vllm.model.maxModelLen }}
+              --max_model_len {{ .Values.vllm.model.maxModelLen }} \
+              {{- end }}
+              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
           ports:
             - name: http
               containerPort: 8000
