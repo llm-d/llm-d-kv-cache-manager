@@ -187,30 +187,32 @@ uninstall-k8s: check-kubectl check-kustomize check-envsubst ## Uninstall from Ku
 
 .PHONY: install-openshift
 install-openshift: check-kubectl check-kustomize check-envsubst ## Install on OpenShift
-	@echo $$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION
-	@echo "Creating namespace $(NAMESPACE)..."
-	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
-	@echo "Deploying common resources from deploy/ ..."
-	# Build and substitute the base manifests from deploy, then apply them
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
-	@echo "Waiting for pod to become ready..."
-	sleep 5
-	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
-	echo "OpenShift installation complete."; \
-	echo "To use the app, run:"; \
-	echo "alias $(PROJECT_NAME)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(PROJECT_NAME)'"
+#	@echo $$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION
+#	@echo "Creating namespace $(NAMESPACE)..."
+#	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
+#	@echo "Deploying common resources from deploy/ ..."
+#	# Build and substitute the base manifests from deploy, then apply them
+#	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
+#	@echo "Waiting for pod to become ready..."
+#	sleep 5
+#	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
+#	echo "OpenShift installation complete."; \
+#	echo "To use the app, run:"; \
+#	echo "alias $(PROJECT_NAME)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(PROJECT_NAME)'"
+	exit 0
 
 .PHONY: uninstall-openshift
 uninstall-openshift: check-kubectl check-kustomize check-envsubst ## Uninstall from OpenShift
-	@echo "Removing resources from OpenShift..."
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl delete --force -f - || true
-	# @if kubectl api-resources --api-group=route.openshift.io | grep -q Route; then \
-	#   envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
-	# fi
-	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
-	echo "Deleting pod: $$POD"; \
-	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
-	echo "OpenShift uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+#	@echo "Removing resources from OpenShift..."
+#	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' | kubectl delete --force -f - || true
+#	# @if kubectl api-resources --api-group=route.openshift.io | grep -q Route; then \
+#	#   envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_TAG_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
+#	# fi
+#	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
+#	echo "Deleting pod: $$POD"; \
+#	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
+#	echo "OpenShift uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+	exit 0
 
 ### RBAC Targets (using kustomize and envsubst)
 
