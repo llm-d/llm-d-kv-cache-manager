@@ -14,7 +14,7 @@ vllm:
     # -- VLLM image repository
     repository: quay.io/llm-d/llm-d-dev
     # -- VLLM image tag (overrides Chart.yaml appVersion if set)
-    tag: "0.0.4-amd64"
+    tag: "lmcache-0.0.6-amd64"
     # -- VLLM image pull policy
     pullPolicy: IfNotPresent
 

@@ -24,14 +24,14 @@ spec:
         {{ .Values.vllm.poolLabelKey }}: {{ .Values.vllm.poolLabelValue }}
         {{- end }}
     spec:
-    {{- if .Values.persistence.enabled }}
+      {{- if .Values.persistence.enabled }}
       volumes:
         - name: vllm-p2p-storage
           persistentVolumeClaim:
             claimName: {{ if .Values.persistence.name }}{{ .Values.persistence.name }}{{ else }}{{ include "chart.pvcName" . }}{{ end }}
-    {{- end }}
+      {{- end }}
       affinity:
-        {{- toYaml .Values.vllm.affinity | nindent 6 }}
+        {{- toYaml .Values.vllm.affinity | nindent 8 }}
       containers:
         - name: vllm
           image: {{ include "chart.vllmImage" . }}
