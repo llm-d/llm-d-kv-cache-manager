@@ -23,9 +23,20 @@ helm upgrade --install vllm-p2p ./vllm-setup-helm \
 
 See [values](values.yaml) for all configurable parameters.
 
+### LMCache Configuration
+
+- **Disabling LMCache**
+To disable LMCache completely, remove `--kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'` from the vLLM deployment’s spec.containers[0].args
+
+- **Disabling Indexing (keeps only offloading enabled)**
+Remove the `LMCACHE_ENABLE_P2P` and the `LMCACHE_LOOKUP_URL` env vars
+
+TODO: make configurable
+
 ### Cleanup
 Uninstalling:
 ```
 helm uninstall vllm-p2p \
   --namespace $NAMESPACE
 ```
+
