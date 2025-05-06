@@ -40,14 +40,10 @@ vllm:
   # -- VLLM container resource requests and limits
   resources:
     limits:
-      # -- GPU limit (e.g., '1')
       nvidia.com/gpu: '1'
     requests:
-      # -- CPU request (e.g., '10')
       cpu: '10'
-      # -- Memory request (e.g., 40Gi)
       memory: 40Gi
-      # -- GPU request (must match limit for whole GPUs)
       nvidia.com/gpu: '1'
 
   # -- Node affinity configuration
@@ -115,6 +111,15 @@ persistence:
   storageClassName: "ibmc-vpc-block-10iops-tier"
   # -- Mount path inside the VLLM container for Hugging Face cache
   mountPath: /data
+
+# -- Configuration for /dev/shm volume
+dshm:
+  # -- Use an empty directory for /dev/shm
+  useEmptyDir: false
+  # -- Size limit for the empty directory (only applicable if useEmptyDir is true)
+  sizeLimit: 8Gi
+  # -- PVC name for /dev/shm (overrides useEmptyDir if set)
+  pvcName: ""
 
 # -- Redis Lookup Server Configuration
 redis:

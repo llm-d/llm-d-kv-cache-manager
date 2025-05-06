@@ -24,12 +24,22 @@ spec:
         {{ .Values.vllm.poolLabelKey }}: {{ .Values.vllm.poolLabelValue }}
         {{- end }}
     spec:
-      {{- if .Values.persistence.enabled }}
       volumes:
+        {{- if .Values.persistence.enabled }}
         - name: vllm-p2p-storage
           persistentVolumeClaim:
             claimName: {{ if .Values.persistence.name }}{{ .Values.persistence.name }}{{ else }}{{ include "chart.pvcName" . }}{{ end }}
-      {{- end }}
+        {{- end }}
+        {{- if .Values.dshm.useEmptyDir }}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.dshm.sizeLimit }}
+        {{- else if .Values.dshm.pvcName }}
+        - name: dshm
+          persistentVolumeClaim:
+            claimName: {{ .Values.dshm.pvcName }}
+        {{- end }}
       affinity:
         {{- toYaml .Values.vllm.affinity | nindent 8 }}
       containers:
@@ -47,7 +57,7 @@ spec:
               --port 8000 \
               --trust-remote-code \
               {{- if .Values.vllm.enableChunkedPrefill }}
-              --enable-chunked-prefill{{- else }}--no-enable-chunked-prefill \
+              --enable-chunked-prefill \{{- else }}--no-enable-chunked-prefill \
               {{- end }}
               --max_num_batched_tokens {{ .Values.vllm.maxNumBatchedTokens }} \
               {{- if .Values.vllm.gpuMemoryUtilization }}
@@ -59,7 +69,7 @@ spec:
               {{- if .Values.vllm.model.maxModelLen }}
               --max_model_len {{ .Values.vllm.model.maxModelLen }} \
               {{- end }}
-              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}' \
           ports:
             - name: http
               containerPort: 8000
@@ -93,15 +103,16 @@ spec:
               value: {{ $val | quote }}
             {{- end }}
           resources:
-            limits:
-              {{- with .Values.vllm.resources.limits }}
-              {{- toYaml . | nindent 14 }}
-              {{- end }}
-            requests:
-              {{- with .Values.vllm.resources.requests }}
-              {{- toYaml . | nindent 14 }}
-              {{- end }}
-          {{- if .Values.persistence.enabled }}
+            {{- toYaml .Values.vllm.resources | nindent 12 }}
+          {{- if or .Values.dshm.useEmptyDir .Values.dshm.pvcName }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: vllm-p2p-storage
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            - name: dshm
+              mountPath: /dev/shm
+          {{- else if .Values.persistence.enabled }}
           volumeMounts:
             - name: vllm-p2p-storage
               mountPath: {{ .Values.persistence.mountPath }}
