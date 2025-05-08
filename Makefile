@@ -1,3 +1,17 @@
+# Copyright 2025 The llm-d Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 SHELL := /usr/bin/env bash
 
 # Defaults
@@ -8,6 +22,7 @@ IMAGE_TAG_BASE ?= quay.io/llm-d/$(PROJECT_NAME)
 IMG = $(IMAGE_TAG_BASE):$(DEV_VERSION)
 NAMESPACE ?= hc4ai-operator
 
+TOOLS_DIR := $(shell pwd)/hack/tools
 CONTAINER_TOOL := $(shell command -v docker >/dev/null 2>&1 && echo docker || command -v podman >/dev/null 2>&1 && echo podman || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
 PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
@@ -45,6 +60,15 @@ post-deploy-test: ## Run post deployment tests
 lint: check-golangci-lint ## Run lint
 	@printf "\033[33;1m==== Running linting ====\033[0m\n"
 	golangci-lint run
+
+$(TOOLS_DIR)/verify_boilerplate.py:
+	mkdir -p $(TOOLS_DIR)
+	curl --fail --retry 3 -L -o $(TOOLS_DIR)/verify_boilerplate.py https://raw.githubusercontent.com/kubernetes/repo-infra/master/hack/verify_boilerplate.py
+	chmod +x $(TOOLS_DIR)/verify_boilerplate.py
+
+.PHONY: verify-boilerplate # TODO: add to CI
+verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
+	$(TOOLS_DIR)/verify_boilerplate.py --boilerplate-dir=hack/boilerplate --skip docs
 
 .PHONY: unit-test
 unit-test: tokenizer-build

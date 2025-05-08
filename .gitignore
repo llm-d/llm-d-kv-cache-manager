@@ -55,6 +55,7 @@ _cgo_*
 
 # Gopls and tools
 .gopls/
+hack/tools
 
 # Tokenizer binaries
 lib
