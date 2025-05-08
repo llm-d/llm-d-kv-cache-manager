@@ -17,7 +17,10 @@ limitations under the License.
 //nolint:testpackage // allow tests to run in the same package
 package e2e
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // TestBasicE2E verifies that the indexer initially returns no scores for the first prompt and
 // correct scores for the second request.
@@ -118,4 +121,38 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Equal(pods[s.Pod1IP], 10, "expected pod score to equal 10")
+}
+
+func (s *KVCacheSuite) TestLongPrefixExpansion() {
+	base := "The quick brown fox jumps over the lazy dog"
+	modelName := defaultModelName
+	s.T().Logf("s.config.PrefixStoreConfig: %+v", s.config.PrefixStoreConfig.LRUStoreConfig)
+	// Generate long prompts
+	shortPrompt := strings.Repeat(base, 2)
+	midPrompt := strings.Repeat(base, 5) // ~900 tokens
+
+	// longPrompt := strings.Repeat(base, 10) // ~4500 tokens
+	// Insert only short prompt into Redis
+	blockKeys := s.promptToRedisKeys(shortPrompt, modelName)
+	fakePodList := []string{s.Pod1IP}
+	s.setRedisMockEntries(blockKeys, fakePodList)
+
+	// Test 1: short prompt (should return no pod scores yet)
+	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
+	s.Require().NoError(err)
+	s.T().Logf("Short prompt scores: %+v", pods)
+	s.Empty(pods, "expected no pod scores")
+	time.Sleep(5 * time.Second)
+
+	// Test 2: mid prompt (should return partial match if indexer picks it up)
+	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
+	s.Require().NoError(err)
+	s.T().Logf("Mid prompt scores: %+v", pods)
+	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
+
+	// Test 3: long prompt (should return higher score)
+	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
+	s.Require().NoError(err)
+	s.T().Logf("mid prompt second time scores: %+v", pods)
+	s.True(len(pods) > 0, "expected at least one pod score for long prompt")
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package prefixstore
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -84,10 +85,10 @@ func NewLRUTokenStore(config *Config) (Indexer, error) {
 // indexer for a given model.
 // The function assumes tokens and offsets are of the same length.
 // The function assumes that tokens will not be mutated after the call.
-func (c *LRUTokenStore) AddTokenization(modelName string, text string, tokens []uint32,
+func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens []uint32,
 	offsets []tokenizers.Offset,
 ) error {
-	if text == "" || len(tokens) == 0 {
+	if prompt == "" || len(tokens) == 0 {
 		return nil
 	}
 
@@ -106,22 +107,29 @@ func (c *LRUTokenStore) AddTokenization(modelName string, text string, tokens []
 		c.store[modelName] = cache
 	}
 
+	promptBytes := []byte(prompt)
 	tokenIdxIterator := 0
+	previousHash := uint64(0)
+	digest := xxhash.New()
+
 	// Chunk the text into blocks and populate the cache
-	for start := 0; start < len(text); start += c.blockSize {
+	for start := 0; start < len(promptBytes); start += c.blockSize {
 		end := start + c.blockSize
-		if end > len(text) {
-			end = len(text)
+		if end > len(promptBytes) {
+			end = len(promptBytes)
 		}
 
 		// Compute the hash for the current block
-		digest := xxhash.New()
-		//nolint:gocritic // Cast inside
-		if _, err := digest.Write([]byte(text[start:end])); err != nil {
+		digest.Reset()
+		if err := binary.Write(digest, binary.LittleEndian, previousHash); err != nil {
+			return fmt.Errorf("failed to add token: %w", err)
+		}
+		if _, err := digest.Write(promptBytes[start:end]); err != nil {
 			return fmt.Errorf("failed to add token: %w", err)
 		}
 
 		blockHash := digest.Sum64()
+		previousHash = blockHash
 
 		// Only add tokens with [_, high] offset associated with the chunk range.
 		// If a token's [low, _] index is less than the start, it is OK as long as
@@ -156,21 +164,29 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) []u
 
 	containedTokens := []uint32{}
 
+	promptBytes := []byte(prompt)
+	previousHash := uint64(0)
+	digest := xxhash.New()
+
 	// Chunk the text into blocks and populate the cache
-	for i := 0; i < len(prompt); i += c.blockSize {
+	for i := 0; i < len(promptBytes); i += c.blockSize {
 		end := i + c.blockSize
-		if end > len(prompt) {
-			end = len(prompt)
+		if end > len(promptBytes) {
+			end = len(promptBytes)
 		}
 
 		// Compute the hash for the current block
-		digest := xxhash.New()
-		//nolint:gocritic // Cast inside
-		if _, err := digest.Write([]byte(prompt[i:end])); err != nil {
+		digest.Reset()
+		if err := binary.Write(digest, binary.LittleEndian, previousHash); err != nil {
+			return containedTokens
+		}
+		if _, err := digest.Write(promptBytes[i:end]); err != nil {
 			return containedTokens
 		}
 
 		blockHash := digest.Sum64()
+		previousHash = blockHash
+
 		block, ok := cache.Get(blockHash)
 		if !ok {
 			break // early-stop
