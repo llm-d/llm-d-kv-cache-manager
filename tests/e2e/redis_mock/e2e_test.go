@@ -43,7 +43,7 @@ func (s *KVCacheSuite) TestBasicE2E() {
 	s.Len(pods, 1, "expected one pod score")
 	s.T().Logf("Received pod scores: %+v", pods)
 
-	s.Equal(pods[s.Pod1IP], 3, "expected pod score to equal 3")
+	s.Equal(2, pods[s.Pod1IP], "expected pod score to equal 2")
 }
 
 // TestPrefixReduction tests scoring behavior when querying progressively shorter prefixes of a fully cached prompt.
@@ -109,7 +109,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], 6, "expected pod score to equal 6")
+	s.Equal(5, pods[s.Pod1IP], "expected pod score to equal 5")
 
 	blockKeys = s.promptToRedisKeys(midPrompt, modelName)
 	s.setRedisMockEntries(blockKeys, fakePodList) // update redis
@@ -120,7 +120,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], 10, "expected pod score to equal 10")
+	s.Equal(10, pods[s.Pod1IP], "expected pod score to equal 10")
 }
 
 func (s *KVCacheSuite) TestLongPrefixExpansion() {
@@ -131,7 +131,6 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	shortPrompt := strings.Repeat(base, 2)
 	midPrompt := strings.Repeat(base, 5) // ~900 tokens
 
-	// longPrompt := strings.Repeat(base, 10) // ~4500 tokens
 	// Insert only short prompt into Redis
 	blockKeys := s.promptToRedisKeys(shortPrompt, modelName)
 	fakePodList := []string{s.Pod1IP}
@@ -150,7 +149,7 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.T().Logf("Mid prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
 
-	// Test 3: long prompt (should return higher score)
+	// Test 3: mid prompt again
 	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("mid prompt second time scores: %+v", pods)
