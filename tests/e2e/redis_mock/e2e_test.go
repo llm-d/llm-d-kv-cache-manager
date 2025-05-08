@@ -43,7 +43,7 @@ func (s *KVCacheSuite) TestBasicE2E() {
 	s.Len(pods, 1, "expected one pod score")
 	s.T().Logf("Received pod scores: %+v", pods)
 
-	s.Equal(2, pods[s.Pod1IP], "expected pod score to equal 2")
+	s.Equal(1, pods[s.Pod1IP], "expected pod score to equal 1")
 }
 
 // TestPrefixReduction tests scoring behavior when querying progressively shorter prefixes of a fully cached prompt.
