@@ -1,5 +1,5 @@
 /*
-Copyright 2025 The llm-d Authors.
+Copyright YEAR The llm-d Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +14,3 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
-
-// SliceMap applies a function to each element of a slice and returns a new
-// slice with the results.
-func SliceMap[Domain, Range any](slice []Domain, fn func(Domain) Range) []Range {
-	if slice == nil {
-		return nil
-	}
-
-	ans := make([]Range, len(slice))
-	for idx, elt := range slice {
-		ans[idx] = fn(elt)
-	}
-
-	return ans
-}
