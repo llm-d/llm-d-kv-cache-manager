@@ -108,7 +108,7 @@ func (k *Indexer) Run(ctx context.Context) {
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
-	logger := klog.FromContext(ctx)
+	traceLogger := klog.FromContext(ctx).V(5)
 	// 0. add to tokenizers pool
 	k.tokenizersPool.AddTask(prompt, modelName)
 
@@ -121,20 +121,21 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
-	logger.Info("made block keys", "blockKeys", blockKeys)
+	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
 	strBlockKeys, keyToPods, err := k.kvBlockIndexer.GetPodsForKeys(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
-	logger.Info("queried kvblock indexer", "strBlockKeys", strBlockKeys, "keyToPods", keyToPods)
+	traceLogger.Info("found block keys", "block-keys", blockKeys, "pods", keyToPods)
 
 	// 4. score pods
 	podScores, err := k.kvBlockScorer.Score(strBlockKeys, keyToPods)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
+	traceLogger.Info("found pod scores", "pod-scores", podScores)
 
 	return podScores, nil
 }
