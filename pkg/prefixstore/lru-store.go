@@ -116,7 +116,7 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 	for start := 0; start < len(promptBytes); start += c.blockSize {
 		end := start + c.blockSize
 		if end > len(promptBytes) {
-			end = len(promptBytes)
+			break // no partial blocks
 		}
 
 		// Compute the hash for the current block
@@ -172,16 +172,16 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) []u
 	for i := 0; i < len(promptBytes); i += c.blockSize {
 		end := i + c.blockSize
 		if end > len(promptBytes) {
-			end = len(promptBytes)
+			break // no partial blocks
 		}
 
 		// Compute the hash for the current block
 		digest.Reset()
 		if err := binary.Write(digest, binary.LittleEndian, previousHash); err != nil {
-			return containedTokens
+			break
 		}
 		if _, err := digest.Write(promptBytes[i:end]); err != nil {
-			return containedTokens
+			break
 		}
 
 		blockHash := digest.Sum64()

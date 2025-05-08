@@ -124,8 +124,9 @@ func (db *ChunkedTokenDatabase) chunkTokens(tokens []uint32) [][]uint32 {
 	for i := 0; i < len(tokens); i += db.ChunkSize {
 		end := i + db.ChunkSize
 		if end > len(tokens) {
-			break
+			break // no partial blocks
 		}
+
 		chunks = append(chunks, tokens[i:end])
 	}
 
