@@ -127,9 +127,11 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	base := "The quick brown fox jumps over the lazy dog"
 	modelName := defaultModelName
 	s.T().Logf("s.config.PrefixStoreConfig: %+v", s.config.PrefixStoreConfig.LRUStoreConfig)
+	s.T().Logf("s.config.PrefixStoreConfig: %+v", s.config.TokenProcessorConfig)
 	// Generate long prompts
 	shortPrompt := strings.Repeat(base, 2)
-	midPrompt := strings.Repeat(base, 5) // ~900 tokens
+	midPrompt := strings.Repeat(base, 100)  // ~900 tokens
+	longPrompt := strings.Repeat(base, 500) // ~4500 tokens
 
 	// Insert only short prompt into Redis
 	blockKeys := s.promptToRedisKeys(shortPrompt, modelName)
@@ -148,10 +150,13 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.Require().NoError(err)
 	s.T().Logf("Mid prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
+	blockKeys = s.promptToRedisKeys(midPrompt, modelName)
+	s.setRedisMockEntries(blockKeys, fakePodList)
+	time.Sleep(5 * time.Second)
 
-	// Test 3: mid prompt again
-	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
+	// Test 3: long prompt (should return higher score)
+	pods, err = s.indexer.GetPodScores(s.ctx, longPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
-	s.T().Logf("mid prompt second time scores: %+v", pods)
+	s.T().Logf("Long prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for long prompt")
 }
