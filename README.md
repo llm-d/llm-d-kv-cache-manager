@@ -53,7 +53,8 @@ For a detailed architecture, refer to the [architecture](docs/architecture.md) d
 ## Examples
 
 - [KVCache Indexer](examples/kvcache-indexer/README.md): 
-  - A reference implementation of using the KVCacheIndex module.
+  - A reference implementation of using the `kvcache.Indexer` module.
 - [KVCache Aware Scorer](examples/kv-cache-aware-scorer/README.md): 
-  - A reference implementation of integrating the KVCacheIndex module in an inference-gateway based router with `Scorers`.
+  - A reference implementation of integrating the `kvcache.Indexer` module in 
+  [llm-d-inference-scheduler](https://github.com/neuralmagic/llm-d-inference-scheduler) in a KVCache aware scorer.
 
