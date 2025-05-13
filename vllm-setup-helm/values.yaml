@@ -12,7 +12,7 @@ vllm:
 
   image:
     # -- VLLM image repository
-    repository: quay.io/llm-d/llm-d
+    repository: ghcr.io/llm-d/llm-d
     # -- VLLM image tag (overrides Chart.yaml appVersion if set)
     tag: "latest"
     # -- VLLM image pull policy

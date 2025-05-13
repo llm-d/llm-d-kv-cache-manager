@@ -16,5 +16,5 @@ spec:
       serviceAccountName: operator-controller-manager
       containers:
         - name: cmd
-          image: quay.io/llm-d/placeholder:placeholder
+          image: ghcr.io/llm-d/placeholder:placeholder
           imagePullPolicy: Always

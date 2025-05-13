@@ -25,8 +25,8 @@ configMapGenerator:
 
 # Define the image to be updated.
 # images:
-# - name: quay.io/llm-d/placeholder
-#   newName: quay.io/llm-d/${IMAGE_TAG_BASE}
+# - name: ghcr.io/llm-d/placeholder
+#   newName: ghcr.io/llm-d/${IMAGE_TAG_BASE}
 #   newTag: ${VERSION}
 patches:
 - path: common/patch-service.yaml
