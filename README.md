@@ -1,6 +1,17 @@
 # KVCache Manager
-Pluggable KVCache Manager for KVCache Aware Routing in vLLM-based serving platforms.
 
+## Introduction
+
+LLM inference can be computationally expensive due to the sequential nature of token generation. 
+KV-caching plays a critical role in optimizing this process. By storing previously computed key and value attention vectors, 
+KVCache reuse avoids redundant computations during inference, significantly reducing latency and resource consumption. 
+This is particularly beneficial for long context multi-turn conversations or Agentic (&RAG) applications where 
+previously computed information can be leveraged effectively. 
+Efficient KVCache management and routing are essential for scaling LLM inference and delivering a responsive user experience.
+
+llmd-kv-cache-manager is a pluggable KVCache Manager for KVCache Aware Routing in vLLM-based serving platforms.
+
+See [docs](docs/README.md) for more information on goals, architecture and more.
 ## Overview
 
 The code defines a [KVCacheIndexer](pkg/kv-cache/indexer.go) module that efficiently maintains a global view of KVCache states and localities. 
