@@ -12,9 +12,9 @@ vllm:
 
   image:
     # -- VLLM image repository
-    repository: quay.io/llm-d/llm-d-dev
+    repository: quay.io/llm-d/llm-d
     # -- VLLM image tag (overrides Chart.yaml appVersion if set)
-    tag: "lmcache-0.0.6-amd64"
+    tag: "latest"
     # -- VLLM image pull policy
     pullPolicy: IfNotPresent
 
@@ -24,7 +24,7 @@ vllm:
     # -- Label used for Kubernetes resources related to this model instance
     label: llama3-8b-instruct
     # -- Maximum model length parameter for VLLM
-    maxModelLen: null
+    maxModelLen: 16384
 
   # -- Maximum number of batched tokens for VLLM
   maxNumBatchedTokens: 1024
@@ -92,30 +92,30 @@ secret:
   hfTokenValue: ""
   # -- Set to true to create the secret. If false, assumes secret 'name' already exists.
   # @default -- false
-  create: false
+  create: true
   # -- Key name within the secret (will be formatted like 'hf_token_<model.label>')
   keyPrefix: hf_token
 
 # -- Persistence Configuration using PVC
 persistence:
   # -- Enable persistence using a PersistentVolumeClaim
-  enabled: false
+  enabled: true
   # -- PVC name (if not set, it will be templated)
   name: ""
   # -- PVC access mode
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   # -- PVC storage size
   size: 50Gi
   # -- Optional: Storage class name for the PVC
-  storageClassName: "ibmc-vpc-block-10iops-tier"
+  storageClassName: "ocs-storagecluster-cephfs"
   # -- Mount path inside the VLLM container for Hugging Face cache
   mountPath: /data
 
 # -- Configuration for /dev/shm volume
 dshm:
   # -- Use an empty directory for /dev/shm
-  useEmptyDir: false
+  useEmptyDir: true
   # -- Size limit for the empty directory (only applicable if useEmptyDir is true)
   sizeLimit: 8Gi
   # -- PVC name for /dev/shm (overrides useEmptyDir if set)
@@ -140,9 +140,9 @@ redis:
   resources:
     limits:
       # -- Redis CPU limit
-      cpu: '4'
+      cpu: '8'
       # -- Redis memory limit
-      memory: 10G
+      memory: 30G
     requests:
       # -- Redis CPU request
       cpu: '4'
