@@ -56,5 +56,5 @@ For a detailed architecture, refer to the [architecture](docs/architecture.md) d
   - A reference implementation of using the `kvcache.Indexer` module.
 - [KVCache Aware Scorer](examples/kv-cache-aware-scorer/README.md): 
   - A reference implementation of integrating the `kvcache.Indexer` module in 
-  [llm-d-inference-scheduler](https://github.com/neuralmagic/llm-d-inference-scheduler) in a KVCache aware scorer.
+  [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) in a KVCache aware scorer.
 

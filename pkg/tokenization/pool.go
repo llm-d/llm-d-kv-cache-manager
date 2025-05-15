@@ -23,7 +23,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/neuralmagic/llm-d-kv-cache-manager/pkg/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/prefixstore"
 
 	"k8s.io/client-go/util/workqueue"
 )

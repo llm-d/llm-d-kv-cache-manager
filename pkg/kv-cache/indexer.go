@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/neuralmagic/llm-d-kv-cache-manager/pkg/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/prefixstore"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/klog/v2"
 
-	"github.com/neuralmagic/llm-d-kv-cache-manager/pkg/tokenization"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
 // Config holds the configuration for the Indexer module.
