@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"os"
 
-	kvcache "github.com/neuralmagic/llm-d-kv-cache-manager/pkg/kv-cache"
+	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/plugins"

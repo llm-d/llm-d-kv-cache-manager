@@ -26,7 +26,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/neuralmagic/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 )
 
 const defaultChunkSize = 256

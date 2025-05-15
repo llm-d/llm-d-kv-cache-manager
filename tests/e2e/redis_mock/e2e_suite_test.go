@@ -21,11 +21,11 @@ import (
 	"context"
 	"testing"
 
-	kvcache "github.com/neuralmagic/llm-d-kv-cache-manager/pkg/kv-cache"
+	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
 
 	"github.com/alicebob/miniredis/v2"
 
-	"github.com/neuralmagic/llm-d-kv-cache-manager/pkg/tokenization"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/suite"
 )
