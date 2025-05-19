@@ -59,7 +59,7 @@ func (s *KVCacheSuite) SetupTest() {
 	s.Require().NoError(err)
 
 	s.config = kvcache.NewDefaultConfig()
-	s.config.KVBlockIndexerConfig.RedisKVBlockIndexerConfig.RedisAddr = s.server.Addr()
+	s.config.KVBlockIndexerConfig.RedisAddr = s.server.Addr()
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.ChunkSize = 4
 

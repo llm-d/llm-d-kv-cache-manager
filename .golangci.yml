@@ -1,22 +1,19 @@
-# Based on recommendations in https://olegk.dev/go-linters-configuration-the-right-version
-
+version: "2"
 run:
-  # linter execution
-  timeout: 30m
-  issues-exit-code: 1
   concurrency: 4
-  # check tests as well
-  tests: true
-  # fail if go.mod file is outdated.
-  modules-download-mode: readonly
-  # use the Go version from the go.mod file.
   go: ""
-
+  modules-download-mode: readonly
+  issues-exit-code: 1
+  tests: true
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: false
+      colors: false
 linters:
-  # set to true to run only fast linters (e.g., for pre-commit)
-  fast: false
-
-  disable-all: true
+  default: none
   enable:
     - asasalint
     - asciicheck
@@ -30,16 +27,13 @@ linters:
     - ginkgolinter
     - gocritic
     - godot
-    - gofumpt
-    - goimports
     - gosec
-    - gosimple
     - govet
     - grouper
-    - lll
-    - loggercheck
     - importas
     - ineffassign
+    - lll
+    - loggercheck
     - makezero
     - misspell
     - nakedret
@@ -56,11 +50,10 @@ linters:
     - reassign
     - revive
     - staticcheck
-    - stylecheck
     - tagliatelle
     - testableexamples
-    - thelper
     - testpackage
+    - thelper
     - tparallel
     - unconvert
     - unparam
@@ -68,78 +61,63 @@ linters:
     - usestdlibvars
     - varnamelen
     - whitespace
-
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-
-  errcheck:
-    # change some error checks which are disabled by default
-    check-type-assertions: true
-    check-blank: true
-
-  nakedret:
-    # No naked returns (default: 30)
-    max-func-lines: 1
-
-  lll:
-    # max line length, lines longer will be reported. Default is 120.
-    line-length: 130
-
-  staticcheck:
-    checks:
-      - "all"
-
-  stylecheck:
-
-  varnamelen:
-    # The longest distance, in source lines, that is being considered a "small scope".
-    # Variables used in at most this many lines will be ignored (Default: 5)
-    max-distance: 20
-    # The minimum length of a variable's name that is considered "long".
-    # Variable names that are at least this long will be ignored (Default: 3)
-    min-name-length: 2
-    # Check type parameters (Default: false)
-    check-type-param: true
-    # Ignore "ok" variables that hold the bool return value of a type assertion,
-    # map index, or channel receive (default: false)
-    ignore-type-assert-ok: true
-    ignore-map-index-ok: true
-    ignore-chan-recv-ok: true
-    # Optional list of variable declarations that should be ignored completely.
-    ignore-decls:
-      - c echo.Context
-      - t *testing.T
-      - w http.ResponseWriter
-      - r *http.Request
-  # Ignore dot-imports error
-  revive:
-    rules:
-      - name: dot-imports
-        disabled: true
-output:
-  # prefer the simplest output: `line-number` without saving to file
-  formats:
-    - format: line-number
-  print-issued-lines: false
-  print-linter-name: true
-
-  # easier to follow the results with a deterministic output
-  sort-results: true
-
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    lll:
+      line-length: 130
+    nakedret:
+      max-func-lines: 1
+    revive:
+      rules:
+        - name: dot-imports
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+    varnamelen:
+      max-distance: 20
+      min-name-length: 2
+      check-type-param: true
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+      ignore-decls:
+        - c echo.Context
+        - t *testing.T
+        - w http.ResponseWriter
+        - r *http.Request
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  # setting 0 to have all the results.
   max-issues-per-linter: 0
-  # nothing should be skipped to not miss errors.
   max-same-issues: 0
-  # analyze only new code (manually set to false to check existing code)
-  #new: true
-  # do not automatically fix (until AI assisted code improves)
-  fix: false
-  # allow multiple reports per line
   uniq-by-line: false
+  fix: false
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

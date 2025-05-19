@@ -46,7 +46,7 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	// For sample running with mistral (tokenizer), a huggingface token is needed
 	huggingFaceToken := os.Getenv("HF_TOKEN")
 	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
+		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	return config
