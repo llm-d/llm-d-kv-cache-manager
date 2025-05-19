@@ -34,12 +34,12 @@ jobs:
           version: 'v2.1.6'
           args: "--config=./.golangci.yml"
 
-      - name: Run make test
-        shell: bash 
-        run: |
-          make test
-
       - name: Run make build
         shell: bash
         run: |
           make build
+
+      - name: Run make test
+        shell: bash 
+        run: |
+          make test
