@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-        
+
       - name: Sanity check repo contents
         run: ls -la
 
@@ -25,14 +25,17 @@ jobs:
           go-version: "${{ env.GO_VERSION }}"
           cache-dependency-path: ./go.sum
 
-      - name: go mod tidy
-        run: go mod tidy
+      - name: Install dependencies
+        run: go mod download
 
-      - name: Run lint checks
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: 'v2.1.6'
-          args: "--config=./.golangci.yml"
+          version: v2.1.6
+          args: ""
+
+      - name: Run precommit checks
+        run: make precommit
 
       - name: Run make build
         shell: bash
@@ -40,6 +43,6 @@ jobs:
           make build
 
       - name: Run make test
-        shell: bash 
+        shell: bash
         run: |
           make test

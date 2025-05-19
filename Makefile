@@ -1,17 +1,3 @@
-# Copyright 2025 The llm-d Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 SHELL := /usr/bin/env bash
 
 # Defaults
@@ -52,12 +38,25 @@ $(TOKENIZER_LIB):
 	curl -L https://github.com/daulet/tokenizers/releases/download/$(TOKENIZER_RELEASE)/libtokenizers.$(TARGETOS)-$(TARGETARCH).tar.gz | tar -xz -C lib
 	ranlib lib/*.a
 
-##@ Development
 
-.PHONY: format
-format: ## Format Go source files
-	@printf "\033[33;1m==== Running gofmt ====\033[0m\n"
-	@gofmt -l -w $(SRC)
+
+##@ Precommit code checks --
+.PHONY: precommit lint tidy-go copr-fix
+precommit: tidy-go lint copr-fix
+
+tidy-go:
+	@echo "Tidying up go.mod and go.sum..."
+	@go mod tidy
+
+lint:
+	@echo "==== Running linting ===="
+	@golangci-lint run
+
+copr-fix:
+	@echo "Adding copyright headers..."
+	@docker run -i --rm -v $(shell pwd):/github/workspace apache/skywalking-eyes header fix
+
+##@ Development
 
 .PHONY: test
 test: unit-test e2e-test ## Run tests
@@ -66,11 +65,6 @@ test: unit-test e2e-test ## Run tests
 post-deploy-test: ## Run post deployment tests
 	echo Success!
 	@echo "Post-deployment tests passed."
-
-.PHONY: lint
-lint: check-golangci-lint ## Run lint
-	@printf "\033[33;1m==== Running linting ====\033[0m\n"
-	golangci-lint run
 
 $(TOOLS_DIR)/verify_boilerplate.py:
 	mkdir -p $(TOOLS_DIR)
