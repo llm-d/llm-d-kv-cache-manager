@@ -22,17 +22,12 @@ IMAGE_TAG_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)
 IMG = $(IMAGE_TAG_BASE):$(DEV_VERSION)
 NAMESPACE ?= hc4ai-operator
 
+TARGETOS ?= $(shell go env GOOS)
+TARGETARCH ?= $(shell go env GOARCH)
+
 TOOLS_DIR := $(shell pwd)/hack/tools
 CONTAINER_TOOL := $(shell command -v docker >/dev/null 2>&1 && echo docker || command -v podman >/dev/null 2>&1 && echo podman || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
-PLATFORMS ?= linux/amd64 # linux/arm64 # linux/s390x,linux/ppc64le
-
-
-TOKENIZER_BUILD_DIR := ./build/tokenizers
-LIB_OUTPUT_DIR := lib
-TOKENIZER_REPO := https://github.com/daulet/tokenizers.git
-TOKENIZER_LIB := $(LIB_OUTPUT_DIR)/libtokenizers.a
-LDFLAGS ?= -extldflags '-L$(shell pwd)/lib'
 
 # go source files
 SRC = $(shell find . -type f -name '*.go')
@@ -40,6 +35,22 @@ SRC = $(shell find . -type f -name '*.go')
 .PHONY: help
 help: ## Print help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Tokenizer & Linking
+
+LDFLAGS ?= -extldflags '-L$(shell pwd)/lib'
+CGO_ENABLED=1
+TOKENIZER_LIB = lib/libtokenizers.a
+TOKENIZER_RELEASE = v1.20.2
+
+.PHONY: download-tokenizer
+download-tokenizer: $(TOKENIZER_LIB)
+$(TOKENIZER_LIB):
+	## Download the HuggingFace tokenizer bindings.
+	@echo "Downloading HuggingFace tokenizer bindings..."
+	mkdir -p lib
+	curl -L https://github.com/daulet/tokenizers/releases/download/$(TOKENIZER_RELEASE)/libtokenizers.$(TARGETOS)-$(TARGETARCH).tar.gz | tar -xz -C lib
+	ranlib lib/*.a
 
 ##@ Development
 
@@ -71,81 +82,30 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 	$(TOOLS_DIR)/verify_boilerplate.py --boilerplate-dir=hack/boilerplate --skip docs
 
 .PHONY: unit-test
-unit-test: tokenizer-build
+unit-test: download-tokenizer
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -ldflags="$(LDFLAGS)" ./pkg/...
 
 .PHONY: e2e-test
-e2e-test: tokenizer-build
+e2e-test: download-tokenizer
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -v -ldflags="$(LDFLAGS)" ./tests/...
 
 ##@ Build
 
-.PHONY: tokenizer-build
-tokenizer-build: $(TOKENIZER_LIB) check-rust check-cmake
-# Build rule: only triggers if lib/libtokenizers.a is missing
-$(TOKENIZER_LIB):
-	@echo "libtokenizers.a not found, building from source..."
-	@if [ ! -d "$(TOKENIZER_BUILD_DIR)" ]; then \
-		echo "Cloning tokenizers into $(TOKENIZER_BUILD_DIR)..."; \
-		git clone --depth=1 $(TOKENIZER_REPO) $(TOKENIZER_BUILD_DIR); \
-	fi
-	@cd $(TOKENIZER_BUILD_DIR) && make build
-	@mkdir -p $(LIB_OUTPUT_DIR)
-	@cp $(TOKENIZER_BUILD_DIR)/libtokenizers.a $(TOKENIZER_LIB)
-	@echo "✅ libtokenizers.a is ready in $(LIB_OUTPUT_DIR)"
-
 .PHONY: build
-build: check-go tokenizer-build ##
+build: check-go download-tokenizer ##
 	@printf "\033[33;1m==== Building ====\033[0m\n"
 	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv-cache-index/main.go
-
-##@ Container Build/Push
-
-.PHONY: buildah-build
-buildah-build: check-builder load-version-json ## Build and push image (multi-arch if supported)
-	@echo "✅ Using builder: $(BUILDER)"
-	@if [ "$(BUILDER)" = "buildah" ]; then \
-	  echo "🔧 Buildah detected: Performing multi-arch build..."; \
-	  FINAL_TAG=$(IMG); \
-	  for arch in amd64; do \
-	    ARCH_TAG=$$FINAL_TAG-$$arch; \
-	    echo "📦 Building for architecture: $$arch"; \
-		buildah build --arch=$$arch --os=linux --layers -t $(IMG)-$$arch . || exit 1; \
-	    echo "🚀 Pushing image: $(IMG)-$$arch"; \
-	    buildah push $(IMG)-$$arch docker://$(IMG)-$$arch || exit 1; \
-	  done; \
-	  echo "🧼 Removing existing manifest (if any)..."; \
-	  buildah manifest rm $$FINAL_TAG || true; \
-	  echo "🧱 Creating and pushing manifest list: $(IMG)"; \
-	  buildah manifest create $(IMG); \
-	  for arch in amd64; do \
-	    ARCH_TAG=$$FINAL_TAG-$$arch; \
-	    buildah manifest add $$FINAL_TAG $$ARCH_TAG; \
-	  done; \
-	  buildah manifest push --all $(IMG) docker://$(IMG); \
-	elif [ "$(BUILDER)" = "docker" ]; then \
-	  echo "🐳 Docker detected: Building with buildx..."; \
-	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' Dockerfile > Dockerfile.cross; \
-	  - docker buildx create --use --name image-builder || true; \
-	  docker buildx use image-builder; \
-	  docker buildx build --push --platform=$(PLATFORMS) --tag $(IMG) -f Dockerfile.cross . || exit 1; \
-	  docker buildx rm image-builder || true; \
-	  rm Dockerfile.cross; \
-	elif [ "$(BUILDER)" = "podman" ]; then \
-	  echo "⚠️ Podman detected: Building single-arch image..."; \
-	  podman build -t $(IMG) . || exit 1; \
-	  podman push $(IMG) || exit 1; \
-	else \
-	  echo "❌ No supported container tool available."; \
-	  exit 1; \
-	fi
 
 .PHONY:	image-build
 image-build: check-container-tool load-version-json ## Build Docker image ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) ====\033[0m\n"
-	$(CONTAINER_TOOL) build --build-arg TARGETOS=$(TARGETOS) --build-arg TARGETARCH=$(TARGETARCH) -t $(IMG) .
+	$(CONTAINER_TOOL) build \
+		--platform $(TARGETOS)/$(TARGETARCH) \
+		--build-arg TARGETOS=$(TARGETOS) \
+		--build-arg TARGETARCH=$(TARGETARCH) \
+		-t $(IMG) .
 
 .PHONY: image-push
 image-push: check-container-tool load-version-json ## Push Docker image $(IMG) to registry
