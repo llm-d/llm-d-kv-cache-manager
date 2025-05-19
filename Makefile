@@ -268,7 +268,6 @@ check-tools: \
   check-go \
   check-ginkgo \
   check-golangci-lint \
-  check-rust \
   check-cmake \
   check-jq \
   check-kustomize \
@@ -335,10 +334,6 @@ check-podman:
 	@command -v podman >/dev/null 2>&1 || { \
 	  echo "⚠️  Podman is not installed. You can install it with:"; \
 	  echo "🔧 sudo apt install podman  OR  brew install podman"; exit 1; }
-
-check-rust:
-	@command -v rustc >/dev/null 2>&1 || { \
-	  echo "❌ Rust is not installed. Install it from https://rustup.rs"; exit 1; }
 
 check-cmake:
 	@command -v cmake >/dev/null 2>&1 || { \
