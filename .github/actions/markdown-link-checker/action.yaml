@@ -36,23 +36,16 @@ runs:
           # Create a temp copy with absolute links
           temp_file=$(mktemp)
  
-          # Replace relative Markdown links (i.e., not starting with http or mailto)
           file_dir=$(dirname "$file")
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
-            # Match [text](relative-path) not starting with http/mailto
-            while (match($0, /\[([^\]]+)\]\(([^\):#][^)]*)\)/, arr)) {
-              if (arr[2] ~ /^(https?:\/\/|mailto:)/) {
-                break
-              }
-              newlink = url "/" dir "/" arr[2]
-              gsub(/\/+/, "/", newlink)
-              replacement = "[" arr[1] "](" newlink ")"
-              $0 = substr($0, 1, RSTART - 1) replacement substr($0, RSTART + RLENGTH)
-            }
+            # Replace all non-absolute links with absolute ones using gensub
+            $0 = gensub(/\[([^\]]+)\]\(([^):#][^)]*)\)/, 
+                        "[" "\\1" "](" url "/" dir "/" "\\2" ")", "g")
             print
           }
           ' "$file" > "$temp_file"
+
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
