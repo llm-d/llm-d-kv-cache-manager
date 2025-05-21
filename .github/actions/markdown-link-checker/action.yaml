@@ -63,8 +63,12 @@ runs:
           }
           ' "$file" > "$temp_file"
 
-        output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
+        output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
         echo "$output"
+
+        # Show all attempted links with HTTP status
+        echo "🔗 Attempted links and HTTP status codes:"
+        echo "$output" | grep -E '\[[0-9]{3}\]' || echo "⚠️  No link status lines found."
 
         # Show 403s separately
         ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
