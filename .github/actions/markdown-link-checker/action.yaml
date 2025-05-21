@@ -27,16 +27,14 @@ runs:
 
         REPO_REF=$(echo "${GITHUB_REF}" | sed -E 's#refs/heads/##; s#refs/pull/.*/merge#main#')
         REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${REPO_REF}"
-        # escaped_repo_url=$(printf '%s\n' "$REPO_URL" | sed 's/[&/\]/\\&/g')
 
         while IFS= read -r -d '' file; do
           echo "------------------------------------------------------------"
           echo "📄 Checking: $file"
 
-          # Create a temp copy with absolute links
           temp_file=$(mktemp)
- 
           file_dir=$(dirname "$file")
+
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
             line = $0
@@ -47,7 +45,7 @@ runs:
               text = arr[1]
               link = arr[2]
 
-              if (link ~ /^(https?:\/\/|mailto:|#)/) {
+              if (link ~ /^(https?:\/\/|mailto:|#)/ || link ~ /^[a-zA-Z0-9.-]+\.[a-z]{2,}/) {
                 output = output prefix "[" text "](" link ")"
               } else {
                 gsub(/^\.\/+/, "", link)
@@ -66,18 +64,15 @@ runs:
           output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
 
-          # Show all attempted links with HTTP status
           echo "🔗 Attempted links and HTTP status codes:"
           echo "$output" | grep -E '\[[0-9]{3}\]' || echo "⚠️  No link status lines found."
 
-          # Show 403s separately
           ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
           if [ -n "$ignored_403" ]; then
             echo "ℹ️  Ignored 403 links (not counted as broken):"
             echo "$ignored_403"
           fi
 
-          # Count only broken links that are NOT 403s
           num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
 
           if [ "$num_file_dead_links" -gt 0 ]; then
@@ -87,3 +82,14 @@ runs:
           else
             echo "✅ No broken (non-403) links in $file"
           fi
+
+          rm -f "$temp_file"
+        done < <(find . -type f -name "*.md" -print0)
+
+        echo "------------------------------------------------------------"
+        if [ "$failed" -ne 0 ]; then
+          echo "❌ Total broken links found: $total_dead_links"
+          exit 1
+        else
+          echo "✅ All Markdown files passed link checks."
+        fi
