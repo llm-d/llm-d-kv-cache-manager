@@ -25,7 +25,7 @@ runs:
         failed=0
         total_dead_links=0
 
-        # REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}"
+        REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}"
         echo "REPO_URL: $REPO_URL"
 
         while IFS= read -r -d '' file; do
