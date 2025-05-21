@@ -63,9 +63,7 @@ runs:
           }
           ' "$file" > "$temp_file"
 
-
           output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
-          echo "$output"
 
           echo "🔗 ✅ Successful links:"
           echo "$output" | grep -E '^\[200\]' || echo "⚠️  No successful links found."
@@ -76,15 +74,15 @@ runs:
           echo "🔗 ⚠️ Ignored 403 links:"
           echo "$output" | grep '✖' | grep '→ Status: 403' || echo "✅ None"
 
-          # Count only broken links that are NOT 403s
-          num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
+          # echo "$output"
 
-          if [ "$num_file_dead_links" -gt 0 ]; then
-            echo "❌ $num_file_dead_links broken (non-403) links in $file"
+          if echo "$output" | grep -q '✖'; then
+            num_file_dead_links=$(echo "$output" | grep '✖' | wc -l)
+            echo "❌ $num_file_dead_links broken links in $file"
             total_dead_links=$((total_dead_links + num_file_dead_links))
             failed=1
           else
-            echo "✅ No broken (non-403) links in $file"
+            echo "✅ No broken links in $file"
           fi
 
           rm -f "$temp_file"
@@ -97,4 +95,3 @@ runs:
         else
           echo "✅ All Markdown files passed link checks."
         fi
-
