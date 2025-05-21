@@ -39,26 +39,29 @@ runs:
           file_dir=$(dirname "$file")
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
-            while (match($0, /\[([^\]]+)\]\(([^)]+)\)/, arr)) {
+            line = $0
+            output = ""
+            while (match(line, /\[([^\]]+)\]\(([^)]+)\)/, arr)) {
+              prefix = substr(line, 1, RSTART - 1)
+              suffix = substr(line, RSTART + RLENGTH)
               text = arr[1]
               link = arr[2]
 
-              # Do not rewrite if link starts with http, https, mailto, or #
               if (link ~ /^(https?:\/\/|mailto:|#)/) {
-                replacement = "[" text "](" link ")"
+                output = output prefix "[" text "](" link ")"
               } else {
                 gsub(/^\.\/+/, "", link)
                 full_link = url "/" dir "/" link
                 gsub(/\/+/, "/", full_link)
-                replacement = "[" text "](" full_link ")"
+                output = output prefix "[" text "](" full_link ")"
               }
 
-              $0 = substr($0, 1, RSTART - 1) replacement substr($0, RSTART + RLENGTH)
+              line = suffix
             }
-            print
+            output = output line
+            print output
           }
           ' "$file" > "$temp_file"
-
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
