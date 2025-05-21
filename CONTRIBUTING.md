@@ -62,9 +62,9 @@ All pull requests will be reviewed by the lead core Maintainer. Feedback will be
 
 
 * **Social Media:** Follow us on social media for the latest news, announcements, and updates: 
-* **X:** [https://x.com/_llm_d_] 
-* **LinkedIn:** [linkedin.com/company/llm-d]
-* **Reddit:** [https://www.reddit.com/r/llm_d/]
+* **X:** [https://x.com/_llm_d_](https://x.com/_llm_d_) 
+* **LinkedIn:** [https://linkedin.com/company/llm-d](linkedin.com/company/llm-d)
+* **Reddit:** [https://www.reddit.com/r/llm_d/](https://www.reddit.com/r/llm_d/)
 
 ## License
 

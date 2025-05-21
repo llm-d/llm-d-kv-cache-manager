@@ -21,7 +21,7 @@ helm upgrade --install vllm-p2p ./vllm-setup-helm \
   --set vllm.poolLabelValue="vllm-llama3-8b-instruct" 
 ```
 
-See [values](values.yaml) for all configurable parameters.
+See [values](./values.yaml) for all configurable parameters.
 
 ### LMCache Configuration
 
