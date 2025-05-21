@@ -63,27 +63,27 @@ runs:
           }
           ' "$file" > "$temp_file"
 
-        output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
-        echo "$output"
+          output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
+          echo "$output"
 
-        # Show all attempted links with HTTP status
-        echo "🔗 Attempted links and HTTP status codes:"
-        echo "$output" | grep -E '\[[0-9]{3}\]' || echo "⚠️  No link status lines found."
+          # Show all attempted links with HTTP status
+          echo "🔗 Attempted links and HTTP status codes:"
+          echo "$output" | grep -E '\[[0-9]{3}\]' || echo "⚠️  No link status lines found."
 
-        # Show 403s separately
-        ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
-        if [ -n "$ignored_403" ]; then
-          echo "ℹ️  Ignored 403 links (not counted as broken):"
-          echo "$ignored_403"
-        fi
+          # Show 403s separately
+          ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
+          if [ -n "$ignored_403" ]; then
+            echo "ℹ️  Ignored 403 links (not counted as broken):"
+            echo "$ignored_403"
+          fi
 
-        # Count only broken links that are NOT 403s
-        num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
+          # Count only broken links that are NOT 403s
+          num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
 
-        if [ "$num_file_dead_links" -gt 0 ]; then
-          echo "❌ $num_file_dead_links broken (non-403) links in $file"
-          total_dead_links=$((total_dead_links + num_file_dead_links))
-          failed=1
-        else
-          echo "✅ No broken (non-403) links in $file"
-        fi
+          if [ "$num_file_dead_links" -gt 0 ]; then
+            echo "❌ $num_file_dead_links broken (non-403) links in $file"
+            total_dead_links=$((total_dead_links + num_file_dead_links))
+            failed=1
+          else
+            echo "✅ No broken (non-403) links in $file"
+          fi
