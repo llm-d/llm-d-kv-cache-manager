@@ -40,11 +40,13 @@ runs:
           file_dir=$(dirname "$file")
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
-            # Replace relative markdown links: [text](relative/path)
-            gsub(/\[([^\]]+)\]\(\.\/?([^():#)]+)\)/, "[\\1](" url "/" dir "/\\2)", $0)
+            $0 = gensub(/\[([^\]]+)\]\((?!https?:\/\/|mailto:)([^)]+)\)/,
+                        "[" "\\1" "](" url "/" dir "/" "\\2" ")",
+                        "g")
             print
           }
           ' "$file" > "$temp_file"
+
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
