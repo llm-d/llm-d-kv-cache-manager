@@ -33,7 +33,7 @@ runs:
 
           # Create a temp copy with absolute links
           temp_file=$(mktemp)
-          sed "s|](\([./][^)]*\))|](${REPO_URL}/\1)|g" "$file" > "$temp_file"
+          sed -E "s|\]\(((?!https?://)[^)]+)\)|](${REPO_URL}/\1)|g" "$file" > "$temp_file"
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
