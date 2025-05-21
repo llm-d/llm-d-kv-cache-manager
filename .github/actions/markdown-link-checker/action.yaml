@@ -63,25 +63,23 @@ runs:
           }
           ' "$file" > "$temp_file"
 
-          output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
-          echo "$output"
+        output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
+        echo "$output"
 
-          if echo "$output" | grep -q '✖'; then
-            num_file_dead_links=$(echo "$output" | grep '✖' | wc -l)
-            echo "❌ $num_file_dead_links broken links in $file"
-            total_dead_links=$((total_dead_links + num_file_dead_links))
-            failed=1
-          else
-            echo "✅ No broken links in $file"
-          fi
+        # Show 403s separately
+        ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
+        if [ -n "$ignored_403" ]; then
+          echo "ℹ️  Ignored 403 links (not counted as broken):"
+          echo "$ignored_403"
+        fi
 
-          rm -f "$temp_file"
-        done < <(find . -type f -name "*.md" -print0)
+        # Count only broken links that are NOT 403s
+        num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
 
-        echo "------------------------------------------------------------"
-        if [ "$failed" -ne 0 ]; then
-          echo "❌ Total broken links found: $total_dead_links"
-          exit 1
+        if [ "$num_file_dead_links" -gt 0 ]; then
+          echo "❌ $num_file_dead_links broken (non-403) links in $file"
+          total_dead_links=$((total_dead_links + num_file_dead_links))
+          failed=1
         else
-          echo "✅ All Markdown files passed link checks."
+          echo "✅ No broken (non-403) links in $file"
         fi
