@@ -37,12 +37,17 @@ runs:
           temp_file=$(mktemp)
  
           # Replace relative Markdown links (i.e., not starting with http or mailto)
-          awk -v url="$REPO_URL" '
+          file_dir=$(dirname "$file")
+          awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
             while (match($0, /\[([^\]]+)\]\(([^)]+)\)/, arr)) {
+              text = arr[1]
               link = arr[2]
               if (link !~ /^(https?:\/\/|mailto:)/) {
-                $0 = substr($0, 1, RSTART - 1) "[" arr[1] "](" url "/" link ")" substr($0, RSTART + RLENGTH)
+                gsub(/^\.\/+/, "", link)
+                newlink = url "/" dir "/" link
+                gsub(/\/+/, "/", newlink)
+                $0 = substr($0, 1, RSTART - 1) "[" text "](" newlink ")" substr($0, RSTART + RLENGTH)
               } else {
                 break
               }
