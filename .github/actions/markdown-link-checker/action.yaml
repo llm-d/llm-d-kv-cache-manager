@@ -25,7 +25,7 @@ runs:
         failed=0
         total_dead_links=0
 
-        REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}"
+        REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/main"
         echo "REPO_URL: $REPO_URL"
 
         while IFS= read -r -d '' file; do
@@ -34,7 +34,7 @@ runs:
 
           # Create a temp copy with absolute links
           temp_file=$(mktemp)
-          sed -E "s|\\]\\(((?!https?://|mailto:)[^)]+)\\)|](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/\1)|g" "$file" > "$temp_file"
+          sed -E "s|\\]\\(((?!https?://|mailto:)[^)]+)\\)|](https://github.com/${GITHUB_REPOSITORY}/blob/main/\1)|g" "$file" > "$temp_file"
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
