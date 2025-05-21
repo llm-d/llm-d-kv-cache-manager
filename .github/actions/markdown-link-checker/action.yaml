@@ -34,7 +34,21 @@ runs:
 
           # Create a temp copy with absolute links
           temp_file=$(mktemp)
-          sed -E -e "s@\\]\\(((?!https?://|mailto:)[^)]+)\\)@](${escaped_repo_url}/\1)@g" "$file" > "$temp_file"
+ 
+          # Replace relative Markdown links (i.e., not starting with http or mailto)
+          awk -v url="$escaped_repo_url" '
+          {
+            while (match($0, /\[([^\]]+)\]\(([^)]+)\)/, arr)) {
+              link = arr[2]
+              if (link !~ /^(https?:\/\/|mailto:)/) {
+                $0 = substr($0, 1, RSTART - 1) "[" arr[1] "](" url "/" link ")" substr($0, RSTART + RLENGTH)
+              } else {
+                break
+              }
+            }
+            print
+          }
+          ' "$file" > "$temp_file"
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
