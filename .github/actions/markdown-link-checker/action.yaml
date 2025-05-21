@@ -39,13 +39,13 @@ runs:
           file_dir=$(dirname "$file")
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
-            # Replace all non-absolute links with absolute ones using gensub
-            $0 = gensub(/\[([^\]]+)\]\(([^):#][^)]*)\)/, 
-                        "[" "\\1" "](" url "/" dir "/" "\\2" ")", "g")
+            # Replace only clearly relative links (starting with ./, ../, or filename)
+            $0 = gensub(/\[([^\]]+)\]\(((\.{1,2}\/|[^\/:][^)]*))\)/,
+                        "[" "\\1" "](" url "/" dir "/" "\\2" ")",
+                        "g")
             print
           }
           ' "$file" > "$temp_file"
-
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
