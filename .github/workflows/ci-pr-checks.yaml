@@ -25,14 +25,11 @@ jobs:
           go-version: "${{ env.GO_VERSION }}"
           cache-dependency-path: ./go.sum
 
-      - name: Broken Link Check
-        uses: technote-space/broken-link-checker-action@v2
-
-      # - name: Run markdown link checker
-      #   uses: ./.github/actions/markdown-link-checker
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     args: "--quiet --retry"  
+      - name: Run markdown link checker
+        uses: ./.github/actions/markdown-link-checker
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          args: "--quiet --retry"  
     
       - name: Install dependencies
         run: go mod download
