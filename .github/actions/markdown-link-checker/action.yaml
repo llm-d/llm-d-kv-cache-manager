@@ -27,14 +27,16 @@ runs:
 
         REPO_REF=$(echo "${GITHUB_REF}" | sed -E 's#refs/heads/##; s#refs/pull/.*/merge#main#')
         REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${REPO_REF}"
+        # escaped_repo_url=$(printf '%s\n' "$REPO_URL" | sed 's/[&/\]/\\&/g')
 
         while IFS= read -r -d '' file; do
           echo "------------------------------------------------------------"
           echo "📄 Checking: $file"
 
+          # Create a temp copy with absolute links
           temp_file=$(mktemp)
+ 
           file_dir=$(dirname "$file")
-
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
             line = $0
@@ -45,7 +47,7 @@ runs:
               text = arr[1]
               link = arr[2]
 
-              if (link ~ /^(https?:\/\/|mailto:|#)/ || link ~ /^[a-zA-Z0-9.-]+\.[a-z]{2,}/) {
+              if (link ~ /^(https?:\/\/|mailto:|#)/) {
                 output = output prefix "[" text "](" link ")"
               } else {
                 gsub(/^\.\/+/, "", link)
@@ -61,26 +63,16 @@ runs:
           }
           ' "$file" > "$temp_file"
 
-          output=$(markdown-link-check --verbose ${{ inputs.args }} "$temp_file" 2>&1 || true)
+          output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
 
-          echo "🔗 Attempted links and HTTP status codes:"
-          echo "$output" | grep -E '\[[0-9]{3}\]' || echo "⚠️  No link status lines found."
-
-          ignored_403=$(echo "$output" | grep '✖' | grep '→ Status: 403' || true)
-          if [ -n "$ignored_403" ]; then
-            echo "ℹ️  Ignored 403 links (not counted as broken):"
-            echo "$ignored_403"
-          fi
-
-          num_file_dead_links=$(echo "$output" | grep '✖' | grep -v '→ Status: 403' | wc -l)
-
-          if [ "$num_file_dead_links" -gt 0 ]; then
-            echo "❌ $num_file_dead_links broken (non-403) links in $file"
+          if echo "$output" | grep -q '✖'; then
+            num_file_dead_links=$(echo "$output" | grep '✖' | wc -l)
+            echo "❌ $num_file_dead_links broken links in $file"
             total_dead_links=$((total_dead_links + num_file_dead_links))
             failed=1
           else
-            echo "✅ No broken (non-403) links in $file"
+            echo "✅ No broken links in $file"
           fi
 
           rm -f "$temp_file"
