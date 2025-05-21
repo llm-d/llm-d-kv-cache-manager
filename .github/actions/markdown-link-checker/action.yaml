@@ -27,27 +27,39 @@ runs:
 
         REPO_REF=$(echo "${GITHUB_REF}" | sed -E 's#refs/heads/##; s#refs/pull/.*/merge#main#')
         REPO_URL="https://github.com/${GITHUB_REPOSITORY}/blob/${REPO_REF}"
-        # escaped_repo_url=$(printf '%s\n' "$REPO_URL" | sed 's/[&/\]/\\&/g')
 
         while IFS= read -r -d '' file; do
           echo "------------------------------------------------------------"
           echo "📄 Checking: $file"
 
-          # Create a temp copy with absolute links
           temp_file=$(mktemp)
- 
           file_dir=$(dirname "$file")
+
           awk -v url="$REPO_URL" -v dir="$file_dir" '
           {
-            # Only replace relative links that do NOT start with http(s), mailto, or #
-            $0 = gensub(/\[([^\]]+)\]\(((?!https?:\/\/|mailto:|#)[^)]+)\)/,
-                        "[" "\\1" "](" url "/" dir "/" "\\2" ")",
-                        "g")
+            # Rewrite links that do not start with http, https, mailto, or #
+            while (match($0, /\[([^\]]+)\]\(([^)]+)\)/, arr)) {
+              text = arr[1]
+              link = arr[2]
+
+              if (link ~ /^(https?:\/\/|mailto:|#)/) {
+                replacement = "[" text "](" link ")"
+              } else {
+                gsub(/^\.\/+/, "", link)
+                full_link = url "/" dir "/" link
+                gsub(/\/+/, "/", full_link)
+                replacement = "[" text "](" full_link ")"
+              }
+
+              $0 = substr($0, 1, RSTART - 1) replacement substr($0, RSTART + RLENGTH)
+            }
             print
           }
           ' "$file" > "$temp_file"
 
-
+          # Optional: normalize multiple slashes (not affecting protocol)
+          sed -i.bak 's#https\{0,1\}://#PROTOCOL_FIX#g; s#//\+#/#g; s#PROTOCOL_FIX#https://#g' "$temp_file"
+          rm -f "$temp_file.bak"
 
           output=$(markdown-link-check ${{ inputs.args }} "$temp_file" 2>&1 || true)
           echo "$output"
