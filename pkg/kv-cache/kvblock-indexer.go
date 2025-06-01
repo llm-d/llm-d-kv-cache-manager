@@ -59,16 +59,15 @@ var _ KVBlockIndexer = &RedisKVBlockIndexer{}
 
 // RedisKVBlockIndexerConfig holds the configuration for the RedisKVBlockIndexer.
 type RedisKVBlockIndexerConfig struct {
-	RedisAddr     string
-	RedisPassword string
-	RedisDB       int
+	RedisOpt *redis.Options
 }
 
 func defaultRedisKVBlockIndexerConfig() *RedisKVBlockIndexerConfig {
 	return &RedisKVBlockIndexerConfig{
-		RedisAddr:     "localhost:6379",
-		RedisPassword: "",
-		RedisDB:       0,
+		RedisOpt: &redis.Options{
+			Addr: "localhost:6379",
+			DB:   0,
+		},
 	}
 }
 
@@ -83,11 +82,7 @@ func NewRedisKVBlockIndexer(config *KVBlockIndexerConfig) (KVBlockIndexer, error
 		config = DefaultKVBlockIndexerConfig()
 	}
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     config.RedisAddr,
-		Password: config.RedisPassword,
-		DB:       config.RedisDB,
-	})
+	redisClient := redis.NewClient(config.RedisOpt)
 
 	_, err := redisClient.Ping(context.Background()).Result()
 	if err != nil {
