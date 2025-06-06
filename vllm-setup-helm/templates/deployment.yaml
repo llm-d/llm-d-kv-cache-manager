@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-vllm-{{ .Values.vllm.model.label }}
+  name: {{ .Release.Name }}-vllm-{{ lower .Values.vllm.model.label }}
   namespace: {{ .Release.Namespace | default .Values.namespace }}
   labels:
     {{- include "chart.labels" . | nindent 4 }}

@@ -16,6 +16,7 @@ Deploying (repo root as working directory):
 ```
 helm upgrade --install vllm-p2p ./vllm-setup-helm \
   --namespace $NAMESPACE \
+  --create-namespace \
   --set secret.create=true \
   --set secret.hfTokenValue=$HF_TOKEN \
   --set vllm.poolLabelValue="vllm-llama3-8b-instruct" 
