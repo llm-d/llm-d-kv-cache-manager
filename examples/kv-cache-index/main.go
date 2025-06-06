@@ -27,7 +27,7 @@ import (
 )
 
 /*
-Refer to docs/phase1-setup.md
+Refer to docs/phase-1/setup.md
 
 In Redis:
 1) "meta-llama/Llama-3.1-8B-Instruct@33c26f4ed679005e733e382beeb8df69d8362c07400bb07fec69712413cb4310"
@@ -49,11 +49,22 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
 	}
 
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost != "" {
+		config.KVBlockIndexerConfig.RedisOpt.Addr = redisHost
+	}
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	if redisPassword != "" {
+		config.KVBlockIndexerConfig.RedisOpt.Password = redisPassword
+	}
+
 	return config
 }
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	logger := klog.FromContext(ctx)
 
 	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(getKVCacheIndexerConfig())
@@ -88,7 +99,4 @@ func main() {
 
 	// Print the pods - should be empty because no tokenization
 	logger.Info("got pods", "pods", pods)
-
-	// Cancel the context
-	cancel()
 }
