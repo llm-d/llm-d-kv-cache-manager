@@ -18,10 +18,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
 	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
+	"github.com/redis/go-redis/v9"
 
 	"k8s.io/klog/v2"
 )
@@ -37,32 +39,39 @@ In Redis:
 */
 
 //nolint:lll // need prompt as-is, chunking to string concatenation is too much of a hassle
-const prompt = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
-const defaultModelName = "meta-llama/Llama-3.1-8B-Instruct"
+const (
+	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
+	defaultModelName = "meta-llama/Llama-3.1-8B-Instruct"
 
-func getKVCacheIndexerConfig() *kvcache.Config {
+	envRedisAddr = "REDIS_ADDR"
+	envHFToken   = "HF_TOKEN"
+	envModelName = "MODEL_NAME"
+)
+
+func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 	config := kvcache.NewDefaultConfig()
 
 	// For sample running with mistral (tokenizer), a huggingface token is needed
-	huggingFaceToken := os.Getenv("HF_TOKEN")
+	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
 		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
 	}
 
-	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost != "" {
-		config.KVBlockIndexerConfig.RedisOpt.Addr = redisHost
-	}
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-	if redisPassword != "" {
-		config.KVBlockIndexerConfig.RedisOpt.Password = redisPassword
+	redisAddr := os.Getenv(envRedisAddr)
+	if redisAddr != "" {
+		redisOpt, err := redis.ParseURL(redisAddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse redis host: %w", err)
+		}
+
+		config.KVBlockIndexerConfig.RedisOpt = redisOpt
 	}
 
-	return config
+	return config, nil
 }
 
 func getModelName() string {
-	modelName := os.Getenv("MODEL_NAME")
+	modelName := os.Getenv(envModelName)
 	if modelName != "" {
 		return modelName
 	}
@@ -76,7 +85,13 @@ func main() {
 
 	logger := klog.FromContext(ctx)
 
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(getKVCacheIndexerConfig())
+	config, err := getKVCacheIndexerConfig()
+	if err != nil {
+		logger.Error(err, "failed to instantiate kv-cache-indexer config")
+		os.Exit(1)
+	}
+
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(config)
 	if err != nil {
 		logger.Error(err, "failed to init Indexer")
 	}
