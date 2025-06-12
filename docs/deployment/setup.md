@@ -45,7 +45,7 @@ export MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
 2. Deploy using Helm:
 
 ```bash
-helm upgrade --install llm-d-kv-cache-manager ./vllm-setup-helm \
+helm upgrade --install vllm-stack ./vllm-setup-helm \
   --namespace $NAMESPACE \
   --create-namespace \
   --set secret.create=true \
