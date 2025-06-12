@@ -94,6 +94,14 @@ Ensure you have a running deployment with vLLM and Redis as described above.
 
 The vLLM node can be tested with the prompt found in `examples/kv-cache-index/main.go`.
 
+First, ensure that the tokenizer engine is available locally for our example:
+
+```bash
+make download-tokenizer
+```
+
+This will download the tokenizer engine.
+
 ```bash
 export HF_TOKEN=<token>
 export REDIS_ADDR=<redis://$user:$pass@localhost:6379/$db> # optional, defaults to localhost:6379

@@ -94,6 +94,7 @@ func main() {
 	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(config)
 	if err != nil {
 		logger.Error(err, "failed to init Indexer")
+		os.Exit(1)
 	}
 
 	logger.Info("created Indexer")
@@ -106,7 +107,7 @@ func main() {
 	pods, err := kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
 	if err != nil {
 		logger.Error(err, "failed to get pod scores")
-		return
+		os.Exit(1)
 	}
 
 	// Print the pods - should be empty because no tokenization
@@ -119,7 +120,7 @@ func main() {
 	pods, err = kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
 	if err != nil {
 		logger.Error(err, "failed to get pod scores")
-		return
+		os.Exit(1)
 	}
 
 	// Print the pods - should be empty because no tokenization
