@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/prefixstore"
+	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/klog/v2"
-
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
 // Config holds the configuration for the Indexer module.
@@ -34,7 +34,7 @@ import (
 type Config struct {
 	PrefixStoreConfig    *prefixstore.Config
 	TokenProcessorConfig *TokenProcessorConfig
-	KVBlockIndexerConfig *KVBlockIndexerConfig
+	KVBlockIndexerConfig *kvblock.IndexerConfig
 	KVBLockScorerConfig  *KVBlockScorerConfig
 	TokenizersPoolConfig *tokenization.Config
 }
@@ -44,7 +44,7 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: DefaultTokenProcessorConfig(),
-		KVBlockIndexerConfig: DefaultKVBlockIndexerConfig(),
+		KVBlockIndexerConfig: kvblock.DefaultIndexerConfig(),
 		KVBLockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
 	}
@@ -54,7 +54,7 @@ func NewDefaultConfig() *Config {
 type Indexer struct {
 	tokensIndexer   prefixstore.Indexer // gets tokens for a prompt
 	tokensProcessor TokenProcessor      // turns tokens to kv block keys
-	kvBlockIndexer  KVBlockIndexer      // looks up pods for block keys
+	kvBlockIndexer  *kvblock.Indexer    // looks up pods for block keys
 	kvBlockScorer   KVBlockScorer       // scores pods based on block hits
 
 	tokenizersPool *tokenization.Pool
@@ -69,7 +69,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 
 	tokensProcessor := NewChunkedTokenDatabase(config.TokenProcessorConfig)
 
-	kvBlockIndexer, err := NewRedisKVBlockIndexer(config.KVBlockIndexerConfig)
+	kvBlockIndexer, err := kvblock.NewIndexer(config.KVBlockIndexerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}

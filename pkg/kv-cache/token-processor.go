@@ -22,7 +22,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
+
+	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
 
 	"k8s.io/klog/v2"
 
@@ -61,19 +62,8 @@ type TemporaryTokenProcessorConfig struct {
 // TokenProcessor defines the interface for converting tokens to
 // KVBlockKeys.
 type TokenProcessor interface {
-	// TokensToKVBlockKeys converts tokens into KVBlockKeys.
-	TokensToKVBlockKeys(tokens []uint32, modelName string) []KVBlockKey
-}
-
-// KVBlockKey is equivalent to the LMCacheEngineKey in the Python code.
-type KVBlockKey struct {
-	ModelName string
-	ChunkHash string
-}
-
-// String returns a string representation of the CacheEngineKey.
-func (c KVBlockKey) String() string {
-	return fmt.Sprintf("%s@%s", c.ModelName, c.ChunkHash)
+	// TokensToKVBlockKeys converts tokens into kv_block.Keys.
+	TokensToKVBlockKeys(tokens []uint32, modelName string) []kvblock.Key
 }
 
 // ChunkedTokenDatabase is a concrete implementation of TokenDatabase.
@@ -146,13 +136,13 @@ func (db *ChunkedTokenDatabase) prefixHashes(tokenChunks [][]uint32) []string {
 	return hashes
 }
 
-// TokensToKVBlockKeys converts tokens into KVBlockKeys.
-func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []KVBlockKey {
+// TokensToKVBlockKeys converts tokens into kv_block.Keys.
+func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []kvblock.Key {
 	tokenChunks := db.chunkTokens(tokens)
 	prefixHashes := db.prefixHashes(tokenChunks)
 
-	return utils.SliceMap(prefixHashes, func(hashVal string) KVBlockKey {
-		return KVBlockKey{
+	return utils.SliceMap(prefixHashes, func(hashVal string) kvblock.Key {
+		return kvblock.Key{
 			ModelName: modelName,
 			ChunkHash: hashVal,
 		}

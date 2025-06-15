@@ -21,6 +21,8 @@ import (
 	"context"
 	"testing"
 
+	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+
 	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
 
 	"github.com/alicebob/miniredis/v2"
@@ -90,7 +92,7 @@ func (s *KVCacheSuite) TearDownTest() {
 // promptToRedisKeys tokenizes a prompt and returns its corresponding KV block keys.
 //
 //nolint:unparam // allow future support for multiple models
-func (s *KVCacheSuite) promptToRedisKeys(prompt, model string) []kvcache.KVBlockKey {
+func (s *KVCacheSuite) promptToRedisKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
@@ -101,7 +103,7 @@ func (s *KVCacheSuite) promptToRedisKeys(prompt, model string) []kvcache.KVBlock
 }
 
 // setRedisMockEntries inserts KV block keys into mock Redis mapped to pod IPs.
-func (s *KVCacheSuite) setRedisMockEntries(blockKeys []kvcache.KVBlockKey, podList []string) {
+func (s *KVCacheSuite) setRedisMockEntries(blockKeys []kvblock.Key, podList []string) {
 	s.Require().NotEmpty(blockKeys)
 
 	redisKeys := make([]string, len(blockKeys))
