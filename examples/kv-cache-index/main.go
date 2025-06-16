@@ -80,21 +80,25 @@ func getModelName() string {
 }
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	ctx := context.Background()
 	logger := klog.FromContext(ctx)
 
-	config, err := getKVCacheIndexerConfig()
-	if err != nil {
-		logger.Error(err, "failed to instantiate kv-cache-indexer config")
+	if err := kvCacheIndexer(ctx, logger); err != nil {
+		logger.Error(err, "failed to run kv-cache-indexer")
 		os.Exit(1)
 	}
+}
 
+func kvCacheIndexer(ctx context.Context, logger klog.Logger) error {
+	config, err := getKVCacheIndexerConfig()
+	if err != nil {
+		return err
+	}
+
+	//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
 	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(config)
 	if err != nil {
-		logger.Error(err, "failed to init Indexer")
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("created Indexer")
@@ -106,8 +110,7 @@ func main() {
 	// Get pods for the prompt
 	pods, err := kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
 	if err != nil {
-		logger.Error(err, "failed to get pod scores")
-		os.Exit(1)
+		return err
 	}
 
 	// Print the pods - should be empty because no tokenization
@@ -119,10 +122,10 @@ func main() {
 	// Get pods for the prompt
 	pods, err = kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
 	if err != nil {
-		logger.Error(err, "failed to get pod scores")
-		os.Exit(1)
+		return err
 	}
 
 	// Print the pods - should be empty because no tokenization
 	logger.Info("got pods", "pods", pods)
+	return nil
 }
