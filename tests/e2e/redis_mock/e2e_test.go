@@ -26,11 +26,11 @@ import (
 // correct scores for the second request.
 func (s *KVCacheSuite) TestBasicE2E() {
 	prompt := "What is the capital of France?"
-	blockKeys := s.promptToRedisKeys(prompt, defaultModelName)
+	blockKeys := s.promptToKeys(prompt, defaultModelName)
 
 	fakePodList := []string{s.Pod1IP}
 
-	s.setRedisMockEntries(blockKeys, fakePodList)
+	s.addEntriesToIndex(blockKeys, fakePodList)
 	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
@@ -54,10 +54,10 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	midPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 	shortPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit."
 
-	blockKeys := s.promptToRedisKeys(fullPrompt, defaultModelName)
+	blockKeys := s.promptToKeys(fullPrompt, defaultModelName)
 	fakePodList := []string{s.Pod1IP}
 
-	s.setRedisMockEntries(blockKeys, fakePodList)
+	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Test 1: Full prompt (no match expected)
 	pods, err := s.indexer.GetPodScores(s.ctx, fullPrompt, defaultModelName, []string{s.Pod1IP})
@@ -91,10 +91,10 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	shortPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit."
 	modelName := defaultModelName
 	// Insert only short prompt
-	blockKeys := s.promptToRedisKeys(shortPrompt, modelName)
+	blockKeys := s.promptToKeys(shortPrompt, modelName)
 	fakePodList := []string{s.Pod1IP}
 
-	s.setRedisMockEntries(blockKeys, fakePodList)
+	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Test 1: short prompt
 	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
@@ -111,8 +111,8 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Equal(5, pods[s.Pod1IP], "expected pod score to equal 5")
 
-	blockKeys = s.promptToRedisKeys(midPrompt, modelName)
-	s.setRedisMockEntries(blockKeys, fakePodList) // update redis
+	blockKeys = s.promptToKeys(midPrompt, modelName)
+	s.addEntriesToIndex(blockKeys, fakePodList) // update redis
 	time.Sleep(5 * time.Second)
 
 	// Test 3: full prompt
@@ -134,9 +134,9 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	longPrompt := strings.Repeat(base, 500) // ~4500 tokens
 
 	// Insert only short prompt into Redis
-	blockKeys := s.promptToRedisKeys(shortPrompt, modelName)
+	blockKeys := s.promptToKeys(shortPrompt, modelName)
 	fakePodList := []string{s.Pod1IP}
-	s.setRedisMockEntries(blockKeys, fakePodList)
+	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Test 1: short prompt (should return no pod scores yet)
 	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
@@ -150,8 +150,8 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.Require().NoError(err)
 	s.T().Logf("Mid prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
-	blockKeys = s.promptToRedisKeys(midPrompt, modelName)
-	s.setRedisMockEntries(blockKeys, fakePodList)
+	blockKeys = s.promptToKeys(midPrompt, modelName)
+	s.addEntriesToIndex(blockKeys, fakePodList)
 	time.Sleep(5 * time.Second)
 
 	// Test 3: long prompt (should return higher score)

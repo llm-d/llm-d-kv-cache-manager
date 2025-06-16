@@ -22,13 +22,11 @@ import (
 	"testing"
 
 	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 
 	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
 
-	"github.com/alicebob/miniredis/v2"
-
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -41,15 +39,17 @@ const (
 type KVCacheSuite struct {
 	suite.Suite
 
-	ctx             context.Context
-	cancel          context.CancelFunc
-	server          *miniredis.Miniredis
-	rdb             *redis.Client
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	tokenizer       tokenization.Tokenizer
 	tokensProcessor kvcache.TokenProcessor
 	config          *kvcache.Config
-	indexer         *kvcache.Indexer
-	Pod1IP          string
+
+	kvBlockIndex kvblock.Index
+	indexer      *kvcache.Indexer // TODO: test for all index backends
+
+	Pod1IP string
 }
 
 // SetupTest initializes the mock Redis, tokenizer, config, and starts the indexer before each test.
@@ -57,17 +57,12 @@ func (s *KVCacheSuite) SetupTest() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 
 	var err error
-	s.server, err = miniredis.Run()
 	s.Require().NoError(err)
 
 	s.config = kvcache.NewDefaultConfig()
-	s.config.KVBlockIndexerConfig.RedisOpt = &redis.Options{
-		Addr: s.server.Addr(),
-	}
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.ChunkSize = 4
 
-	s.rdb = redis.NewClient(&redis.Options{Addr: s.server.Addr()})
 	s.tokenizer, err = tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
 	s.Require().NoError(err)
 
@@ -76,23 +71,16 @@ func (s *KVCacheSuite) SetupTest() {
 	s.Pod1IP = "10.0.0.1"
 
 	s.indexer, err = kvcache.NewKVCacheIndexer(s.config)
+	s.kvBlockIndex = s.indexer.KVBlockIndex()
 	s.Require().NoError(err)
 
 	go s.indexer.Run(s.ctx)
 }
 
-// TearDownTest cleans up resources and stops the mock Redis after each test.
-func (s *KVCacheSuite) TearDownTest() {
-	s.cancel()
-	if s.server != nil {
-		s.server.Close()
-	}
-}
-
-// promptToRedisKeys tokenizes a prompt and returns its corresponding KV block keys.
+// promptToKeys tokenizes a prompt and returns its corresponding KV block keys.
 //
 //nolint:unparam // allow future support for multiple models
-func (s *KVCacheSuite) promptToRedisKeys(prompt, model string) []kvblock.Key {
+func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
@@ -102,16 +90,17 @@ func (s *KVCacheSuite) promptToRedisKeys(prompt, model string) []kvblock.Key {
 	return blockKeys
 }
 
-// setRedisMockEntries inserts KV block keys into mock Redis mapped to pod IPs.
-func (s *KVCacheSuite) setRedisMockEntries(blockKeys []kvblock.Key, podList []string) {
+func (s *KVCacheSuite) addEntriesToIndex(blockKeys []kvblock.Key, podList []string) {
 	s.Require().NotEmpty(blockKeys)
 
-	redisKeys := make([]string, len(blockKeys))
-	for i, blockKey := range blockKeys {
-		redisKey := blockKey.String()
-		redisKeys[i] = redisKey
-		s.server.HSet(redisKey, podList[0]+":80", "doesn't matter")
-	}
+	// Add entries to the indexer
+	err := s.kvBlockIndex.Add(s.ctx, blockKeys, utils.SliceMap(podList, func(pod string) kvblock.PodEntry {
+		return kvblock.PodEntry{
+			PodIdentifier: pod,
+			DeviceTier:    "gpu",
+		}
+	}))
+	s.Require().NoError(err)
 }
 
 // TestKVCacheSuite runs the KVCacheSuite using testify's suite runner.

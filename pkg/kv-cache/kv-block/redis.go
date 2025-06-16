@@ -28,12 +28,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// RedisIndexConfig holds the configuration for the RedisIndexBackend.
+// RedisIndexConfig holds the configuration for the RedisIndex.
 type RedisIndexConfig struct {
 	RedisOpt *redis.Options
 }
 
-func defaultRedisIndexConfig() *RedisIndexConfig {
+func DefaultRedisIndexConfig() *RedisIndexConfig {
 	return &RedisIndexConfig{
 		RedisOpt: &redis.Options{
 			Addr: "localhost:6379",
@@ -42,10 +42,10 @@ func defaultRedisIndexConfig() *RedisIndexConfig {
 	}
 }
 
-// NewRedisIndexBackend creates a new RedisIndexBackend instance.
-func NewRedisIndexBackend(config *RedisIndexConfig) (IndexBackend, error) {
+// NewRedisIndex creates a new RedisIndex instance.
+func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 	if config == nil {
-		config = defaultRedisIndexConfig()
+		config = DefaultRedisIndexConfig()
 	}
 
 	redisClient := redis.NewClient(config.RedisOpt)
@@ -55,18 +55,18 @@ func NewRedisIndexBackend(config *RedisIndexConfig) (IndexBackend, error) {
 		return nil, fmt.Errorf("could not connect to Redis: %w", err)
 	}
 
-	return &RedisIndexBackend{
+	return &RedisIndex{
 		RedisClient: redisClient,
 	}, nil
 }
 
-// RedisIndexBackend implements the IndexBackend interface
+// RedisIndex implements the Index interface
 // using Redis as the backend for KV block indexing.
-type RedisIndexBackend struct {
+type RedisIndex struct {
 	RedisClient *redis.Client
 }
 
-var _ IndexBackend = &RedisIndexBackend{}
+var _ Index = &RedisIndex{}
 
 // Lookup receives a list of keys and a set of pod identifiers,
 // and retrieves the filtered pods associated with those keys.
@@ -74,37 +74,27 @@ var _ IndexBackend = &RedisIndexBackend{}
 // If the podIdentifierSet is empty, all pods are returned.
 //
 // It returns:
-// 1. A slice of strings representing the keys.
-// 2. A map where the keys are those in (1) and the values are pod names.
+// 1. A slice of the hit keys.
+// 2. A map where the keys are those in (1) and the values are pod-identifiers.
 // 3. An error if any occurred during the operation.
-//
-// The function uses a Redis pipeline to optimize the retrieval of keys.
-// The function assumes that the redis structure is a hash where the keys are
-// the KVBlockKeys, the fields are the pod entries, and the values are some
-// associated data that we don't need to retrieve.
-//
-//nolint:gocritic // no need named return values here
-func (r *RedisIndexBackend) Lookup(ctx context.Context, keys []Key,
+func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) ([]string, map[string][]string, error) {
+) ([]Key, map[Key][]string, error) {
 	if len(keys) == 0 {
 		return nil, nil, nil
 	}
 
-	logger := klog.FromContext(ctx).WithName("RedisKVBlockIndexer")
-	podsPerKey := make(map[string][]string)
+	logger := klog.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
+	podsPerKey := make(map[Key][]string)
 
 	// pipeline for single RTT
 	pipe := r.RedisClient.Pipeline()
 	results := make([]*redis.StringSliceCmd, len(keys))
-	redisKeys := make([]string, len(keys))
 
 	// queue an HKeys command for each key in the pipeline
 	for i, key := range keys {
-		redisKey := key.String()
-		redisKeys[i] = redisKey
 		// HKeys gets all field names
-		results[i] = pipe.HKeys(ctx, redisKey)
+		results[i] = pipe.HKeys(ctx, key.String())
 	}
 
 	_, execErr := pipe.Exec(ctx)
@@ -113,18 +103,19 @@ func (r *RedisIndexBackend) Lookup(ctx context.Context, keys []Key,
 	}
 
 	filterPods := len(podIdentifierSet) > 0 // predicate for filtering
-	for i, cmd := range results {
-		currentRedisKey := redisKeys[i]
+	highestHitIdx := 0
+
+	for idx, cmd := range results {
+		key := keys[idx]
 
 		// cmd.Result() returns the slice of strings (pod IDs) which is the first layer in the mapping
 		pods, cmdErr := cmd.Result()
 		if cmdErr != nil {
-			podsPerKey[currentRedisKey] = []string{} // assign an empty slice
 			if !errors.Is(cmdErr, redis.Nil) {
-				logger.Error(cmdErr, "failed to get pods for key", "key", currentRedisKey)
+				logger.Error(cmdErr, "failed to get pods for key", "key", key)
 			}
 
-			continue
+			return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
 		}
 
 		var filteredPods []string
@@ -135,14 +126,20 @@ func (r *RedisIndexBackend) Lookup(ctx context.Context, keys []Key,
 			}
 		}
 
-		podsPerKey[currentRedisKey] = filteredPods
+		if len(filteredPods) == 0 {
+			logger.Info("no pods found for key, cutting search", "key", key.String())
+			return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
+		}
+
+		highestHitIdx = idx
+		podsPerKey[key] = filteredPods
 	}
 
-	return redisKeys, podsPerKey, nil
+	return keys[:highestHitIdx], podsPerKey, nil
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
-func (r *RedisIndexBackend) Add(ctx context.Context, keys []Key, entries []PodEntry) error {
+func (r *RedisIndex) Add(ctx context.Context, keys []Key, entries []PodEntry) error {
 	if len(keys) == 0 || len(entries) == 0 {
 		return nil
 	}
@@ -164,7 +161,7 @@ func (r *RedisIndexBackend) Add(ctx context.Context, keys []Key, entries []PodEn
 }
 
 // Evict removes a key and its associated pod entries from the index backend.
-func (r *RedisIndexBackend) Evict(ctx context.Context, key Key, entries []PodEntry) error {
+func (r *RedisIndex) Evict(ctx context.Context, key Key, entries []PodEntry) error {
 	redisKey := key.String()
 	pipe := r.RedisClient.Pipeline()
 

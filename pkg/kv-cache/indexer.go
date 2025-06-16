@@ -34,7 +34,7 @@ import (
 type Config struct {
 	PrefixStoreConfig    *prefixstore.Config
 	TokenProcessorConfig *TokenProcessorConfig
-	KVBlockIndexerConfig *kvblock.IndexerConfig
+	KVBlockIndexConfig   *kvblock.IndexConfig
 	KVBLockScorerConfig  *KVBlockScorerConfig
 	TokenizersPoolConfig *tokenization.Config
 }
@@ -44,7 +44,7 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: DefaultTokenProcessorConfig(),
-		KVBlockIndexerConfig: kvblock.DefaultIndexerConfig(),
+		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBLockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
 	}
@@ -54,7 +54,7 @@ func NewDefaultConfig() *Config {
 type Indexer struct {
 	tokensIndexer   prefixstore.Indexer // gets tokens for a prompt
 	tokensProcessor TokenProcessor      // turns tokens to kv block keys
-	kvBlockIndexer  *kvblock.Indexer    // looks up pods for block keys
+	kvBlockIndex    kvblock.Index       // looks up pods for block keys
 	kvBlockScorer   KVBlockScorer       // scores pods based on block hits
 
 	tokenizersPool *tokenization.Pool
@@ -69,7 +69,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 
 	tokensProcessor := NewChunkedTokenDatabase(config.TokenProcessorConfig)
 
-	kvBlockIndexer, err := kvblock.NewIndexer(config.KVBlockIndexerConfig)
+	kvBlockIndex, err := kvblock.NewIndex(config.KVBlockIndexConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
@@ -87,7 +87,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 	return &Indexer{
 		tokensIndexer:   tokensIndexer,
 		tokensProcessor: tokensProcessor,
-		kvBlockIndexer:  kvBlockIndexer,
+		kvBlockIndex:    kvBlockIndex,
 		kvBlockScorer:   scorer,
 		tokenizersPool:  tokenizersPool,
 	}, nil
@@ -96,6 +96,11 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 // Run starts the indexer.
 func (k *Indexer) Run(ctx context.Context) {
 	k.tokenizersPool.Run(ctx)
+}
+
+// KVBlockIndex returns the kvblock.Index used by the Indexer.
+func (k *Indexer) KVBlockIndex() kvblock.Index {
+	return k.kvBlockIndex
 }
 
 // GetPodScores retrieves the pod scores for a given prompt and model name.
@@ -124,7 +129,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
-	strBlockKeys, keyToPods, err := k.kvBlockIndexer.GetPodsForKeys(ctx, blockKeys, sets.New(podIdentifiers...))
+	strBlockKeys, keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}

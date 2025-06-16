@@ -19,6 +19,8 @@ package kvcache
 import (
 	"fmt"
 
+	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -28,10 +30,6 @@ type KVScoringStrategy string
 const (
 	// LongestPrefixMatch Score by longest consecutive match from start.
 	LongestPrefixMatch KVScoringStrategy = "LongestPrefix"
-	// HighestBlockHit Score by highest block index hit.
-	HighestBlockHit KVScoringStrategy = "HighestBlockHit"
-	// CoverageBasedMatching Score by total number of blocks hit.
-	CoverageBasedMatching KVScoringStrategy = "CoverageBased"
 )
 
 // KVBlockScorerConfig holds the configuration for the KVBlockScorer.
@@ -53,7 +51,7 @@ type KVBlockScorer interface {
 	Strategy() KVScoringStrategy
 	// Score scores the blocks based on the scoring strategy.
 	// It returns a map of pod names to their scores.
-	Score(blockKeys []string, keyToPods map[string][]string) (map[string]int, error)
+	Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]string) (map[string]int, error)
 }
 
 // NewKVBlockScorer creates a new KVBlockScorer based on the provided strategy.
@@ -61,10 +59,6 @@ func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 	switch config.ScoringStrategy {
 	case LongestPrefixMatch:
 		return &LongestPrefixScorer{}, nil
-	case HighestBlockHit:
-		return &HighestBlockHitScorer{}, nil
-	case CoverageBasedMatching:
-		return &CoverageBasedScorer{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scoring strategy: %s", config.ScoringStrategy)
 	}
@@ -80,14 +74,14 @@ func (s *LongestPrefixScorer) Strategy() KVScoringStrategy {
 }
 
 // Score implements the longest prefix scoring logic.
-func (s *LongestPrefixScorer) Score(blockKeys []string, keyToPods map[string][]string) (map[string]int, error) {
+func (s *LongestPrefixScorer) Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]string) (map[string]int, error) {
 	podScores := make(map[string]int)
 
-	if len(blockKeys) == 0 {
+	if len(keys) == 0 {
 		return podScores, nil
 	}
 
-	podsForFirstKey := keyToPods[blockKeys[0]]
+	podsForFirstKey := keyToPods[keys[0]]
 	activePods := sets.NewString(podsForFirstKey...)
 
 	// set initial score of 1
@@ -96,12 +90,12 @@ func (s *LongestPrefixScorer) Score(blockKeys []string, keyToPods map[string][]s
 		podScores[pod] = 1
 	}
 
-	for i := 1; i < len(blockKeys); i++ {
+	for i := 1; i < len(keys); i++ {
 		if activePods.Len() == 0 {
 			break
 		}
 
-		podsForKey := keyToPods[blockKeys[i]]
+		podsForKey := keyToPods[keys[i]]
 		currentPodsSet := sets.NewString(podsForKey...)
 
 		// update scores and active pods to the intersection
@@ -113,58 +107,5 @@ func (s *LongestPrefixScorer) Score(blockKeys []string, keyToPods map[string][]s
 	}
 
 	// Return the map containing the final score for each pod encountered.
-	return podScores, nil
-}
-
-// HighestBlockHitScorer scores based on the highest-indexed block hit for each
-// pod.
-type HighestBlockHitScorer struct{}
-
-// Strategy returns the strategy type: HighestBlockHit.
-func (s *HighestBlockHitScorer) Strategy() KVScoringStrategy {
-	return HighestBlockHit
-}
-
-// Score implements the highest block hit scoring logic.
-func (s *HighestBlockHitScorer) Score(blockKeys []string, keyToPods map[string][]string) (map[string]int, error) {
-	podScores := make(map[string]int)
-
-	for i, k := range blockKeys {
-		pods, ok := keyToPods[k]
-		if !ok {
-			continue
-		}
-
-		for _, pod := range pods {
-			podScores[pod] = i + 1 // +1 to convert from 0-based index to 1-based score
-		}
-	}
-
-	return podScores, nil
-}
-
-// CoverageBasedScorer scores based on total number of blocks hit (coverage).
-type CoverageBasedScorer struct{}
-
-// Strategy returns the strategy type: CoverageBasedMatching.
-func (s *CoverageBasedScorer) Strategy() KVScoringStrategy {
-	return CoverageBasedMatching
-}
-
-// Score implements the coverage-based scoring logic.
-func (s *CoverageBasedScorer) Score(blockKeys []string, keyToPods map[string][]string) (map[string]int, error) {
-	podScores := make(map[string]int)
-
-	for _, k := range blockKeys {
-		pods, ok := keyToPods[k]
-		if !ok {
-			continue
-		}
-
-		for _, pod := range pods {
-			podScores[pod]++
-		}
-	}
-
 	return podScores, nil
 }

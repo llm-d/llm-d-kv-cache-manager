@@ -19,6 +19,8 @@ package kvcache_test
 import (
 	"testing"
 
+	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+
 	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
 
 	"github.com/stretchr/testify/assert"
@@ -27,15 +29,15 @@ import (
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
 	scorer := &kvcache.LongestPrefixScorer{}
-	blockKeys := []string{"b1", "b2", "b3", "b4", "b5", "b6"}
+	blockKeys := stringKeysToKVBlockKeys([]string{"b1", "b2", "b3", "b4", "b5", "b6"})
 
-	hitmap := map[string][]string{
-		"b1": {"pod-a"},
-		"b2": {"pod-a"},
-		"b3": {"pod-a"},
-		"b4": {"pod-b"},
-		"b5": {"pod-b"},
-		"b6": {"pod-a"},
+	hitmap := map[kvblock.Key][]string{
+		{ModelName: "test-model", ChunkHash: "b1"}: {"pod-a"},
+		{ModelName: "test-model", ChunkHash: "b2"}: {"pod-a"},
+		{ModelName: "test-model", ChunkHash: "b3"}: {"pod-a"},
+		{ModelName: "test-model", ChunkHash: "b4"}: {"pod-b"},
+		{ModelName: "test-model", ChunkHash: "b5"}: {"pod-b"},
+		{ModelName: "test-model", ChunkHash: "b6"}: {"pod-a"},
 	}
 
 	expected := map[string]int{
@@ -50,53 +52,13 @@ func TestLongestPrefixScorer(t *testing.T) {
 	}
 }
 
-// TestHighestBlockHitScorer verifies scoring based on the highest index where a pod has a block.
-func TestHighestBlockHitScorer(t *testing.T) {
-	scorer := &kvcache.HighestBlockHitScorer{}
-	blockKeys := []string{"b1", "b2", "b3", "b4", "b5"}
-
-	hitmap := map[string][]string{
-		"b1": {"pod-x"},
-		"b2": {"pod-x"},
-		"b3": {"pod-y"},
-		"b4": {"pod-x"},
-		"b5": {"pod-z"},
+func stringKeysToKVBlockKeys(keys []string) []kvblock.Key {
+	kvKeys := make([]kvblock.Key, len(keys))
+	for i, key := range keys {
+		kvKeys[i] = kvblock.Key{
+			ModelName: "test-model",
+			ChunkHash: key,
+		}
 	}
-
-	expected := map[string]int{
-		"pod-x": 4,
-		"pod-y": 3,
-		"pod-z": 5,
-	}
-
-	scored, err := scorer.Score(blockKeys, hitmap)
-	assert.NoError(t, err)
-	for pod, score := range scored {
-		assert.Equal(t, expected[pod], score)
-	}
-}
-
-// TestCoverageBasedScorer verifies scoring based on total number of non-consecutive block hits.
-func TestCoverageBasedScorer(t *testing.T) {
-	scorer := &kvcache.CoverageBasedScorer{}
-	blockKeys := []string{"b1", "b2", "b3", "b4", "b5"}
-
-	hitmap := map[string][]string{
-		"b1": {"pod-x"},
-		"b2": {"pod-x"},
-		"b3": {"pod-y"},
-		"b4": {"pod-x"},
-		"b5": {"pod-y"},
-	}
-
-	expected := map[string]int{
-		"pod-x": 3,
-		"pod-y": 2,
-	}
-
-	scored, err := scorer.Score(blockKeys, hitmap)
-	assert.NoError(t, err)
-	for pod, score := range scored {
-		assert.Equal(t, expected[pod], score)
-	}
+	return kvKeys
 }
