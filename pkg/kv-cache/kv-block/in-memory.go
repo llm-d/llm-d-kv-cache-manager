@@ -145,7 +145,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 	traceLogger := klog.FromContext(ctx).V(5).WithName("kvblock.InMemoryIndex.Add")
 
 	for _, key := range keys {
-		podCache, found := m.data.Get(key)
+		podCache, found := m.data.Get(key) // bumps LRU timestamp if found
 		if !found {
 			cache, err := lru.New[PodEntry, time.Time](m.podCacheSize)
 			if err != nil {
@@ -161,7 +161,10 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 			podCache.cache.Add(entry, time.Now()) // TODO: can this be batched to avoid multiple locks?
 		}
 
-		m.data.Add(key, podCache) // if exists, this bumps the LRU timestamp
+		if !found {
+			m.data.Add(key, podCache) // TODO: conflicts here can lead to lost updates, fix locking
+		}
+
 		traceLogger.Info("added pods to key", "key", key.String(), "pods", entries)
 	}
 
@@ -186,12 +189,11 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		podCache.cache.Remove(entry) // TODO: can this be batched to avoid multiple locks?
 	}
 
+	traceLogger.Info("evicted pods from key", "key", key.String(), "pods", entries)
+
 	if podCache.cache.Len() == 0 {
 		m.data.Remove(key)
 		traceLogger.Info("evicted key from index as no pods remain", "key", key.String())
-	} else {
-		m.data.Add(key, podCache) // bumps the LRU timestamp
-		traceLogger.Info("evicted pods from key", "key", key.String(), "pods", entries)
 	}
 
 	return nil
