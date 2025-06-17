@@ -30,7 +30,7 @@ import (
 
 const (
 	defaultInMemoryIndexSize = 1e8 // TODO: change to memory-size based configuration
-	defaultPodCacheSize      = 10  // number of pods per key
+	defaultPodsPerKey        = 10  // number of pods per key
 )
 
 // InMemoryIndexConfig holds the configuration for the InMemoryIndex.
@@ -45,7 +45,7 @@ type InMemoryIndexConfig struct {
 func DefaultInMemoryIndexConfig() *InMemoryIndexConfig {
 	return &InMemoryIndexConfig{
 		Size:         defaultInMemoryIndexSize,
-		PodCacheSize: defaultPodCacheSize,
+		PodCacheSize: defaultPodsPerKey,
 	}
 }
 
@@ -107,7 +107,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	for idx, key := range keys {
 		if pods, found := m.data.Get(key); found { //nolint:nestif // TODO: can this be optimized?
 			if pods == nil || pods.cache.Len() == 0 {
-				traceLogger.Info("no pods found for key, cutting search", "key", key.String())
+				traceLogger.Info("no pods found for key, cutting search", "key", key)
 				return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
 			}
 
@@ -128,7 +128,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				}
 			}
 		} else {
-			traceLogger.Info("key not found in index", "key", key.String())
+			traceLogger.Info("key not found in index", "key", key)
 		}
 	}
 
@@ -166,7 +166,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 			m.data.Add(key, podCache) // TODO: conflicts here can lead to lost updates, fix locking
 		}
 
-		traceLogger.Info("added pods to key", "key", key.String(), "pods", entries)
+		traceLogger.Info("added pods to key", "key", key, "pods", entries)
 	}
 
 	return nil
@@ -182,7 +182,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 
 	podCache, found := m.data.Get(key)
 	if !found || podCache == nil {
-		traceLogger.Info("key not found in index, nothing to evict", "key", key.String())
+		traceLogger.Info("key not found in index, nothing to evict", "key", key)
 		return nil
 	}
 
@@ -190,11 +190,11 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		podCache.cache.Remove(entry) // TODO: can this be batched to avoid multiple locks?
 	}
 
-	traceLogger.Info("evicted pods from key", "key", key.String(), "pods", entries)
+	traceLogger.Info("evicted pods from key", "key", key, "pods", entries)
 
 	if podCache.cache.Len() == 0 {
 		m.data.Remove(key)
-		traceLogger.Info("evicted key from index as no pods remain", "key", key.String())
+		traceLogger.Info("evicted key from index as no pods remain", "key", key)
 	}
 
 	return nil

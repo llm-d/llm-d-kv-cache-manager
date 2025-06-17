@@ -21,12 +21,11 @@ import (
 	"context"
 	"testing"
 
-	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 
-	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
-
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/stretchr/testify/suite"
 )
 

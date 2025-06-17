@@ -19,11 +19,16 @@ package kvcache_test
 import (
 	"testing"
 
-	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
-
-	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	testModelName = "test-model"
+	podA          = "pod-a"
+	podB          = "pod-b"
 )
 
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
@@ -32,12 +37,12 @@ func TestLongestPrefixScorer(t *testing.T) {
 	blockKeys := stringKeysToKVBlockKeys([]string{"b1", "b2", "b3", "b4", "b5", "b6"})
 
 	hitmap := map[kvblock.Key][]string{
-		{ModelName: "test-model", ChunkHash: "b1"}: {"pod-a"},
-		{ModelName: "test-model", ChunkHash: "b2"}: {"pod-a"},
-		{ModelName: "test-model", ChunkHash: "b3"}: {"pod-a"},
-		{ModelName: "test-model", ChunkHash: "b4"}: {"pod-b"},
-		{ModelName: "test-model", ChunkHash: "b5"}: {"pod-b"},
-		{ModelName: "test-model", ChunkHash: "b6"}: {"pod-a"},
+		{ModelName: testModelName, ChunkHash: "b1"}: {podA},
+		{ModelName: testModelName, ChunkHash: "b2"}: {podA},
+		{ModelName: testModelName, ChunkHash: "b3"}: {podA},
+		{ModelName: testModelName, ChunkHash: "b4"}: {podB},
+		{ModelName: testModelName, ChunkHash: "b5"}: {podB},
+		{ModelName: testModelName, ChunkHash: "b6"}: {podA},
 	}
 
 	expected := map[string]int{
@@ -56,7 +61,7 @@ func stringKeysToKVBlockKeys(keys []string) []kvblock.Key {
 	kvKeys := make([]kvblock.Key, len(keys))
 	for i, key := range keys {
 		kvKeys[i] = kvblock.Key{
-			ModelName: "test-model",
+			ModelName: testModelName,
 			ChunkHash: key,
 		}
 	}

@@ -21,9 +21,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	lru "github.com/hashicorp/golang-lru/v2"
-
 	"github.com/daulet/tokenizers"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // tokenizersCacheSize is the size of the LRU cache for tokenizers.

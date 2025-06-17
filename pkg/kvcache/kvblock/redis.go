@@ -127,7 +127,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 		}
 
 		if len(filteredPods) == 0 {
-			logger.Info("no pods found for key, cutting search", "key", key.String())
+			logger.Info("no pods found for key, cutting search", "key", key)
 			return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
 		}
 

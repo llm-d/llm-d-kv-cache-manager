@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"os"
 
-	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/plugins"

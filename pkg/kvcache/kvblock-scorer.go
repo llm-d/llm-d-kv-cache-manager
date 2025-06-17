@@ -19,9 +19,9 @@ package kvcache
 import (
 	"fmt"
 
-	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
-
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 )
 
 // KVScoringStrategy defines the strategy used to score pods for KV cache block reuse.

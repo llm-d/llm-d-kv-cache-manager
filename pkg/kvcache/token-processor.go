@@ -23,11 +23,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 
-	kvblock "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache/kv-block"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 
 	"k8s.io/klog/v2"
-
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 )
 
 const defaultChunkSize = 256

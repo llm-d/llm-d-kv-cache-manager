@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	kvcache "github.com/llm-d/llm-d-kv-cache-manager/pkg/kv-cache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 
 	"k8s.io/klog/v2"
 )
