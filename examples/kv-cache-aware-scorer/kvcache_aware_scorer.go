@@ -23,13 +23,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
-
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/plugins"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/scheduling/types"
-
 	logutil "sigs.k8s.io/gateway-api-inference-extension/pkg/epp/util/logging"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 )
 
 const (

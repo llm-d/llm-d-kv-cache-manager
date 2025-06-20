@@ -19,7 +19,6 @@ package kvblock
 import (
 	"context"
 	"fmt"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -80,7 +79,7 @@ var _ Index = &InMemoryIndex{}
 type PodCache struct {
 	// cache is an LRU cache that maps PodEntry to their last access time.
 	// thread-safe.
-	cache *lru.Cache[PodEntry, time.Time]
+	cache *lru.Cache[PodEntry, struct{}]
 }
 
 // Lookup receives a list of keys and a set of pod identifiers,
@@ -148,7 +147,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 	for _, key := range keys {
 		podCache, found := m.data.Get(key) // bumps LRU timestamp if found
 		if !found {
-			cache, err := lru.New[PodEntry, time.Time](m.podCacheSize)
+			cache, err := lru.New[PodEntry, struct{}](m.podCacheSize)
 			if err != nil {
 				return fmt.Errorf("failed to create pod cache for key %s: %w", key.String(), err)
 			}
@@ -156,14 +155,12 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 			podCache = &PodCache{
 				cache: cache,
 			}
+
+			m.data.ContainsOrAdd(key, podCache)
 		}
 
 		for _, entry := range entries {
-			podCache.cache.Add(entry, time.Now()) // TODO: can this be batched to avoid multiple locks?
-		}
-
-		if !found {
-			m.data.Add(key, podCache) // TODO: conflicts here can lead to lost updates, fix locking
+			podCache.cache.Add(entry, struct{}{}) // TODO: can this be batched to avoid multiple locks?
 		}
 
 		traceLogger.Info("added pods to key", "key", key, "pods", entries)
