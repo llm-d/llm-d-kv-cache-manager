@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kvcache
+package kvblock
 
 import (
 	"bytes"
@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 
 	"k8s.io/klog/v2"
@@ -62,7 +61,7 @@ type TemporaryTokenProcessorConfig struct {
 // KVBlockKeys.
 type TokenProcessor interface {
 	// TokensToKVBlockKeys converts tokens into kv_block.Keys.
-	TokensToKVBlockKeys(tokens []uint32, modelName string) []kvblock.Key
+	TokensToKVBlockKeys(tokens []uint32, modelName string) []Key
 }
 
 // ChunkedTokenDatabase is a concrete implementation of TokenDatabase.
@@ -136,12 +135,12 @@ func (db *ChunkedTokenDatabase) prefixHashes(tokenChunks [][]uint32) []string {
 }
 
 // TokensToKVBlockKeys converts tokens into kv_block.Keys.
-func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []kvblock.Key {
+func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []Key {
 	tokenChunks := db.chunkTokens(tokens)
 	prefixHashes := db.prefixHashes(tokenChunks)
 
-	return utils.SliceMap(prefixHashes, func(hashVal string) kvblock.Key {
-		return kvblock.Key{
+	return utils.SliceMap(prefixHashes, func(hashVal string) Key {
+		return Key{
 			ModelName: modelName,
 			ChunkHash: hashVal,
 		}

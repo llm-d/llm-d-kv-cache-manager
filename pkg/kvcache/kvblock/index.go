@@ -75,6 +75,8 @@ func NewIndex(cfg *IndexConfig) (Index, error) {
 //
 // The index backend allows efficient tracking of which vLLM engines hold which
 // KV-blocks, on what device tier, and when they were last updated.
+//
+// Index operations are thread-safe and can be performed concurrently.
 type Index interface {
 	// Lookup receives a list of keys and a set of pod identifiers,
 	// and retrieves the filtered pods associated with those keys.

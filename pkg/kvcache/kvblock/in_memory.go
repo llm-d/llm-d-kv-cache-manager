@@ -132,7 +132,15 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	}
 
 	traceLogger.Info("lookup completed", "highest-hit-index", highestHitIdx,
-		"pods-per-key", podsPerKey)
+		"pods-per-key", func(ks map[Key][]string) string {
+			flattened := ""
+			for k, v := range ks {
+				flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+			}
+
+			return flattened
+		}(podsPerKey))
+
 	return keys[:highestHitIdx+1], podsPerKey, nil
 }
 

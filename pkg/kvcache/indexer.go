@@ -33,7 +33,7 @@ import (
 // module.
 type Config struct {
 	PrefixStoreConfig    *prefixstore.Config
-	TokenProcessorConfig *TokenProcessorConfig
+	TokenProcessorConfig *kvblock.TokenProcessorConfig
 	KVBlockIndexConfig   *kvblock.IndexConfig
 	KVBLockScorerConfig  *KVBlockScorerConfig
 	TokenizersPoolConfig *tokenization.Config
@@ -43,7 +43,7 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
-		TokenProcessorConfig: DefaultTokenProcessorConfig(),
+		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBLockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
@@ -52,10 +52,10 @@ func NewDefaultConfig() *Config {
 
 // Indexer is a concrete implementation of the KVCacheIndex interface.
 type Indexer struct {
-	tokensIndexer   prefixstore.Indexer // gets tokens for a prompt
-	tokensProcessor TokenProcessor      // turns tokens to kv block keys
-	kvBlockIndex    kvblock.Index       // looks up pods for block keys
-	kvBlockScorer   KVBlockScorer       // scores pods based on block hits
+	tokensIndexer   prefixstore.Indexer    // gets tokens for a prompt
+	tokensProcessor kvblock.TokenProcessor // turns tokens to kv block keys
+	kvBlockIndex    kvblock.Index          // looks up pods for block keys
+	kvBlockScorer   KVBlockScorer          // scores pods based on block hits
 
 	tokenizersPool *tokenization.Pool
 }
@@ -67,7 +67,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create prefixstore.Indexer: %w", err)
 	}
 
-	tokensProcessor := NewChunkedTokenDatabase(config.TokenProcessorConfig)
+	tokensProcessor := kvblock.NewChunkedTokenDatabase(config.TokenProcessorConfig)
 
 	kvBlockIndex, err := kvblock.NewIndex(config.KVBlockIndexConfig)
 	if err != nil {

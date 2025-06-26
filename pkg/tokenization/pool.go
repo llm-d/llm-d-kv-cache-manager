@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
 const defaultWorkers = 5
@@ -127,7 +126,7 @@ func (pool *Pool) workerLoop(_ int) {
 func (pool *Pool) processTask(task Task) error {
 	tokenIds, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 	if err != nil {
-		klog.Error(err, " failed to encode token", "prompt", task.Prompt, "modelName", task.ModelName)
+		klog.Error(err, " failed to encode token", " prompt ", task.Prompt, " modelName ", task.ModelName)
 		return err
 	}
 
