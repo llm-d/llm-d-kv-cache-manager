@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/redis/go-redis/v9"
 
 	"k8s.io/klog/v2"
@@ -29,20 +30,13 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 )
 
-/*
-Refer to docs/deployment/setup.md
-
-In Redis:
-1) "meta-llama/Llama-3.1-8B-Instruct@33c26f4ed679005e733e382beeb8df69d8362c07400bb07fec69712413cb4310"
-2) "meta-llama/Llama-3.1-8B-Instruct@0a3fd4e370c8aa0fafea88040e14f08aace073029aeec81a2b3aa8be8b84d6ae"
-2) "mistralai/Mistral-7B-Instruct-v0.2@923cdf5f667a7c3e059a1f7b8ed8b7e61d079a1bdceb47196575f4c327a674ae"
-3) "mistralai/Mistral-7B-Instruct-v0.2@e59c0c9babc978ec7d1f22510c7c3cae345f49fe88497c49ae598b95ee948313"
-*/
-
 //nolint:lll // need prompt as-is, chunking to string concatenation is too much of a hassle
 const (
-	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
-	defaultModelName = "meta-llama/Llama-3.1-8B-Instruct"
+	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst. sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
+	blockHash1       = "e59c0c9babc978ec7d1f22510c7c3cae345f49fe88497c49ae598b95ee948313"
+	blockHash2       = "24c6f0a8809f060622a57bf566ae6033ef01834de0a71dff4b30ec1d302f4aee"
+	blockHash3       = "8763970ba646874886b40b315e925025e39653772d0757f4a807608d38980039"
+	defaultModelName = "mistralai/Mistral-7B-Instruct-v0.2"
 
 	envRedisAddr = "REDIS_ADDR"
 	envHFToken   = "HF_TOKEN"
@@ -66,7 +60,7 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 		}
 
 		config.KVBlockIndexConfig.RedisConfig.RedisOpt = redisOpt
-	}
+	} // Otherwise defaults to in-memory indexer
 
 	return config, nil
 }
@@ -84,27 +78,44 @@ func main() {
 	ctx := context.Background()
 	logger := klog.FromContext(ctx)
 
-	if err := kvCacheIndexer(ctx, logger); err != nil {
-		logger.Error(err, "failed to run kv-cache-indexer")
+	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
+	if err != nil {
+		logger.Error(err, "failed to setup KVCacheIndexer")
+		os.Exit(1)
+	}
+
+	if err := runPrompts(ctx, kvCacheIndexer); err != nil {
+		logger.Error(err, "failed to run prompts")
 		os.Exit(1)
 	}
 }
 
-func kvCacheIndexer(ctx context.Context, logger klog.Logger) error {
+func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
+	logger := klog.FromContext(ctx)
+
 	config, err := getKVCacheIndexerConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
 	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.Info("Created Indexer")
 
 	go kvCacheIndexer.Run(ctx)
+	modelName := getModelName()
+	logger.Info("Started Indexer", "model", modelName)
+
+	return kvCacheIndexer, nil
+}
+
+func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
+	logger := klog.FromContext(ctx)
+
 	modelName := getModelName()
 	logger.Info("Started Indexer", "model", modelName)
 
@@ -116,6 +127,14 @@ func kvCacheIndexer(ctx context.Context, logger klog.Logger) error {
 
 	// Print the pods - should be empty because no tokenization
 	logger.Info("Got pods", "pods", pods)
+
+	// Add entries in kvblock.Index manually
+	//nolint // skip linting for this example
+	_ = kvCacheIndexer.KVBlockIndex().Add(ctx, []kvblock.Key{
+		{modelName, blockHash1},
+		{modelName, blockHash2},
+		{modelName, blockHash3},
+	}, []kvblock.PodEntry{{"pod1", "gpu"}})
 
 	// Sleep 3 secs
 	time.Sleep(3 * time.Second)
