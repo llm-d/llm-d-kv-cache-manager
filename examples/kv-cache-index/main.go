@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tracing"
 )
 
 /*
@@ -83,6 +84,24 @@ func getModelName() string {
 func main() {
 	ctx := context.Background()
 	logger := klog.FromContext(ctx)
+
+	tracingConfig := tracing.NewConfigFromEnv()
+	shutdown, err := tracing.Initialize(ctx, tracingConfig)
+	if err != nil {
+		logger.Error(err, "failed to initialize tracing")
+		os.Exit(1)
+	}
+	defer func() {
+		if err := shutdown(ctx); err != nil {
+			logger.Error(err, "failed to shutdown tracing")
+		}
+	}()
+
+	if tracingConfig.Enabled {
+		logger.Info("tracing enabled", "endpoint", tracingConfig.ExporterEndpoint, "sampling", tracingConfig.SamplingRate)
+	} else {
+		logger.Info("tracing disabled")
+	}
 
 	if err := kvCacheIndexer(ctx, logger); err != nil {
 		logger.Error(err, "failed to run kv-cache-indexer")
