@@ -33,10 +33,10 @@ import (
 //nolint:lll // need prompt as-is, chunking to string concatenation is too much of a hassle
 const (
 	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst. sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
-	blockHash1       = "e59c0c9babc978ec7d1f22510c7c3cae345f49fe88497c49ae598b95ee948313"
-	blockHash2       = "24c6f0a8809f060622a57bf566ae6033ef01834de0a71dff4b30ec1d302f4aee"
-	blockHash3       = "8763970ba646874886b40b315e925025e39653772d0757f4a807608d38980039"
-	defaultModelName = "mistralai/Mistral-7B-Instruct-v0.2"
+	blockHash1       = "2b3c9f5784440c74c508c976ca0798229e21033ab4467b891654fcb771627586"
+	blockHash2       = "c85b359a14518ffbaa991cbb490d4f440eb376a14a42c0a0fa27baeb11ae5551"
+	blockHash3       = "390b26f364beac1d0bb70a42aaea6fddc3e83751c1c1a90e5d49eb126bf96798"
+	defaultModelName = "bert-base-uncased"
 
 	envRedisAddr = "REDIS_ADDR"
 	envHFToken   = "HF_TOKEN"
@@ -46,7 +46,6 @@ const (
 func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 	config := kvcache.NewDefaultConfig()
 
-	// For sample running with mistral (tokenizer), a huggingface token is needed
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
 		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
