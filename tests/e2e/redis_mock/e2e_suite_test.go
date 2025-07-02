@@ -83,7 +83,7 @@ func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, model)
+	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
 	s.Require().NotEmpty(blockKeys)
 
 	return blockKeys

@@ -44,7 +44,7 @@ RUN ranlib lib/*.a
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 
-RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-extldflags '-L$(pwd)/lib'" -a -o bin/kv-cache-manager cmd/cmd.go
+RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-extldflags '-L$(pwd)/lib'" -a -o bin/kv-cache-manager examples/kv-events/online/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
@@ -53,6 +53,7 @@ WORKDIR /
 COPY --from=builder /workspace/bin/kv-cache-manager /app/kv-cache-manager
 USER 65532:65532
 
-CMD ["sleep", "infinity"]
+# Set the entrypoint to the kv-cache-manager binary
+ENTRYPOINT ["/app/kv-cache-manager"]
 
 

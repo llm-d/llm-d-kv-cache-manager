@@ -34,15 +34,15 @@ const (
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
 	scorer := &kvcache.LongestPrefixScorer{}
-	blockKeys := stringKeysToKVBlockKeys([]string{"b1", "b2", "b3", "b4", "b5", "b6"})
+	blockKeys := int64KeysToKVBlockKeys([]int64{1001, 1002, 1003, 1004, 1005, 1006})
 
 	hitmap := map[kvblock.Key][]string{
-		{ModelName: testModelName, ChunkHash: "b1"}: {podA},
-		{ModelName: testModelName, ChunkHash: "b2"}: {podA},
-		{ModelName: testModelName, ChunkHash: "b3"}: {podA},
-		{ModelName: testModelName, ChunkHash: "b4"}: {podB},
-		{ModelName: testModelName, ChunkHash: "b5"}: {podB},
-		{ModelName: testModelName, ChunkHash: "b6"}: {podA},
+		{ModelName: testModelName, ChunkHash: 1001}: {podA},
+		{ModelName: testModelName, ChunkHash: 1002}: {podA},
+		{ModelName: testModelName, ChunkHash: 1003}: {podA},
+		{ModelName: testModelName, ChunkHash: 1004}: {podB},
+		{ModelName: testModelName, ChunkHash: 1005}: {podB},
+		{ModelName: testModelName, ChunkHash: 1006}: {podA},
 	}
 
 	expected := map[string]int{
@@ -57,7 +57,7 @@ func TestLongestPrefixScorer(t *testing.T) {
 	}
 }
 
-func stringKeysToKVBlockKeys(keys []string) []kvblock.Key {
+func int64KeysToKVBlockKeys(keys []int64) []kvblock.Key {
 	kvKeys := make([]kvblock.Key, len(keys))
 	for i, key := range keys {
 		kvKeys[i] = kvblock.Key{

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
@@ -113,7 +114,7 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
-	traceLogger := klog.FromContext(ctx).V(5)
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 	// 0. add to tokenizers pool
 	k.tokenizersPool.AddTask(prompt, modelName)
 
@@ -125,7 +126,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	}
 
 	// 2. get block keys
-	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(nil, tokens, modelName)
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods

@@ -2,12 +2,12 @@ package kvevents
 
 import (
 	"context"
-	"fmt"
 	"hash/fnv"
-	"strconv"
 	"sync"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -22,6 +22,8 @@ type Message struct {
 	// PodIdentifier is the identifier of the pod that sent the event.
 	// This will be extracted from the ZMQ topic.
 	PodIdentifier string
+	// ModelName is the name of the model that is associated with this event.
+	ModelName string
 }
 
 // Pool is a sharded worker pool that processes events from a ZMQ subscriber.
@@ -134,9 +136,10 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 // processEvent deserializes the message payload and calls the appropriate
 // index method based on the event type. It returns an error to trigger retries.
 func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
-	debugLogger := klog.FromContext(ctx).V(4)
+	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
+	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
-	var eventBatch KVEventBatch
+	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
 		// This is likely a "poison pill" message that can't be unmarshalled.
 		// We log the error but return nil to prevent it from being retried indefinitely.
@@ -144,44 +147,90 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
 		return nil
 	}
 
-	podIdentifier := msg.PodIdentifier
-	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
-	// TODO: update when DeviceTier is part of the event
+	var events []Event
+	for _, rawEvent := range eventBatch.Events {
+		var taggedUnion []msgpack.RawMessage
+		if err := msgpack.Unmarshal(rawEvent, &taggedUnion); err != nil {
+			debugLogger.Error(err, "Failed to unmarshal tagged union, skipping event")
+			continue
+		}
+		if len(taggedUnion) != 2 {
+			debugLogger.Error(nil, "Expected 2-part tagged union, got different number of parts", "parts", len(taggedUnion))
+			continue
+		}
 
-	for _, event := range eventBatch.Events {
-		var opErr error
+		var tag string
+		if err := msgpack.Unmarshal(taggedUnion[0], &tag); err != nil {
+			debugLogger.Error(err, "Failed to unmarshal tag from tagged union, skipping event")
+			continue
+		}
+
+		var event Event
+		var unmarshalErr error
+		switch tag {
+		case "BlockStored":
+			var bs BlockStored
+			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &bs)
+			event = bs
+		case "BlockRemoved":
+			var br BlockRemoved
+			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &br)
+			event = br
+		case "AllBlocksCleared":
+			var ac AllBlocksCleared
+			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &ac)
+			event = ac
+		default:
+			debugLogger.Info("Unknown event tag", "tag", tag)
+			continue
+		}
+
+		if unmarshalErr != nil {
+			debugLogger.Error(unmarshalErr, "Failed to unmarshal event value", "tag", tag)
+			continue
+		}
+		events = append(events, event)
+	}
+
+	podIdentifier := msg.PodIdentifier
+	modelName := msg.ModelName
+	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
+	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
+
+	return nil
+}
+
+func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
+	events []Event, podEntries []kvblock.PodEntry) {
+	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
+	debugLogger.Info("Digesting events", "count", len(events))
+
+	// Process each event in the batch
+	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
-			keys := make([]kvblock.Key, len(ev.BlockHashes))
-			for i, hash := range ev.BlockHashes {
-				keys[i] = kvblock.Key{ChunkHash: strconv.FormatInt(hash, 10)}
-			}
-			opErr = p.index.Add(ctx, keys, entries)
-			if opErr != nil {
-				debugLogger.Error(opErr, "Failed to add event to index", "podIdentifier",
+			keys := utils.SliceMap(ev.BlockHashes, func(hash int64) kvblock.Key {
+				return kvblock.Key{ModelName: modelName, ChunkHash: hash}
+			})
+
+			if err := p.index.Add(ctx, keys, podEntries); err != nil {
+				debugLogger.Error(err, "Failed to add event to index", "podIdentifier",
 					podIdentifier, "event", ev)
+				continue // Continue processing other events even if one fails
 			}
 		case BlockRemoved:
 			for _, hash := range ev.BlockHashes {
-				key := kvblock.Key{ChunkHash: strconv.FormatInt(hash, 10)}
-				opErr = p.index.Evict(ctx, key, entries)
-				if opErr != nil {
-					debugLogger.Error(opErr, "Failed to remove event from index", "podIdentifier",
+				key := kvblock.Key{ModelName: modelName, ChunkHash: hash}
+				if err := p.index.Evict(ctx, key, podEntries); err != nil {
+					debugLogger.Error(err, "Failed to remove event from index", "podIdentifier",
 						podIdentifier, "event", ev)
-					break // Stop processing this batch on the first error
+					continue // Continue processing other events even if one fails
 				}
 			}
 		case AllBlocksCleared:
-			// The current Index interface doesn't have a method to clear all blocks for a pod.
-			// This would need to be added to the interface if this functionality is required.
-			debugLogger.Info("All blocks cleared", "podIdentifier", podIdentifier)
+			continue
 		default:
 			debugLogger.Info("Unknown event", "podIdentifier", podIdentifier, "event", ev)
 		}
-		// If any operation in the batch fails, return the error to retry the whole message.
-		if opErr != nil {
-			return fmt.Errorf("failed to process event for pod %s: %w", podIdentifier, opErr)
-		}
 	}
-	return nil
 }

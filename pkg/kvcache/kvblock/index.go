@@ -97,12 +97,12 @@ type Index interface {
 // Key struct represents a unique identifier for a KV-cache block.
 type Key struct {
 	ModelName string // TODO: eject after aligning LMCache
-	ChunkHash string
+	ChunkHash int64
 }
 
 // String returns a string representation of the Key.
 func (c *Key) String() string {
-	return fmt.Sprintf("%s@%s", c.ModelName, c.ChunkHash)
+	return fmt.Sprintf("%s@%d", c.ModelName, c.ChunkHash)
 }
 
 // PodEntry struct represents a pod entry in the KV-block index.

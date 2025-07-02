@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	zmq "github.com/pebbe/zmq4"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -58,27 +60,31 @@ func (z *zmqSubscriber) Start(ctx context.Context) {
 	}
 }
 
+// runSubscriber connects to the ZMQ PUB socket, subscribes to the topic filter,
+// and listens for messages.
 func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
+	logger := klog.FromContext(ctx).WithName("zmq-subscriber")
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
-		log.Printf("Failed to create ZMQ SUB socket: %v", err)
+		logger.Error(err, "Failed to create subscriber socket")
 		return
 	}
 	defer sub.Close()
 
 	if err := sub.Connect(z.endpoint); err != nil {
-		log.Printf("Failed to connect ZMQ SUB socket to %s: %v", z.endpoint, err)
+		logger.Error(err, "Failed to connect subscriber socket", "endpoint", z.endpoint)
 		return
 	}
-	log.Printf("ZMQ subscriber connected to %s", z.endpoint)
+	logger.Info("Connected to subscriber socket", "endpoint", z.endpoint)
 
 	if err := sub.SetSubscribe(z.topicFilter); err != nil {
-		log.Printf("Failed to subscribe to topic '%s': %v", z.topicFilter, err)
+		logger.Error(err, "Failed to subscribe to topic filter", "topic", z.topicFilter)
 		return
 	}
 
 	poller := zmq.NewPoller()
 	poller.Add(sub, zmq.POLLIN)
+	debugLogger := logger.V(logging.DEBUG)
 
 	for {
 		select {
@@ -89,18 +95,18 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 
 		polled, err := poller.Poll(pollTimeout)
 		if err != nil {
-			log.Printf("Error polling ZMQ socket: %v", err)
+			debugLogger.Error(err, "Failed to poll zmq subscriber", "endpoint", z.endpoint)
 			break // Exit on poll error to reconnect
 		}
 
 		if len(polled) > 0 {
 			parts, err := sub.RecvMessageBytes(0)
 			if err != nil {
-				log.Printf("Error receiving ZMQ message: %v", err)
+				debugLogger.Error(err, "Failed to receive message from zmq subscriber", "endpoint", z.endpoint)
 				break // Exit on receive error to reconnect
 			}
 			if len(parts) != 3 {
-				log.Printf("Unexpected message parts count: got %d, want 3", len(parts))
+				debugLogger.Error(err, "Failed to receive message from zmq subscriber", "endpoint", z.endpoint)
 				continue
 			}
 			topic := string(parts[0])
@@ -109,21 +115,31 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 
 			seq := binary.BigEndian.Uint64(seqBytes)
 
-			// Extract pod identifier from topic, assuming "kv.<pod-id>" format
-			topicParts := strings.Split(topic, ".")
-			var podIdentifier string
-			if len(topicParts) > 1 {
+			// Extract pod identifier from topic, assuming "kv@<pod-id>@<model-name>" format
+			// TODO: optimize this to not occur for every message
+			topicParts := strings.Split(topic, "@")
+			var podIdentifier, modelName string
+			if len(topicParts) == 3 {
 				podIdentifier = topicParts[1]
+				modelName = topicParts[2]
 			} else {
-				log.Printf("Could not extract pod identifier from topic: %s", topic)
+				debugLogger.Error(nil, "Failed to extract identifiers from topic, expected format kv@<pod-id>@<model-name>", "topic", topic)
 				return // Useless if we can't extract pod identifier
 			}
+
+			debugLogger.Info("Received message from zmq subscriber",
+				"topic", topic,
+				"seq", seq,
+				"podIdentifier", podIdentifier,
+				"modelName", modelName,
+				"payloadSize", len(payload))
 
 			z.pool.AddTask(&Message{
 				Topic:         topic,
 				Payload:       payload,
 				Seq:           seq,
 				PodIdentifier: podIdentifier,
+				ModelName:     modelName,
 			})
 		}
 	}
