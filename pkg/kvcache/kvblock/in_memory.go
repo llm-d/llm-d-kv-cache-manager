@@ -21,11 +21,11 @@ import (
 	"fmt"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 const (
@@ -133,14 +133,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	}
 
 	traceLogger.Info("lookup completed", "highest-hit-index", highestHitIdx,
-		"pods-per-key", func(ks map[Key][]string) string {
-			flattened := ""
-			for k, v := range ks {
-				flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
-			}
-
-			return flattened
-		}(podsPerKey))
+		"pods-per-key", podsPerKeyPrintHelper(podsPerKey))
 
 	return keys[:highestHitIdx+1], podsPerKey, nil
 }
@@ -204,4 +197,14 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 	}
 
 	return nil
+}
+
+// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
+func podsPerKeyPrintHelper(ks map[Key][]string) string {
+	flattened := ""
+	for k, v := range ks {
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+	}
+
+	return flattened
 }

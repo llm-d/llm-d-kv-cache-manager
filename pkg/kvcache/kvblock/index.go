@@ -97,7 +97,7 @@ type Index interface {
 // Key struct represents a unique identifier for a KV-cache block.
 type Key struct {
 	ModelName string // TODO: eject after aligning LMCache
-	ChunkHash int64
+	ChunkHash uint64
 }
 
 // String returns a string representation of the Key.

@@ -21,9 +21,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
 const defaultWorkers = 5

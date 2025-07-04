@@ -20,11 +20,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"strconv"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"k8s.io/klog/v2"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 )
 
 const defaultChunkSize = 256
@@ -34,14 +34,16 @@ type TokenProcessorConfig struct {
 	ChunkSize int
 	// HashSeed is used to prefix initial hash chunks, similarly to vLLM's NONE_HASH.
 	// This should be aligned with vLLM's `PYTHONHASHSEED` environment variable.
-	HashSeed int64
+	HashSeed string
+
+	initHash *uint64 // cache once
 }
 
 // DefaultTokenProcessorConfig returns the default configuration for the token processor.
 func DefaultTokenProcessorConfig() *TokenProcessorConfig {
 	return &TokenProcessorConfig{
 		ChunkSize: defaultChunkSize,
-		HashSeed:  0,
+		HashSeed:  "",
 	}
 }
 
@@ -49,7 +51,7 @@ func DefaultTokenProcessorConfig() *TokenProcessorConfig {
 // KVBlockKeys.
 type TokenProcessor interface {
 	// TokensToKVBlockKeys converts tokens into kv_block.Keys.
-	TokensToKVBlockKeys(parentHash *int64, tokens []uint32, modelName string) []Key
+	TokensToKVBlockKeys(tokens []uint32, modelName string) []Key
 }
 
 // ChunkedTokenDatabase is a concrete implementation of TokenDatabase.
@@ -71,19 +73,33 @@ func NewChunkedTokenDatabase(config *TokenProcessorConfig) TokenProcessor {
 	}
 }
 
-// getInitHash returns the initial hash by computing SHA-256 of the HashSeed.
-// This mimics Python's sha256(os.getenv("PYTHONHASHSEED")).
-func (db *ChunkedTokenDatabase) getInitHash() *int64 {
-	seedStr := strconv.FormatInt(db.HashSeed, 10)
-	sum := sha256.Sum256([]byte(seedStr))
-	// Convert to int64 using big-endian (matching Python's int.from_bytes with byteorder="big")
-	hash := int64(binary.BigEndian.Uint64(sum[:8]))
-	return &hash
+// getInitHash returns the root parent hash.
+func (db *ChunkedTokenDatabase) getInitHash() *uint64 {
+	if db.initHash != nil {
+		return db.initHash
+	}
+
+	encMode, err := cbor.CanonicalEncOptions().EncMode() // deterministic
+	if err != nil {
+		klog.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
+		return nil
+	}
+
+	b, err := encMode.Marshal(db.HashSeed)
+	if err != nil {
+		klog.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
+		return nil
+	}
+
+	sum := sha256.Sum256(b)
+	hashVal := binary.BigEndian.Uint64(sum[24:])
+	db.initHash = &hashVal
+	return db.initHash
 }
 
-// hash computes the SHA-256 hash using CBOR serialization, mimicking Python's sha256_cbor function.
-// It serializes the input using canonical CBOR, computes SHA-256, and returns the first 8 bytes as int64.
-func (db *ChunkedTokenDatabase) hash(parent int64, tokens []uint32, extra interface{}) int64 {
+// hash computes a uint64 hash (lower 64 bits of SHA256).
+// The format, serialization and hashing is aligned with that of vLLM.
+func (db *ChunkedTokenDatabase) hash(parent uint64, tokens []uint32, extra interface{}) uint64 {
 	payload := []interface{}{parent, tokens, extra}
 
 	encMode, err := cbor.CanonicalEncOptions().EncMode() // deterministic
@@ -99,8 +115,18 @@ func (db *ChunkedTokenDatabase) hash(parent int64, tokens []uint32, extra interf
 	}
 
 	sum := sha256.Sum256(b)
-	// Convert to int64 using big-endian (matching Python's int.from_bytes with byteorder="big")
-	return int64(binary.BigEndian.Uint64(sum[:8]))
+	return binary.BigEndian.Uint64(sum[24:])
+}
+
+// prefixHashes returns a slice of uint64 hashes.
+func (db *ChunkedTokenDatabase) prefixHashes(parentHash uint64, tokenChunks [][]uint32) []uint64 {
+	prefix := parentHash
+	hashes := make([]uint64, len(tokenChunks))
+	for i, chunk := range tokenChunks {
+		prefix = db.hash(prefix, chunk, nil)
+		hashes[i] = prefix
+	}
+	return hashes
 }
 
 // chunkTokens splits the input slice of tokens into chunks of size chunkSize.
@@ -118,30 +144,16 @@ func (db *ChunkedTokenDatabase) chunkTokens(tokens []uint32) [][]uint32 {
 	return chunks
 }
 
-// prefixHashes computes the rolling (prefix) hash for each chunk and
-// returns a slice of hash values. It starts from the parentHash
-// and then for each token chunk it computes the new hash.
-func (db *ChunkedTokenDatabase) prefixHashes(parentHash int64, tokenChunks [][]uint32) []int64 {
-	prefixHash := parentHash
-	hashes := make([]int64, len(tokenChunks))
-	for i, chunk := range tokenChunks {
-		prefixHash = db.hash(prefixHash, chunk, nil)
-		hashes[i] = prefixHash
-	}
-	return hashes
-}
-
 // TokensToKVBlockKeys converts tokens into kv_block.Keys.
-func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(parentHash *int64, tokens []uint32, modelName string) []Key {
-	if parentHash == nil {
-		// If no parent hash is provided, use the initial hash.
-		parentHash = db.getInitHash()
+func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []Key {
+	parentPtr := db.getInitHash()
+	if parentPtr == nil {
+		return nil
 	}
 
-	tokenChunks := db.chunkTokens(tokens)
-	prefixHashes := db.prefixHashes(*parentHash, tokenChunks)
-
-	return utils.SliceMap(prefixHashes, func(hashVal int64) Key {
+	chunks := db.chunkTokens(tokens)
+	ph := db.prefixHashes(*parentPtr, chunks)
+	return utils.SliceMap(ph, func(hashVal uint64) Key {
 		return Key{
 			ModelName: modelName,
 			ChunkHash: hashVal,

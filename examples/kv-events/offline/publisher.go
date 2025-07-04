@@ -42,9 +42,9 @@ func NewPublisher(endpoint string) (*Publisher, error) {
 		return nil, fmt.Errorf("failed to create ZMQ PUB socket: %w", err)
 	}
 
-	if err := socket.Bind(endpoint); err != nil {
+	if err := socket.Connect(endpoint); err != nil {
 		socket.Close()
-		return nil, fmt.Errorf("failed to bind to %s: %w", endpoint, err)
+		return nil, fmt.Errorf("failed to connect to %s: %w", endpoint, err)
 	}
 
 	return &Publisher{

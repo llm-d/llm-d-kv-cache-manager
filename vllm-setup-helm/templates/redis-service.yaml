@@ -1,8 +1,8 @@
-{{- if .Values.redis.enabled }}
+{{- if .Values.lmcache.redis.enabled }}
 kind: Service
 apiVersion: v1
 metadata:
-  name: {{ .Release.Name }}-{{ .Values.redis.service.nameSuffix }}
+  name: {{ .Release.Name }}-{{ .Values.lmcache.redis.service.nameSuffix }}
   namespace: {{ .Release.Namespace | default .Values.namespace }}
   labels:
     {{- include "chart.labels" . | nindent 4 }}
@@ -11,9 +11,9 @@ spec:
   ports:
     - name: lookupserver-port
       protocol: TCP
-      port: {{ .Values.redis.service.port }}
-      targetPort: {{ .Values.redis.service.targetPort }}
-  type: {{ .Values.redis.service.type }}
+      port: {{ .Values.lmcache.redis.service.port }}
+      targetPort: {{ .Values.lmcache.redis.service.targetPort }}
+  type: {{ .Values.lmcache.redis.service.type }}
   selector:
      {{- include "chart.redisSelectorLabels" . | nindent 4 }}
 {{- end }}

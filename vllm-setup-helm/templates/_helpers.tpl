@@ -74,7 +74,7 @@ Return the proper VLLM image name
 Return the proper Redis image name
 */}}
 {{- define "chart.redisImage" -}}
-{{- printf "%s:%s" .Values.redis.image.repository .Values.redis.image.tag -}}
+{{- printf "%s:%s" .Values.lmcache.redis.image.repository .Values.lmcache.redis.image.tag -}}
 {{- end -}}
 
 {{/*
@@ -88,8 +88,16 @@ Generate secret key name
 Generate Redis Service URL (fully qualified)
 */}}
 {{- define "chart.redisServiceUrl" -}}
-{{- $serviceName := printf "%s-%s" .Release.Name .Values.redis.service.nameSuffix -}}
-{{- printf "%s.%s.svc.cluster.local:%v" $serviceName .Release.Namespace .Values.redis.service.port -}}
+{{- $serviceName := printf "%s-%s" .Release.Name .Values.lmcache.redis.service.nameSuffix -}}
+{{- printf "%s.%s.svc.cluster.local:%v" $serviceName .Release.Namespace .Values.lmcache.redis.service.port -}}
+{{- end -}}
+
+{{/*
+Generate KV Cache Manager Service URL (fully qualified)
+*/}}
+{{- define "chart.kvCacheManagerServiceUrl" -}}
+{{- $serviceName := printf "%s-kv-cache-manager" .Release.Name -}}
+{{- printf "tcp://%s.%s.svc.cluster.local:%v" $serviceName .Release.Namespace .Values.kvCacheManager.service.port -}}
 {{- end -}}
 
 {{/*

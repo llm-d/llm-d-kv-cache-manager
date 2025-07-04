@@ -1,10 +1,14 @@
 # -- Target namespace for all resources
 namespace: kvcache-manager
 
+# -- PYTHONHASHSEED for deterministic hashing, must match between vLLM and kv-cache-manager.
+# This is only used when kvCacheManager.enabled is true.
+pythonHashSeed: "0"
+
 # -- VLLM Deployment Configuration
 vllm:
   # -- Number of VLLM replicas
-  replicaCount: 4
+  replicaCount: 1
   # -- Inference pool label key
   poolLabelKey: app
   # -- Inference pool label value
@@ -12,9 +16,9 @@ vllm:
 
   image:
     # -- VLLM image repository
-    repository: ghcr.io/llm-d/llm-d
+    repository: quay.io/oroz/llm-d
     # -- VLLM image tag (overrides Chart.yaml appVersion if set)
-    tag: "0.0.8"
+    tag: "offloading"
     # -- VLLM image pull policy
     pullPolicy: IfNotPresent
 
@@ -75,13 +79,97 @@ vllm:
 
   # -- Additional environment variables for VLLM container
   extraEnv:
-    LMCACHE_USE_EXPERIMENTAL: 'True'
     VLLM_RPC_TIMEOUT: '1000000'
-    LMCACHE_LOCAL_CPU: 'True'
-    LMCACHE_ENABLE_DEBUG: 'True'
-    LMCACHE_MAX_LOCAL_CPU_SIZE: '40'
     # LMCACHE_LOOKUP_URL will be set automatically based on redis service name
     # LMCACHE_DISTRIBUTED_URL will be set automatically based on pod IP
+
+  # -- Block size for prefix-cache block chunking
+  blockSize: 64
+
+# -- KV Cache Manager Configuration
+kvCacheManager:
+  # -- Enable deployment of the kv-cache-manager. It will listen for events from vLLM.
+  enabled: true
+  # -- Number of kv-cache-manager replicas
+  replicaCount: 1
+  image:
+    # -- kv-cache-manager image repository
+    repository: quay.io/vmaroon/llm-d-kv-cache-manager/kvevents
+    # -- kv-cache-manager image tag
+    tag: 0.0.1
+    # -- kv-cache-manager image pull policy
+    pullPolicy: Always
+  # -- ZMQ topic for vLLM to publish to and for the manager to subscribe to
+  zmqTopic: "kv@"
+  # -- Concurrency for the event processing pool in the manager
+  poolConcurrency: "4"
+  service:
+    # -- Port for the ZMQ service that vLLM connects to
+    port: 5557
+    # -- HTTP port for the kv-cache-manager service
+    httpPort: 8080
+  # -- kv-cache-manager container resource requests and limits
+  resources:
+    requests:
+      cpu: "8"
+      memory: "1Gi"
+    limits:
+      cpu: "8"
+      memory: "5Gi"
+
+# -- LMCache Connector Configuration
+lmcache:
+  # -- Enable the LMCache connector for KV cache transfer
+  enabled: false
+  # -- The name of the KV cache connector to use
+  connector: "LMCacheConnectorV1"
+  # -- The role of the vLLM instance in the KV cache transfer
+  role: "kv_both"
+  # -- Use experimental features of LMCache
+  useExperimental: true
+  # -- Enable local CPU caching
+  localCpu: true
+  # -- Enable debug logging for LMCache
+  enableDebug: true
+  # -- Maximum size of the local CPU cache
+  maxLocalCpuSize: "40"
+
+  # -- Redis Lookup Server Configuration (used by LMCache)
+  redis:
+    # -- Enable Redis deployment
+    enabled: false
+    # -- Redis deployment name suffix
+    nameSuffix: lookup-server
+    # -- Number of Redis replicas
+    replicaCount: 1
+    image:
+      # -- Redis image repository
+      repository: redis
+      # -- Redis image tag
+      tag: latest
+      # -- Redis image pull policy
+      pullPolicy: IfNotPresent
+    # -- Redis container resource requests and limits
+    resources:
+      limits:
+        # -- Redis CPU limit
+        cpu: '8'
+        # -- Redis memory limit
+        memory: 30G
+      requests:
+        # -- Redis CPU request
+        cpu: '4'
+        # -- Redis memory request
+        memory: 8G
+    service:
+      # -- Redis service name suffix
+      nameSuffix: lookup-server-service
+      # -- Redis service type
+      type: ClusterIP
+      # -- Port the service exposes
+      port: 8100
+      # -- Target port on the Redis container
+      targetPort: 6379 # Default Redis port
 
 # -- Secret Configuration for Hugging Face Token
 secret:
@@ -120,40 +208,3 @@ dshm:
   sizeLimit: 8Gi
   # -- PVC name for /dev/shm (overrides useEmptyDir if set)
   pvcName: ""
-
-# -- Redis Lookup Server Configuration
-redis:
-  # -- Enable Redis deployment
-  enabled: true
-  # -- Redis deployment name suffix
-  nameSuffix: lookup-server
-  # -- Number of Redis replicas
-  replicaCount: 1
-  image:
-    # -- Redis image repository
-    repository: redis
-    # -- Redis image tag
-    tag: latest
-    # -- Redis image pull policy
-    pullPolicy: IfNotPresent
-  # -- Redis container resource requests and limits
-  resources:
-    limits:
-      # -- Redis CPU limit
-      cpu: '8'
-      # -- Redis memory limit
-      memory: 30G
-    requests:
-      # -- Redis CPU request
-      cpu: '4'
-      # -- Redis memory request
-      memory: 8G
-  service:
-    # -- Redis service name suffix
-    nameSuffix: lookup-server-service
-    # -- Redis service type
-    type: ClusterIP
-    # -- Port the service exposes
-    port: 8100
-    # -- Target port on the Redis container
-    targetPort: 6379 # Default Redis port

@@ -3,13 +3,13 @@ package kvevents
 import (
 	"context"
 	"encoding/binary"
-	"log"
 	"strings"
 	"time"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	zmq "github.com/pebbe/zmq4"
 	"k8s.io/klog/v2"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 const (
@@ -39,10 +39,12 @@ func newZMQSubscriber(pool *Pool, endpoint, topicFilter string) *zmqSubscriber {
 // wraps them in Message structs, and pushes them into the pool.
 // This loop will run until the provided context is canceled.
 func (z *zmqSubscriber) Start(ctx context.Context) {
+	logger := klog.FromContext(ctx).WithName("zmq-subscriber")
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("ZMQ subscriber shutting down.")
+			logger.Info("shutting down zmq-subscriber")
 			return
 		default:
 			// We run the subscriber in a separate function to handle socket
@@ -51,9 +53,9 @@ func (z *zmqSubscriber) Start(ctx context.Context) {
 			// wait before retrying, unless the context has been canceled.
 			select {
 			case <-time.After(retryInterval):
-				log.Printf("ZMQ subscriber disconnected. Retrying in %v...", retryInterval)
+				logger.Info("retrying zmq-subscriber")
 			case <-ctx.Done():
-				log.Println("ZMQ subscriber shutting down.")
+				logger.Info("shutting down zmq-subscriber")
 				return
 			}
 		}
@@ -71,11 +73,11 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 	}
 	defer sub.Close()
 
-	if err := sub.Connect(z.endpoint); err != nil {
-		logger.Error(err, "Failed to connect subscriber socket", "endpoint", z.endpoint)
+	if err := sub.Bind(z.endpoint); err != nil {
+		logger.Error(err, "Failed to bind subscriber socket", "endpoint", z.endpoint)
 		return
 	}
-	logger.Info("Connected to subscriber socket", "endpoint", z.endpoint)
+	logger.Info("Bound subscriber socket", "endpoint", z.endpoint)
 
 	if err := sub.SetSubscribe(z.topicFilter); err != nil {
 		logger.Error(err, "Failed to subscribe to topic filter", "topic", z.topicFilter)
@@ -124,7 +126,7 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 				modelName = topicParts[2]
 			} else {
 				debugLogger.Error(nil, "Failed to extract identifiers from topic, expected format kv@<pod-id>@<model-name>", "topic", topic)
-				return // Useless if we can't extract pod identifier
+				continue // Useless if we can't extract pod identifier
 			}
 
 			debugLogger.Info("Received message from zmq subscriber",

@@ -20,7 +20,11 @@ ARG TARGETARCH
 WORKDIR /workspace
 
 USER root
-RUN dnf install -y gcc-c++ libstdc++ libstdc++-devel clang && dnf clean all
+# Install EPEL repository directly and then ZeroMQ, as epel-release is not in default repos.
+# The builder is based on UBI8, so we need epel-release-8.
+RUN dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm' && \
+    dnf install -y gcc-c++ libstdc++ libstdc++-devel clang zeromq-devel pkgconfig && \
+    dnf clean all
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -50,10 +54,14 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM registry.access.redhat.com/ubi9/ubi:latest
 WORKDIR /
+# Install zeromq runtime library needed by the manager.
+# The final image is UBI9, so we need epel-release-9.
+USER root
+RUN dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm' && \
+    dnf install -y zeromq
+
 COPY --from=builder /workspace/bin/kv-cache-manager /app/kv-cache-manager
 USER 65532:65532
 
 # Set the entrypoint to the kv-cache-manager binary
 ENTRYPOINT ["/app/kv-cache-manager"]
-
-

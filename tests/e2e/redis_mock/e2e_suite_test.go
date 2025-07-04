@@ -21,12 +21,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
-
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -83,7 +83,7 @@ func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
+	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, model)
 	s.Require().NotEmpty(blockKeys)
 
 	return blockKeys

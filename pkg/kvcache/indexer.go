@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 // Config holds the configuration for the Indexer module.
@@ -126,7 +126,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	}
 
 	// 2. get block keys
-	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(nil, tokens, modelName)
+	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
@@ -134,7 +134,8 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
-	traceLogger.Info("found block keys", "block-keys", blockKeys, "pods", keyToPods)
+	traceLogger.Info("found block keys", "block-keys", blockKeys,
+		"pods", podsPerKeyPrintHelper(keyToPods))
 
 	// 4. score pods
 	podScores, err := k.kvBlockScorer.Score(strBlockKeys, keyToPods)
@@ -144,4 +145,14 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
 
 	return podScores, nil
+}
+
+// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
+func podsPerKeyPrintHelper(ks map[kvblock.Key][]string) string {
+	flattened := ""
+	for k, v := range ks {
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+	}
+
+	return flattened
 }

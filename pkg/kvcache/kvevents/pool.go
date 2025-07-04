@@ -5,13 +5,33 @@ import (
 	"hash/fnv"
 	"sync"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
+
+// Config holds the configuration for the event processing pool.
+type Config struct {
+	// ZMQEndpoint is the ZMQ address to connect to (e.g., "tcp://indexer:5557").
+	ZMQEndpoint string
+	// TopicFilter is the ZMQ subscription filter (e.g., "kv.").
+	TopicFilter string
+	// Concurrency is the number of parallel workers to run.
+	Concurrency int
+}
+
+// DefaultConfig returns a default configuration for the event processing pool.
+func DefaultConfig() *Config {
+	return &Config{
+		ZMQEndpoint: "tcp://indexer:5557",
+		TopicFilter: "kv@",
+		Concurrency: 4,
+	}
+}
 
 // Message represents a message that is read from a ZMQ topic.
 type Message struct {
@@ -30,28 +50,29 @@ type Message struct {
 // It ensures that events for the same PodIdentifier are processed in order.
 type Pool struct {
 	queues      []workqueue.TypedRateLimitingInterface[*Message]
-	concurrency int
+	concurrency int // can replace use with len(queues)
 	subscriber  *zmqSubscriber
 	index       kvblock.Index
 	wg          sync.WaitGroup
 }
 
 // NewPool creates a Pool with a sharded worker setup.
-// concurrency (> 0) determines the number of parallel workers (and queues).
-// zmqEndpoint is the ZMQ address (e.g., "tcp://indexer:5557").
-// topicFilter is the ZMQ subscription filter (e.g., "kv.").
-func NewPool(concurrency int, zmqEndpoint, topicFilter string, index kvblock.Index) *Pool {
+func NewPool(cfg *Config, index kvblock.Index) *Pool {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
 	p := &Pool{
-		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], concurrency),
-		concurrency: concurrency,
+		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
+		concurrency: cfg.Concurrency,
 		index:       index,
 	}
 
-	for i := 0; i < concurrency; i++ {
+	for i := 0; i < p.concurrency; i++ {
 		p.queues[i] = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[*Message]())
 	}
 
-	p.subscriber = newZMQSubscriber(p, zmqEndpoint, topicFilter)
+	p.subscriber = newZMQSubscriber(p, cfg.ZMQEndpoint, cfg.TopicFilter)
 	return p
 }
 
@@ -113,13 +134,7 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 		// Use a nested func to ensure Done is always called.
 		func(task *Message) {
 			defer queue.Done(task)
-			err := p.processEvent(ctx, task)
-			if err != nil {
-				// Task failed, requeue it with rate-limiting.
-				klog.FromContext(ctx).Error(err, "Failed to process event, requeuing", "podIdentifier", task.PodIdentifier, "seq", task.Seq)
-				queue.AddRateLimited(task)
-				return
-			}
+			p.processEvent(ctx, task)
 			// Task succeeded, remove it from the queue.
 			queue.Forget(task)
 		}(task)
@@ -135,7 +150,7 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 
 // processEvent deserializes the message payload and calls the appropriate
 // index method based on the event type. It returns an error to trigger retries.
-func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
+func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
@@ -144,18 +159,25 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
 		// This is likely a "poison pill" message that can't be unmarshalled.
 		// We log the error but return nil to prevent it from being retried indefinitely.
 		debugLogger.Error(err, "Failed to unmarshal event batch, dropping message")
-		return nil
+		return
 	}
 
-	var events []Event
+	events := make([]Event, 0, len(eventBatch.Events))
 	for _, rawEvent := range eventBatch.Events {
 		var taggedUnion []msgpack.RawMessage
 		if err := msgpack.Unmarshal(rawEvent, &taggedUnion); err != nil {
 			debugLogger.Error(err, "Failed to unmarshal tagged union, skipping event")
 			continue
 		}
-		if len(taggedUnion) != 2 {
-			debugLogger.Error(nil, "Expected 2-part tagged union, got different number of parts", "parts", len(taggedUnion))
+
+		// Handle array_like tagged union: re-marshall tail parts into a payload array
+		if len(taggedUnion) < 1 {
+			debugLogger.Error(nil, "Malformed tagged union, no tag element", "parts", len(taggedUnion))
+			continue
+		}
+		payloadBytes, err := msgpack.Marshal(taggedUnion[1:])
+		if err != nil {
+			debugLogger.Error(err, "Failed to re-marshal payload parts, skipping event")
 			continue
 		}
 
@@ -170,15 +192,15 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
 		switch tag {
 		case "BlockStored":
 			var bs BlockStored
-			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &bs)
+			unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
 			event = bs
 		case "BlockRemoved":
 			var br BlockRemoved
-			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &br)
+			unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)
 			event = br
 		case "AllBlocksCleared":
 			var ac AllBlocksCleared
-			unmarshalErr = msgpack.Unmarshal(taggedUnion[1], &ac)
+			unmarshalErr = msgpack.Unmarshal(payloadBytes, &ac)
 			event = ac
 		default:
 			debugLogger.Info("Unknown event tag", "tag", tag)
@@ -196,12 +218,11 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) error {
 	modelName := msg.ModelName
 	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
 	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
-
-	return nil
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []Event, podEntries []kvblock.PodEntry) {
+	events []Event, podEntries []kvblock.PodEntry,
+) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))
 
@@ -209,21 +230,22 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
-			keys := utils.SliceMap(ev.BlockHashes, func(hash int64) kvblock.Key {
+			keys := utils.SliceMap(ev.BlockHashes, func(hash uint64) kvblock.Key {
 				return kvblock.Key{ModelName: modelName, ChunkHash: hash}
 			})
 
 			if err := p.index.Add(ctx, keys, podEntries); err != nil {
-				debugLogger.Error(err, "Failed to add event to index", "podIdentifier",
-					podIdentifier, "event", ev)
+				debugLogger.Error(err, "Failed to add event to index",
+					"podIdentifier", podIdentifier, "event", ev)
+
 				continue // Continue processing other events even if one fails
 			}
 		case BlockRemoved:
 			for _, hash := range ev.BlockHashes {
 				key := kvblock.Key{ModelName: modelName, ChunkHash: hash}
 				if err := p.index.Evict(ctx, key, podEntries); err != nil {
-					debugLogger.Error(err, "Failed to remove event from index", "podIdentifier",
-						podIdentifier, "event", ev)
+					debugLogger.Error(err, "Failed to remove event from index",
+						"podIdentifier", podIdentifier, "event", ev)
 					continue // Continue processing other events even if one fails
 				}
 			}

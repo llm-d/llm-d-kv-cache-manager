@@ -34,7 +34,7 @@ const (
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
 	scorer := &kvcache.LongestPrefixScorer{}
-	blockKeys := int64KeysToKVBlockKeys([]int64{1001, 1002, 1003, 1004, 1005, 1006})
+	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
 
 	hitmap := map[kvblock.Key][]string{
 		{ModelName: testModelName, ChunkHash: 1001}: {podA},
@@ -57,7 +57,7 @@ func TestLongestPrefixScorer(t *testing.T) {
 	}
 }
 
-func int64KeysToKVBlockKeys(keys []int64) []kvblock.Key {
+func int64KeysToKVBlockKeys(keys []uint64) []kvblock.Key {
 	kvKeys := make([]kvblock.Key, len(keys))
 	for i, key := range keys {
 		kvKeys[i] = kvblock.Key{
