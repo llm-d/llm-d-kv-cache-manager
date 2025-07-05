@@ -109,6 +109,7 @@ func (p *Pool) Shutdown(ctx context.Context) {
 // same pod always go to the same worker (ordered queue).
 func (p *Pool) AddTask(task *Message) {
 	// Use an FNV-1a hash to deterministically select a queue.
+	// TODO: round-robin or simpler approach could be good enough
 	h := fnv.New32a()
 	_, err := h.Write([]byte(task.PodIdentifier))
 	if err != nil {
@@ -116,12 +117,13 @@ func (p *Pool) AddTask(task *Message) {
 	}
 
 	//nolint:gosec // if concurrency overflows then the world is in trouble anyway
-	queueIndex := h.Sum32() % uint32(p.concurrency) // TODO: better load-balancing across workers
+	queueIndex := h.Sum32() % uint32(p.concurrency)
 	p.queues[queueIndex].Add(task)
 }
 
 // worker is the main processing loop for a single worker goroutine.
 // It processes messages from its dedicated queue using the workqueue pattern.
+// TODO: profile and benchmark cases like backpressure, slow processing (profile), etc.
 func (p *Pool) worker(ctx context.Context, workerIndex int) {
 	defer p.wg.Done()
 	queue := p.queues[workerIndex]
