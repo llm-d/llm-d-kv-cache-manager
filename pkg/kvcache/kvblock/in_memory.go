@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 const (
@@ -98,7 +99,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 		return nil, nil, fmt.Errorf("no keys provided for lookup")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(5).WithName("kvblock.InMemoryIndex.Lookup")
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
 
 	podsPerKey := make(map[Key][]string)
 	highestHitIdx := 0
@@ -132,7 +133,8 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	}
 
 	traceLogger.Info("lookup completed", "highest-hit-index", highestHitIdx,
-		"pods-per-key", podsPerKey)
+		"pods-per-key", podsPerKeyPrintHelper(podsPerKey))
+
 	return keys[:highestHitIdx+1], podsPerKey, nil
 }
 
@@ -142,7 +144,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(5).WithName("kvblock.InMemoryIndex.Add")
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
 
 	for _, key := range keys {
 		podCache, found := m.data.Get(key) // bumps LRU timestamp if found
@@ -175,7 +177,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		return fmt.Errorf("no entries provided for eviction from index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(5).WithName("kvblock.InMemoryIndex.Evict")
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
 
 	podCache, found := m.data.Get(key)
 	if !found || podCache == nil {
@@ -195,4 +197,14 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 	}
 
 	return nil
+}
+
+// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
+func podsPerKeyPrintHelper(ks map[Key][]string) string {
+	flattened := ""
+	for k, v := range ks {
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+	}
+
+	return flattened
 }

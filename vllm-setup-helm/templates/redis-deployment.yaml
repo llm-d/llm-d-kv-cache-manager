@@ -1,15 +1,15 @@
 # chart/templates/redis-deployment.yaml
-{{- if .Values.redis.enabled }}
+{{- if .Values.lmcache.redis.enabled }}
 kind: Deployment
 apiVersion: apps/v1
 metadata:
-  name: {{ .Release.Name }}-redis-{{ .Values.redis.nameSuffix }}
+  name: {{ .Release.Name }}-redis-{{ .Values.lmcache.redis.nameSuffix }}
   namespace: {{ .Release.Namespace | default .Values.namespace }}
   labels:
     {{- include "chart.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis-lookup-server
 spec:
-  replicas: {{ .Values.redis.replicaCount }}
+  replicas: {{ .Values.lmcache.redis.replicaCount }}
   selector:
     matchLabels:
       {{- include "chart.redisSelectorLabels" . | nindent 6 }}
@@ -21,20 +21,20 @@ spec:
       containers:
         - name: lookup-server
           image: {{ include "chart.redisImage" . }}
-          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          imagePullPolicy: {{ .Values.lmcache.redis.image.pullPolicy }}
           command:
             - redis-server
           ports:
             - name: redis-port
-              containerPort: {{ .Values.redis.service.targetPort }}
+              containerPort: {{ .Values.lmcache.redis.service.targetPort }}
               protocol: TCP
           resources:
             limits:
-              {{- with .Values.redis.resources.limits }}
+              {{- with .Values.lmcache.redis.resources.limits }}
               {{- toYaml . | nindent 14 }}
               {{- end }}
             requests:
-              {{- with .Values.redis.resources.requests }}
+              {{- with .Values.lmcache.redis.resources.requests }}
               {{- toYaml . | nindent 14 }}
               {{- end }}
           terminationMessagePath: /dev/termination-log

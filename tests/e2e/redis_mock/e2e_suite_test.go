@@ -21,12 +21,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
-
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -42,7 +42,7 @@ type KVCacheSuite struct {
 	cancel context.CancelFunc
 
 	tokenizer       tokenization.Tokenizer
-	tokensProcessor kvcache.TokenProcessor
+	tokensProcessor kvblock.TokenProcessor
 	config          *kvcache.Config
 
 	kvBlockIndex kvblock.Index
@@ -65,7 +65,7 @@ func (s *KVCacheSuite) SetupTest() {
 	s.tokenizer, err = tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
 	s.Require().NoError(err)
 
-	s.tokensProcessor = kvcache.NewChunkedTokenDatabase(s.config.TokenProcessorConfig)
+	s.tokensProcessor = kvblock.NewChunkedTokenDatabase(s.config.TokenProcessorConfig)
 
 	s.Pod1IP = "10.0.0.1"
 

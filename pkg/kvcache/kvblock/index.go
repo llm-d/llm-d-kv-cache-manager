@@ -75,6 +75,8 @@ func NewIndex(cfg *IndexConfig) (Index, error) {
 //
 // The index backend allows efficient tracking of which vLLM engines hold which
 // KV-blocks, on what device tier, and when they were last updated.
+//
+// Index operations are thread-safe and can be performed concurrently.
 type Index interface {
 	// Lookup receives a list of keys and a set of pod identifiers,
 	// and retrieves the filtered pods associated with those keys.
@@ -95,12 +97,12 @@ type Index interface {
 // Key struct represents a unique identifier for a KV-cache block.
 type Key struct {
 	ModelName string // TODO: eject after aligning LMCache
-	ChunkHash string
+	ChunkHash uint64
 }
 
 // String returns a string representation of the Key.
 func (c *Key) String() string {
-	return fmt.Sprintf("%s@%s", c.ModelName, c.ChunkHash)
+	return fmt.Sprintf("%s@%d", c.ModelName, c.ChunkHash)
 }
 
 // PodEntry struct represents a pod entry in the KV-block index.

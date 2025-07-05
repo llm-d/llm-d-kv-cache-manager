@@ -26,6 +26,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
 // Config holds the configuration for the Indexer module.
@@ -33,7 +34,7 @@ import (
 // module.
 type Config struct {
 	PrefixStoreConfig    *prefixstore.Config
-	TokenProcessorConfig *TokenProcessorConfig
+	TokenProcessorConfig *kvblock.TokenProcessorConfig
 	KVBlockIndexConfig   *kvblock.IndexConfig
 	KVBLockScorerConfig  *KVBlockScorerConfig
 	TokenizersPoolConfig *tokenization.Config
@@ -43,7 +44,7 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
-		TokenProcessorConfig: DefaultTokenProcessorConfig(),
+		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBLockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
@@ -52,10 +53,10 @@ func NewDefaultConfig() *Config {
 
 // Indexer is a concrete implementation of the KVCacheIndex interface.
 type Indexer struct {
-	tokensIndexer   prefixstore.Indexer // gets tokens for a prompt
-	tokensProcessor TokenProcessor      // turns tokens to kv block keys
-	kvBlockIndex    kvblock.Index       // looks up pods for block keys
-	kvBlockScorer   KVBlockScorer       // scores pods based on block hits
+	tokensIndexer   prefixstore.Indexer    // gets tokens for a prompt
+	tokensProcessor kvblock.TokenProcessor // turns tokens to kv block keys
+	kvBlockIndex    kvblock.Index          // looks up pods for block keys
+	kvBlockScorer   KVBlockScorer          // scores pods based on block hits
 
 	tokenizersPool *tokenization.Pool
 }
@@ -67,7 +68,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create prefixstore.Indexer: %w", err)
 	}
 
-	tokensProcessor := NewChunkedTokenDatabase(config.TokenProcessorConfig)
+	tokensProcessor := kvblock.NewChunkedTokenDatabase(config.TokenProcessorConfig)
 
 	kvBlockIndex, err := kvblock.NewIndex(config.KVBlockIndexConfig)
 	if err != nil {
@@ -113,7 +114,7 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
-	traceLogger := klog.FromContext(ctx).V(5)
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 	// 0. add to tokenizers pool
 	k.tokenizersPool.AddTask(prompt, modelName)
 
@@ -133,7 +134,8 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
-	traceLogger.Info("found block keys", "block-keys", blockKeys, "pods", keyToPods)
+	traceLogger.Info("found block keys", "block-keys", blockKeys,
+		"pods", podsPerKeyPrintHelper(keyToPods))
 
 	// 4. score pods
 	podScores, err := k.kvBlockScorer.Score(strBlockKeys, keyToPods)
@@ -143,4 +145,14 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
 
 	return podScores, nil
+}
+
+// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
+func podsPerKeyPrintHelper(ks map[kvblock.Key][]string) string {
+	flattened := ""
+	for k, v := range ks {
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+	}
+
+	return flattened
 }

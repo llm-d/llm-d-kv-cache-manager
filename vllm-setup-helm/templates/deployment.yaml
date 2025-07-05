@@ -51,6 +51,10 @@ spec:
             - '-c'
           args:
             - |
+              git config --global --add safe.directory /workspace/vllm && \
+              git remote add maroon https://github.com/vMaroon/vllm.git && \
+              git fetch maroon && git reset --hard cacfff45005d6bf046927e1b35ea37320413dc17 && \
+              pip install -r requirements/common.txt && \
               export LMCACHE_DISTRIBUTED_URL=${POD_IP} && \
               vllm serve {{ .Values.vllm.model.name }} \
               --host 0.0.0.0 \
@@ -69,7 +73,14 @@ spec:
               {{- if .Values.vllm.model.maxModelLen }}
               --max_model_len {{ .Values.vllm.model.maxModelLen }} \
               {{- end }}
-              --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}' \
+              {{- if .Values.lmcache.enabled }}
+              --kv-transfer-config '{"kv_connector":"{{ .Values.lmcache.connector }}","kv_role":"{{ .Values.lmcache.role }}"}' \
+              {{- end }}
+              --block-size {{ .Values.vllm.blockSize }} \
+              {{- if .Values.kvCacheManager.enabled }}
+              --kv-events-config "{\"enable_kv_cache_events\":{{ .Values.kvCacheManager.enabled }},\"publisher\":\"zmq\",\"endpoint\":\"{{ include "chart.kvCacheManagerServiceUrl" . }}\",\"topic\":\"kv@${POD_IP}@{{ .Values.vllm.model.name }}\"}" \
+              --prefix-caching-hash-algo sha256_cbor \
+              {{- end }}
           ports:
             - name: http
               containerPort: 8000
@@ -94,9 +105,23 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secret.name }}
                   key: {{ include "chart.secretKeyName" . }}
-            {{- if .Values.redis.enabled }}
+            {{- if and .Values.lmcache.enabled .Values.lmcache.redis.enabled }}
             - name: LMCACHE_LOOKUP_URL
               value: {{ include "chart.redisServiceUrl" . }}
+            {{- end }}
+            {{- if .Values.lmcache.enabled }}
+            - name: LMCACHE_USE_EXPERIMENTAL
+              value: {{ .Values.lmcache.useExperimental | quote }}
+            - name: LMCACHE_LOCAL_CPU
+              value: {{ .Values.lmcache.localCpu | quote }}
+            - name: LMCACHE_ENABLE_DEBUG
+              value: {{ .Values.lmcache.enableDebug | quote }}
+            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
+              value: {{ .Values.lmcache.maxLocalCpuSize | quote }}
+            {{- end }}
+            {{- if .Values.kvCacheManager.enabled }}
+            - name: PYTHONHASHSEED
+              value: {{ .Values.pythonHashSeed | quote }}
             {{- end }}
             {{- range $key, $val := .Values.vllm.extraEnv }}
             - name: {{ $key }}
@@ -133,3 +158,21 @@ spec:
       maxSurge: "100%"
   revisionHistoryLimit: 10
   progressDeadlineSeconds: 1200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-vllm-{{ lower .Values.vllm.model.label }}
+  namespace: {{ .Release.Namespace | default .Values.namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vllm
+spec:
+  selector:
+    {{- include "chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: vllm
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: http
