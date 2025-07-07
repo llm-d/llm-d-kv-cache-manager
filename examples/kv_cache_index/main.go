@@ -18,24 +18,22 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"k8s.io/klog/v2"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 )
 
-//nolint:lll // need prompt as-is, chunking to string concatenation is too much of a hassle
 const (
-	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst. sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
-	blockHash1       = 7116574867160041607
-	blockHash2       = 9824230139929555794
-	blockHash3       = 3874749374659795295
-	defaultModelName = "bert-base-uncased"
+	defaultModelName = testdata.ModelName
 
 	envRedisAddr = "REDIS_ADDR"
 	envHFToken   = "HF_TOKEN"
@@ -78,7 +76,7 @@ func main() {
 
 	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
 	if err != nil {
-		logger.Error(err, "failed to setup KVCacheIndexer")
+		logger.Error(err, "failed to set up KVCacheIndexer")
 		os.Exit(1)
 	}
 
@@ -118,7 +116,7 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 	logger.Info("Started Indexer", "model", modelName)
 
 	// Get pods for the prompt
-	pods, err := kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
+	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, modelName, nil)
 	if err != nil {
 		return err
 	}
@@ -128,17 +126,18 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 
 	// Add entries in kvblock.Index manually
 	//nolint // skip linting for this example
-	_ = kvCacheIndexer.KVBlockIndex().Add(ctx, []kvblock.Key{
-		{modelName, blockHash1},
-		{modelName, blockHash2},
-		{modelName, blockHash3},
-	}, []kvblock.PodEntry{{"pod1", "gpu"}})
+	_ = kvCacheIndexer.KVBlockIndex().Add(ctx, utils.SliceMap(testdata.PromptHashes, func(h uint64) kvblock.Key {
+		return kvblock.Key{
+			ModelName: modelName,
+			ChunkHash: h,
+		}
+	}), []kvblock.PodEntry{{"pod1", "gpu"}})
 
 	// Sleep 3 secs
 	time.Sleep(3 * time.Second)
 
 	// Get pods for the prompt
-	pods, err = kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, modelName, nil)
 	if err != nil {
 		return err
 	}

@@ -34,6 +34,8 @@ type TokenProcessorConfig struct {
 	ChunkSize int
 	// HashSeed is used to prefix initial hash chunks, similarly to vLLM's NONE_HASH.
 	// This should be aligned with vLLM's `PYTHONHASHSEED` environment variable.
+	// The system's deployer is responsible for aligning the vLLM deployments
+	// with the same seed value.
 	HashSeed string
 
 	initHash *uint64 // cache once

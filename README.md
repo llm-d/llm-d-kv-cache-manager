@@ -52,9 +52,9 @@ For a detailed architecture, refer to the [architecture](docs/architecture.md) d
 
 ## Examples
 
-- [KVCache Indexer](examples/kv-cache-index/README.md): 
+- [KVCache Indexer](examples/kv_cache_index/README.md): 
   - A reference implementation of using the `kvcache.Indexer` module.
-- [KVCache Aware Scorer](examples/kv-cache-aware-scorer/README.md): 
+- [KVCache Aware Scorer](examples/kv_cache_aware_scorer/README.md): 
   - A reference implementation of integrating the `kvcache.Indexer` module in 
   [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) in a KVCache aware scorer.
 

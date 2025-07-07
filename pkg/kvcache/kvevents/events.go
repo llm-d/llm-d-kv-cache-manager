@@ -6,8 +6,8 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// Event is a marker interface for KV cache events.
-type Event interface {
+// event is a marker interface for KV-cache events.
+type event interface {
 	isEvent()
 }
 

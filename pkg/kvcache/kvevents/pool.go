@@ -101,7 +101,7 @@ func (p *Pool) Shutdown(ctx context.Context) {
 	}
 
 	p.wg.Wait()
-	logger.Info("Event processing pool shut down.")
+	logger.Info("event processing pool shut down.")
 }
 
 // AddTask is called by the subscriber to add a message to the processing queue.
@@ -164,7 +164,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 		return
 	}
 
-	events := make([]Event, 0, len(eventBatch.Events))
+	events := make([]event, 0, len(eventBatch.Events))
 	for _, rawEvent := range eventBatch.Events {
 		var taggedUnion []msgpack.RawMessage
 		if err := msgpack.Unmarshal(rawEvent, &taggedUnion); err != nil {
@@ -189,7 +189,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 			continue
 		}
 
-		var event Event
+		var event event
 		var unmarshalErr error
 		switch tag {
 		case "BlockStored":
@@ -223,7 +223,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []Event, podEntries []kvblock.PodEntry,
+	events []event, podEntries []kvblock.PodEntry,
 ) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))

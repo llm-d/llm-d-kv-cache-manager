@@ -34,7 +34,7 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY examples/kv-cache-index/main.go cmd/cmd.go
+COPY examples/kv_cache_index/main.go cmd/cmd.go
 COPY . .
 
 # HuggingFace tokenizer bindings

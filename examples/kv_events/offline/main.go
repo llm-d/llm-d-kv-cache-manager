@@ -18,38 +18,24 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/klog/v2"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 )
 
-//nolint:lll // need prompt as-is, chunking to string concatenation is too much of a hassle
 const (
-	prompt           = `lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst. sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst.`
-	blockHash1       = 7116574867160041607
-	blockHash2       = 9824230139929555794
-	blockHash3       = 3874749374659795295
-	defaultModelName = "bert-base-uncased"
-
-	envHFToken         = "HF_TOKEN"
-	envModelName       = "MODEL_NAME"
-	envZMQEndpoint     = "ZMQ_ENDPOINT"
-	envZMQTopic        = "ZMQ_TOPIC"
-	envPoolConcurrency = "POOL_CONCURRENCY"
-
-	defaultZMQEndpoint = "tcp://localhost:5557"
-	defaultZMQTopic    = "kv@"
-	defaultConcurrency = 4
+	envHFToken = "HF_TOKEN"
 )
 
 func getKVCacheIndexerConfig() *kvcache.Config {
@@ -61,40 +47,6 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	}
 
 	return config
-}
-
-func getModelName() string {
-	modelName := os.Getenv(envModelName)
-	if modelName != "" {
-		return modelName
-	}
-
-	return defaultModelName
-}
-
-func getEventsPoolConfig() *kvevents.Config {
-	concurrency := defaultConcurrency
-	if envConcurrency := os.Getenv(envPoolConcurrency); envConcurrency != "" {
-		if c, err := strconv.Atoi(envConcurrency); err == nil && c > 0 {
-			concurrency = c
-		}
-	}
-
-	zmqEndpoint := os.Getenv(envZMQEndpoint)
-	if zmqEndpoint == "" {
-		zmqEndpoint = defaultZMQEndpoint
-	}
-
-	zmqTopic := os.Getenv(envZMQTopic)
-	if zmqTopic == "" {
-		zmqTopic = defaultZMQTopic
-	}
-
-	return &kvevents.Config{
-		Concurrency: concurrency,
-		ZMQEndpoint: zmqEndpoint,
-		TopicFilter: zmqTopic,
-	}
 }
 
 func main() {
@@ -163,8 +115,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	logger.Info("Created Indexer")
 
 	go kvCacheIndexer.Run(ctx)
-	modelName := getModelName()
-	logger.Info("Started Indexer", "model", modelName)
+	logger.Info("Started Indexer", "model", testdata.ModelName)
 
 	return kvCacheIndexer, nil
 }
@@ -172,7 +123,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.Pool {
 	logger := klog.FromContext(ctx)
 
-	cfg := getEventsPoolConfig()
+	cfg := kvevents.DefaultConfig()
 
 	logger.Info("Creating events pool", "config", cfg)
 	pool := kvevents.NewPool(cfg, kvBlockIndex)
@@ -183,7 +134,7 @@ func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.
 func setupPublisher(ctx context.Context) (*Publisher, error) {
 	logger := klog.FromContext(ctx)
 
-	cfg := getEventsPoolConfig()
+	cfg := kvevents.DefaultConfig()
 
 	logger.Info("Creating ZMQ publisher (simulating vLLM engines)", "endpoint", cfg.ZMQEndpoint)
 
@@ -199,11 +150,10 @@ func setupPublisher(ctx context.Context) (*Publisher, error) {
 func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publisher *Publisher) error {
 	logger := klog.FromContext(ctx)
 
-	modelName := getModelName()
-	logger.Info("@@@ Starting KV Events Demo", "model", modelName)
+	logger.Info("@@@ Starting KV Events Demo", "model", testdata.ModelName)
 
 	// Initial query - should be empty since no events have been published
-	pods, err := kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
+	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}
@@ -216,9 +166,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Simulating vLLM engine publishing BlockStored events...")
 
 	//nolint // won't fail
-	blockStoredPayloadBytes, _ := msgpack.Marshal(kvevents.BlockStored{
-		BlockHashes: []uint64{blockHash1, blockHash2, blockHash3},
-	})
+	blockStoredPayloadBytes, _ := msgpack.Marshal(kvevents.BlockStored{BlockHashes: testdata.PromptHashes})
 	dpRank := 0
 
 	eventBatch := kvevents.EventBatch{
@@ -227,7 +175,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 		DataParallelRank: &dpRank,
 	}
 
-	topic := fmt.Sprintf("kv@vllm-pod1@%s", modelName)
+	topic := fmt.Sprintf("kv@vllm-pod1@%s", testdata.ModelName)
 	if err := publisher.PublishEvent(ctx, topic, eventBatch); err != nil {
 		return fmt.Errorf("failed to publish BlockStored event: %w", err)
 	}
@@ -238,7 +186,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	time.Sleep(3 * time.Second)
 
 	// Query again to see the effect of the events
-	pods, err = kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}
@@ -249,7 +197,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 
 	//nolint // won't fail
 	blockRemovedPayloadBytes, _ := msgpack.Marshal(kvevents.BlockRemoved{
-		BlockHashes: []uint64{blockHash1, blockHash2},
+		BlockHashes: testdata.PromptHashes[:2],
 	})
 
 	removeEventBatch := kvevents.EventBatch{
@@ -267,7 +215,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	time.Sleep(3 * time.Second)
 
 	// Final query
-	pods, err = kvCacheIndexer.GetPodScores(ctx, prompt, modelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}
