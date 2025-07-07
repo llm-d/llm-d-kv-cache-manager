@@ -88,7 +88,7 @@ e2e-test: download-tokenizer
 .PHONY: build
 build: check-go download-tokenizer ##
 	@printf "\033[33;1m==== Building ====\033[0m\n"
-	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv-cache-index/main.go
+	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
 
 .PHONY:	image-build
 image-build: check-container-tool load-version-json ## Build Docker image ## Build Docker image using $(CONTAINER_TOOL)
