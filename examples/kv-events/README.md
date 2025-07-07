@@ -24,8 +24,8 @@ Download tokenizer bindings:
 The example will start the KV-Cache Manager (indexer) and a dummy publisher that simulates KV-Events. 
 The demo will progress through:
 1. Initializing the KV-Cache Manager and the dummy publisher
-2. Querying the KV-Cache Manager for pod scores (initially empty)
-3. Simulateting KV-Events by the publisher for a dummy prmopt
+2. Querying the KV-Cache Manager for Pod scores (initially empty)
+3. Simulating KV-Events by the publisher for a dummy prompt
 4. Querying the KV-Cache Manager for pod scores again (expecting updated scores)
 
 ## Online
