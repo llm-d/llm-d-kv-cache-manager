@@ -53,7 +53,7 @@ spec:
             - |
               git config --global --add safe.directory /workspace/vllm && \
               git remote add maroon https://github.com/vMaroon/vllm.git && \
-              git fetch maroon && git reset --hard cacfff45005d6bf046927e1b35ea37320413dc17 && \
+              git fetch maroon && git reset --hard 15c602454486412201a2da949bb956ea2e92c36c && \
               pip install -r requirements/common.txt && \
               export LMCACHE_DISTRIBUTED_URL=${POD_IP} && \
               vllm serve {{ .Values.vllm.model.name }} \
