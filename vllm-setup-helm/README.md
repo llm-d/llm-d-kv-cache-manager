@@ -28,8 +28,7 @@ This Helm chart assists with deploying vLLMs with optionally:
     ```bash
     helm upgrade --install my-vllm ./vllm-setup-helm \
       --namespace $NAMESPACE \
-      --create-namespace \
-      --set secret.hfTokenValue=$HF_TOKEN
+      --set secret.hfTokenValue=$HF_TOKEN 
     ```
 
     You can customize the deployment by creating your own `values.yaml` file or by using `--set` flags for other parameters.
