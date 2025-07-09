@@ -1,6 +1,6 @@
-# Helm Chart for vLLM with LMCache
+# vLLM Deployment Chart
 
-This Helm chart assists with deploying vLLM with:
+This Helm chart assists with deploying vLLMs with optionally:
 - KVEvents publishing and a demo KV Cache Manager indexing deployment
 - LMCache for KV-cache offloading and deprecated Redis indexing
 
