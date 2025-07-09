@@ -27,7 +27,7 @@ type Config struct {
 // DefaultConfig returns a default configuration for the event processing pool.
 func DefaultConfig() *Config {
 	return &Config{
-		ZMQEndpoint: "tcp://indexer:5557",
+		ZMQEndpoint: "tcp://0.0.0.0:5557",
 		TopicFilter: "kv@",
 		Concurrency: 4,
 	}
