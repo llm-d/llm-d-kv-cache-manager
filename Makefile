@@ -87,21 +87,6 @@ e2e-test: download-tokenizer
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -v -ldflags="$(LDFLAGS)" ./tests/...
 
-.PHONY: validate-chat-templates
-validate-chat-templates: ## Run chat template validation tests against vLLM
-	@printf "\033[33;1m==== Running Chat Template Validation Tests ====\033[0m\n"
-	@echo "Running tests for all models..."
-	python3 scripts/run_chat_template_validation.py --model "TroyDoesAI/Llama-3.1-8B-Instruct"
-
-.PHONY: validate-chat-template
-validate-chat-template: ## Run chat template validation for a specific model (usage: make validate-chat-template MODEL=model-name)
-	@printf "\033[33;1m==== Running Chat Template Validation for $(MODEL) ====\033[0m\n"
-	python3 scripts/run_chat_template_validation.py --model "$(MODEL)" --save
-
-.PHONY: validate-chat-template-default
-validate-chat-template-default: ## Run chat template validation for default model
-	@printf "\033[33;1m==== Running Chat Template Validation for Default Model ====\033[0m\n"
-	python3 scripts/run_chat_template_validation.py --model "OpenAI-ChatGPT/ChatGPT-4-Micro"
 
 ##@ Build
 
