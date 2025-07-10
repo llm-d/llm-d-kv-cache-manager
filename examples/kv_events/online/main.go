@@ -154,7 +154,7 @@ func main() {
 			logger.Error(err, "failed to encode response")
 		}
 	})
-	logger.Info("HTTP endpoint /prompt exposed", "port", httpPort)
+	logger.Info("HTTP endpoint /score exposed", "port", httpPort)
 	//nolint:gosec // no timeout
 	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
 		logger.Error(err, "HTTP server error")

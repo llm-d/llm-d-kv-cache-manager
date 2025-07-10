@@ -1,60 +1,72 @@
-# KVCache Manager
+# KV-Cache Manager
 
-## Introduction
+### Introduction
 
-LLM inference can be computationally expensive due to the sequential nature of token generation. 
-KV-caching plays a critical role in optimizing this process. By storing previously computed key and value attention vectors, 
-KVCache reuse avoids redundant computations during inference, significantly reducing latency and resource consumption. 
-This is particularly beneficial for long context multi-turn conversations or Agentic (&RAG) applications where 
-previously computed information can be leveraged effectively. 
-Efficient KVCache management and routing are essential for scaling LLM inference and delivering a responsive user experience.
+Efficiently caching Key & Value (KV) tensors is crucial for optimizing LLM inference. 
+Reusing the KV-Cache, rather than recomputing it, significantly improves both Time To First Token (TTFT) and overall throughput, while also maximizing system resource-utilization.
+As a distributed LLM inference platform, `llm-d` provides a comprehensive suite of KV-Cache management capabilities to achieve these goals.
 
-llmd-kv-cache-manager is a pluggable KVCache Manager for KVCache Aware Routing in vLLM-based serving platforms.
+This repository contains the `llm-d-kv-cache-manager`, a pluggable service designed to enable **KV-Cache Aware Routing** and lay the foundation for advanced, cross-node cache coordination in vLLM-based serving platforms.
 
-See [docs](docs/README.md) for more information on goals, architecture and more.
-## Overview
+### Project Northstar
 
-The code defines a [KVCacheIndexer](pkg/kv-cache/indexer.go) module that efficiently maintains a global view of KVCache states and localities. 
-In the current state of vLLM, the only available information on KVCache availability is that of the offloaded tensors to KVCache Engines via the Connector API.
+See the [Project Northstar](https://docs.google.com/document/d/1EM1QtDUaw7pVRkbHQFTSCQhmWqAcRPJugJgqPbvzGTA/edit?tab=t.ikcvw3heciha) document for a detailed overview of the project's goals and vision.
 
-The `kvcache.Indexer` module is a pluggable Go package designed for use by orchestrators to enable KVCache-aware scheduling decisions.
+-----
+
+## KV-Cache Indexer Overview
+
+One of the major component of this project is the **KVCache Indexer**: a high-performance Go service that maintains a global, near-real-time view of KV-Cache block locality.
+
+It is powered by `KVEvents` streamed from vLLM, which provide structured metadata as KV-blocks are created or evicted from a vLLM instance's KV-cache. 
+This allows the indexer to track which blocks reside on which nodes and on which tier (e.g., GPU or CPU). 
+This metadata is the foundation for intelligent routing, enabling schedulers to make optimal, cache-aware placement decisions.
+
+The diagram below shows the primary data flows: the **Read Path** (scoring) and the **Write Path** (event ingestion).
 
 ```mermaid
-graph 
-  subgraph Cluster
-    Router
-    subgraph KVCacheManager[KVCache Manager]
-      KVCacheIndexer[KVCache Indexer]
-      PrefixStore[LRU Prefix Store]
-      KVBlockToPodIndex[KVBlock to Pod availability Index]
+graph TD
+    subgraph Scheduler / Router
+        A[Scheduler]
     end
-    subgraph vLLMNode[vLLM Node]
-      vLLMCore[vLLM Core]
-      KVCacheEngine["KVCache Engine (LMCache)"]
+    
+    subgraph KVCacheManager["KV-Cache Manager"]
+        B[KVCache Indexer API]
+        C[KV-Block Index]
+        D[Event Subscriber]
     end
-    Redis
-  end
 
-  Router -->|"Score(prompt, ModelName, relevantPods)"| KVCacheIndexer
-  KVCacheIndexer -->|"{Pod to Scores map}"| Router
-  Router -->|Route| vLLMNode
-  
-  KVCacheIndexer -->|"FindLongestTokenizedPrefix(prompt, ModelName) -> tokens"| PrefixStore
-  PrefixStore -->|"DigestPromptAsync"| PrefixStore
-  KVCacheIndexer -->|"GetPodsForKeys(tokens) -> {KVBlock keys to Pods} availability map"| KVBlockToPodIndex
-  KVBlockToPodIndex -->|"Redis MGet(blockKeys) -> {KVBlock keys to Pods}"| Redis
+    subgraph vLLM Fleet
+        E[vLLM Pod 1]
+        F[vLLM Pod 2]
+        G[...]
+    end
 
-  vLLMCore -->|Connector API| KVCacheEngine
-  KVCacheEngine -->|"UpdateIndex(KVBlock keys, nodeIP)"| Redis
+    A -- "1. Score(prompt, pods)" --> B
+    B -- "2. Query Index" --> C
+    B -- "3. Return Scores" --> A
+    
+    E -- "4. Emit KVEvents" --> D
+    F -- "4. Emit KVEvents" --> D
+    D -- "5. Update Index" --> C
+    
 ```
-This overview greatly simplifies the actual architecture and combines steps across several submodules.
-For a detailed architecture, refer to the [architecture](docs/architecture.md) document.
 
-## Examples
+1.  **Scoring Request**: A scheduler asks the **KVCache Indexer** to score a set of pods for a given prompt
+2.  **Index Query**: The indexer calculates the necessary KV-block keys from the prompt and queries the **KV-Block Index** to see which pods have those blocks
+3.  **Return Scores**: The indexer returns a map of pods and their corresponding KV-cache-hit scores to the scheduler
+4.  **Event Ingestion**: As vLLM pods create or evict KV-blocks, they emit `KVEvents` containing metadata about these changes
+5.  **Index Update**: The **Event Subscriber** consumes these events and updates the **KV-Block Index** in near-real-time
 
-- [KVCache Indexer](examples/kv_cache_index/README.md): 
-  - A reference implementation of using the `kvcache.Indexer` module.
-- [KVCache Aware Scorer](examples/kv_cache_aware_scorer/README.md): 
-  - A reference implementation of integrating the `kvcache.Indexer` module in 
-  [llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) in a KVCache aware scorer.
+* For a more detailed breakdown, please see the high-level [Architecture Document](docs/architecture.md).
 
+-----
+
+### Examples
+
+* [**KVCache Indexer**](examples/kv_cache_index/README.md):
+  A reference implementation showing how to run and use the `kvcache.Indexer` module
+* [**KVCache Aware Scorer**](examples/kv_cache_aware_scorer/README.md):
+  A reference implementation of how to integrate the `kvcache.Indexer` into a scheduler like the `llm-d-inference-scheduler`
+* [**KV-Events**](examples/kv_events/README.md):
+ Demonstrates how the KV-Cache Manager handles KV-Events through both an offline example with a dummy ZMQ publisher and an online example using a vLLM Helm chart.
