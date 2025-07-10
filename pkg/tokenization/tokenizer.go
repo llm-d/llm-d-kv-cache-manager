@@ -100,6 +100,9 @@ func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokeniz
 	}
 
 	resp := tk.EncodeWithOptions(input, true, encodeOptions...)
+	// ✅ Print actual token strings
+	//fmt.Printf("\n\n tokens (len=%d): %q\n", len(resp.Tokens), resp.Tokens)
+	//fmt.Printf("\n\n resp.IDs (len=%d): %v\n", len(resp.IDs), resp.IDs)
 	return resp.IDs, resp.Offsets, nil
 }
 
