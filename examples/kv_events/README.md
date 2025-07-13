@@ -70,7 +70,7 @@ curl -X POST "http://localhost:8000/v1/completions" \
   -d '{"prompt":"'"${TEXT}"'","max_tokens":50,"temperature":0.7}'
 ```
 
-3. Query the manager again with a short prompt:
+3. Query the manager again with the same prompt:
 ```bash
 curl -X POST "http://localhost:8080/score" \
   -H "Content-Type: application/json" \
