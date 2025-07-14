@@ -66,7 +66,7 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 
 	blockSize, err := strconv.Atoi(os.Getenv(blockSizeEnvVar))
 	if err == nil || blockSize >= 0 {
-		config.TokenProcessorConfig.ChunkSize = blockSize
+		config.TokenProcessorConfig.BlockSize = blockSize
 	}
 
 	return config

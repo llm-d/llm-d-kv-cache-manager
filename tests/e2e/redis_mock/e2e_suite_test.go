@@ -60,7 +60,7 @@ func (s *KVCacheSuite) SetupTest() {
 
 	s.config = kvcache.NewDefaultConfig()
 	s.config.PrefixStoreConfig.BlockSize = 4
-	s.config.TokenProcessorConfig.ChunkSize = 4
+	s.config.TokenProcessorConfig.BlockSize = 4
 
 	s.tokenizer, err = tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
 	s.Require().NoError(err)
