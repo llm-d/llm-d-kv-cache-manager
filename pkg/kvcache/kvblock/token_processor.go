@@ -27,6 +27,8 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 )
 
+// defaultBlockSize is the default number of tokens per block.
+// 16 is the default value used by vLLM.
 const defaultBlockSize = 16
 
 // TokenProcessorConfig holds the configuration for the token processor.
