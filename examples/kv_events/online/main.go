@@ -25,7 +25,9 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -114,6 +116,9 @@ func main() {
 
 	eventsPool.Start(ctx)
 	logger.Info("Events pool started and listening for ZMQ messages")
+
+	metrics.StartMetricsLogging(ctx, time.Second*10)
+	logger.Info("Started metrics thread")
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)

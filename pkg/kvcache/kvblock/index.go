@@ -31,12 +31,16 @@ type IndexConfig struct {
 	InMemoryConfig *InMemoryIndexConfig
 	// RedisConfig holds the configuration for the Redis index.
 	RedisConfig *RedisIndexConfig
+	// EnableMetrics toggles whether admissions/evictions/hits/misses are
+	// recorded.
+	EnableMetrics bool
 }
 
 // DefaultIndexConfig returns a default configuration for the KV-block index.
 func DefaultIndexConfig() *IndexConfig {
 	return &IndexConfig{
 		InMemoryConfig: DefaultInMemoryIndexConfig(),
+		EnableMetrics:  false,
 	}
 }
 
@@ -46,23 +50,30 @@ func NewIndex(cfg *IndexConfig) (Index, error) {
 		cfg = DefaultIndexConfig()
 	}
 
-	if cfg.InMemoryConfig != nil {
-		index, err := NewInMemoryIndex(cfg.InMemoryConfig)
+	var idx Index
+	var err error
+
+	switch {
+	case cfg.InMemoryConfig != nil:
+		idx, err = NewInMemoryIndex(cfg.InMemoryConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create in-memory index: %w", err)
 		}
-		return index, nil
-	}
-
-	if cfg.RedisConfig != nil {
-		index, err := NewRedisIndex(cfg.RedisConfig)
+	case cfg.RedisConfig != nil:
+		idx, err = NewRedisIndex(cfg.RedisConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Redis index: %w", err)
 		}
-		return index, nil
+	default:
+		return nil, fmt.Errorf("no valid index configuration provided")
 	}
 
-	return nil, fmt.Errorf("no valid index configuration provided")
+	// wrap in metrics only if enabled
+	if cfg.EnableMetrics {
+		idx = NewInstrumentedIndex(idx)
+	}
+
+	return idx, nil
 }
 
 // Index defines the interface for a backend that manages KV-block
