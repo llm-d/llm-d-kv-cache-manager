@@ -39,10 +39,9 @@ func (m *instrumentedIndex) Lookup(
 	defer timer.ObserveDuration()
 
 	metrics.LookupRequests.Inc()
-	hitKeys, pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
 
-	metrics.KeyLookupResults.WithLabelValues("hit").Add(float64(len(hitKeys)))
-	metrics.KeyLookupResults.WithLabelValues("miss").Add(float64(len(keys) - len(hitKeys)))
+	hitKeys, pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
+	metrics.LookupHits.Add(float64(len(hitKeys)))
 
 	return hitKeys, pods, err
 }

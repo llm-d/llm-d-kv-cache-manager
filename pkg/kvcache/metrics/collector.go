@@ -25,12 +25,11 @@ var (
 		Namespace: "kvcache", Subsystem: "index", Name: "lookup_requests_total",
 		Help: "Total number of lookup calls",
 	})
-	// KeyLookupResults counts keys examined, labelled by result “hit” or
-	// “miss”.
-	KeyLookupResults = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "kvcache", Subsystem: "index", Name: "lookup_key_total",
-		Help: "Number of keys looked up by result (hit/miss)",
-	}, []string{"result"})
+	// LookupHits counts how many keys were found in the cache on Lookup().
+	LookupHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "kvcache", Subsystem: "index", Name: "lookup_hits_total",
+		Help: "Number of keys found in the cache on Lookup()",
+	})
 	// LookupLatency logs latency of lookup calls.
 	LookupLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "kvcache", Subsystem: "index", Name: "lookup_latency_seconds",
@@ -43,7 +42,7 @@ var (
 func Collectors() []prometheus.Collector {
 	return []prometheus.Collector{
 		Admissions, Evictions,
-		LookupRequests, KeyLookupResults, LookupLatency,
+		LookupRequests, LookupHits, LookupLatency,
 	}
 }
 
@@ -85,32 +84,26 @@ func logMetrics(ctx context.Context) {
 	}
 	lookups := m.GetCounter().GetValue()
 
-	var hit, miss dto.Metric
-	err = KeyLookupResults.WithLabelValues("hit").Write(&hit)
+	var hitsMetric dto.Metric
+	err = LookupHits.Write(&hitsMetric)
 	if err != nil {
 		return
 	}
-	err = KeyLookupResults.WithLabelValues("miss").Write(&miss)
-	if err != nil {
-		return
-	}
-	hits := hit.GetCounter().GetValue()
-	misses := miss.GetCounter().GetValue()
+	hits := hitsMetric.GetCounter().GetValue()
 
-	var h dto.Metric
-	err = LookupLatency.Write(&h)
+	var latencyMetric dto.Metric
+	err = LookupLatency.Write(&latencyMetric)
 	if err != nil {
 		return
 	}
-	latencyCount := h.GetHistogram().GetSampleCount()
-	latencySum := h.GetHistogram().GetSampleSum()
+	latencyCount := latencyMetric.GetHistogram().GetSampleCount()
+	latencySum := latencyMetric.GetHistogram().GetSampleSum()
 
 	klog.FromContext(ctx).WithName("metrics").Info("metrics beat",
 		"admissions", admissions,
 		"evictions", evictions,
 		"lookups", lookups,
 		"hits", hits,
-		"misses", misses,
 		"latency_count", latencyCount,
 		"latency_sum", latencySum,
 		"latency_avg", latencySum/float64(latencyCount),
