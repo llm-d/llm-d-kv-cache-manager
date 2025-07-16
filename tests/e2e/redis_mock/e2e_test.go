@@ -223,8 +223,6 @@ func (s *KVCacheSuite) testChatCompletionE2EWithModel(modelName string) {
 	fakePodList := []string{s.Pod1IP}
 
 	s.addEntriesToIndex(blockKeys, fakePodList)
-
-	// Convert ChatTemplateRequest to JSON string for the unified API
 	chatReqJSON, err := json.Marshal(chatReq)
 	s.Require().NoError(err)
 

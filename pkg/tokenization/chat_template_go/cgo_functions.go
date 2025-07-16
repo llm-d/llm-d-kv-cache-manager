@@ -1,47 +1,11 @@
 package chattemplatego
 
 /*
+// CGo build flags for Python 3.11
+// These are platform-specific and may need adjustment for different systems
 #cgo CFLAGS: -I/Library/Frameworks/Python.framework/Versions/3.11/include/python3.11
 #cgo LDFLAGS: -L/Library/Frameworks/Python.framework/Versions/3.11/lib -lpython3.11
-#include <Python.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-// Initialize Python interpreter
-int Py_InitializeGo() {
-    Py_Initialize();
-    return 0;
-}
-
-// Finalize Python interpreter
-void Py_FinalizeGo() {
-    Py_Finalize();
-}
-
-// CGo cannot call C macros, so we wrap PyRun_SimpleString in a function
-int Go_PyRun_SimpleString(const char* code) {
-    return PyRun_SimpleString(code);
-}
-
-// Wrapper for PyImport_AddModule
-PyObject* Go_PyImport_AddModule(const char* name) {
-    return PyImport_AddModule(name);
-}
-
-// Wrapper for PyModule_GetDict
-PyObject* Go_PyModule_GetDict(PyObject* module) {
-    return PyModule_GetDict(module);
-}
-
-// Wrapper for PyDict_GetItemString
-PyObject* Go_PyDict_GetItemString(PyObject* dict, const char* key) {
-    return PyDict_GetItemString(dict, key);
-}
-
-// Helper function to convert Python string to Go string
-const char* PyUnicode_AsGoString(PyObject* obj) {
-    return PyUnicode_AsUTF8(obj);
-}
+#include "cgo_functions.h"
 */
 import "C"
 import (
@@ -215,8 +179,8 @@ import base64
 import __main__
 __main__.result = 'hello'
 sys.path.insert(0, os.getcwd())
-from chat_template_wrapper import render_jinja_template
 try:
+    from chat_template_wrapper import render_jinja_template
     request = json.loads(base64.b64decode('''%s''').decode('utf-8'))
     rendered_chats, generation_indices = render_jinja_template(
         conversations=request['conversations'],
@@ -235,7 +199,8 @@ try:
     __main__.result = json.dumps(response)
 except Exception as e:
     import traceback
-    __main__.result = 'PYTHON_EXCEPTION:' + traceback.format_exc()
+    error_msg = 'PYTHON_EXCEPTION:' + str(e) + '\\n' + traceback.format_exc()
+    __main__.result = error_msg
 `, reqB64)
 
 	// Execute Python code and get result (JSON string)
@@ -259,8 +224,7 @@ except Exception as e:
 	return &response, nil
 }
 
-// Add a struct for the chat template fetch request
-// (for extensibility, but for now just model name)
+// Struct for the chat template fetch request
 type GetChatTemplateRequest struct {
 	ModelName    string        `json:"model_name"`
 	ChatTemplate string        `json:"chat_template,omitempty"`
@@ -269,7 +233,7 @@ type GetChatTemplateRequest struct {
 	Token        string        `json:"token,omitempty"`
 }
 
-// Add a struct for the response
+// Struct for the response
 // GetModelChatTemplateResponse holds the template and template variables
 type GetModelChatTemplateResponse struct {
 	Template     string                 `json:"template"`
@@ -299,8 +263,8 @@ import json
 import base64
 import __main__
 sys.path.insert(0, os.getcwd())
-from chat_template_wrapper import get_model_chat_template
 try:
+    from chat_template_wrapper import get_model_chat_template
     request = json.loads(base64.b64decode('''%s''').decode('utf-8'))
     result_dict = get_model_chat_template(
         model_name=request['model_name'],
@@ -312,16 +276,25 @@ try:
     __main__.result = json.dumps(result_dict)
 except Exception as e:
     import traceback
-    __main__.result = 'PYTHON_EXCEPTION:' + traceback.format_exc()
+    error_msg = 'PYTHON_EXCEPTION:' + str(e) + '\\n' + traceback.format_exc()
+    __main__.result = error_msg
 `, reqB64)
 
 	result, err := w.executePythonCode(pythonCode)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to execute Python code: %w", err)
 	}
+
+	// Check if the result starts with our exception prefix
 	if len(result) > 18 && result[:18] == "PYTHON_EXCEPTION:" {
-		fmt.Println(result)
+		fmt.Println("DEBUG: Python exception detected:", result)
 		return "", nil, fmt.Errorf("python exception: %s", result[18:])
+	}
+
+	// Also check for any error-like output that might not have the prefix
+	if len(result) > 0 && (result[0] == 'P' || result[0] == 'E' || result[0] == 'T') {
+		fmt.Println("DEBUG: Potential error output:", result)
+		return "", nil, fmt.Errorf("python error: %s", result)
 	}
 
 	// Parse the response
