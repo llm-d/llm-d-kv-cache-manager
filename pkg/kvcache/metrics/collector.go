@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 var (
@@ -38,11 +39,17 @@ var (
 	})
 )
 
-func init() {
-	prometheus.MustRegister(
+// Collectors returns a slice of all registered Prometheus collectors.
+func Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
 		Admissions, Evictions,
 		LookupRequests, KeyLookupResults, LookupLatency,
-	)
+	}
+}
+
+// Register registers all metrics with K8s registry.
+func Register() {
+	metrics.Registry.MustRegister(Collectors()...)
 }
 
 // StartMetricsLogging spawns a goroutine that logs current metric values every

@@ -117,6 +117,7 @@ func main() {
 	eventsPool.Start(ctx)
 	logger.Info("Events pool started and listening for ZMQ messages")
 
+	metrics.Register()
 	metrics.StartMetricsLogging(ctx, time.Second*10)
 	logger.Info("Started metrics thread")
 
