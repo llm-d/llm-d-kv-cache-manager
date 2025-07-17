@@ -31,7 +31,7 @@ const defaultWorkers = 5
 
 // Config holds the configuration for the TokenizationPool.
 type Config struct {
-	WorkersCount int
+	WorkersCount int `json:"workersCount"`
 	*HFTokenizerConfig
 }
 

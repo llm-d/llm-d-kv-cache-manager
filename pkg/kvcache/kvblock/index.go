@@ -28,12 +28,12 @@ import (
 // If multiple backends are configured, only the first one will be used.
 type IndexConfig struct {
 	// InMemoryConfig holds the configuration for the in-memory index.
-	InMemoryConfig *InMemoryIndexConfig
+	InMemoryConfig *InMemoryIndexConfig `json:"inMemoryConfig"`
 	// RedisConfig holds the configuration for the Redis index.
-	RedisConfig *RedisIndexConfig
+	RedisConfig *RedisIndexConfig `json:"redisConfig"`
 	// EnableMetrics toggles whether admissions/evictions/hits/misses are
 	// recorded.
-	EnableMetrics bool
+	EnableMetrics bool `json:"enableMetrics"`
 }
 
 // DefaultIndexConfig returns a default configuration for the KV-block index.

@@ -55,7 +55,7 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 			return nil, fmt.Errorf("failed to parse redis host: %w", err)
 		}
 
-		config.KVBlockIndexConfig.RedisConfig.RedisOpt = redisOpt
+		config.KVBlockIndexConfig.RedisConfig.Address = redisOpt.Addr
 	} // Otherwise defaults to in-memory indexer
 
 	return config, nil

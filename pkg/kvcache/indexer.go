@@ -33,11 +33,11 @@ import (
 // The configuration cover the different components found in the Indexer
 // module.
 type Config struct {
-	PrefixStoreConfig    *prefixstore.Config
-	TokenProcessorConfig *kvblock.TokenProcessorConfig
-	KVBlockIndexConfig   *kvblock.IndexConfig
-	KVBLockScorerConfig  *KVBlockScorerConfig
-	TokenizersPoolConfig *tokenization.Config
+	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
+	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
+	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
+	KVBLockScorerConfig  *KVBlockScorerConfig          // not exported
+	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.

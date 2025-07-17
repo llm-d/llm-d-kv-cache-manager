@@ -36,9 +36,9 @@ const (
 // InMemoryIndexConfig holds the configuration for the InMemoryIndex.
 type InMemoryIndexConfig struct {
 	// Size is the maximum number of keys that can be stored in the index.
-	Size int
+	Size int `json:"size"`
 	// PodCacheSize is the maximum number of pod entries per key.
-	PodCacheSize int
+	PodCacheSize int `json:"podCacheSize"`
 }
 
 // DefaultInMemoryIndexConfig returns a default configuration for the InMemoryIndex.

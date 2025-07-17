@@ -37,8 +37,8 @@ type Tokenizer interface {
 
 // HFTokenizerConfig holds the configuration for the HuggingFace tokenizer.
 type HFTokenizerConfig struct {
-	HuggingFaceToken   string
-	TokenizersCacheDir string
+	HuggingFaceToken   string `json:"huggingFaceToken"`
+	TokenizersCacheDir string `json:"tokenizersCacheDir"` // Directory for caching tokenizers
 }
 
 // DefaultHFTokenizerConfig returns a default configuration for the HuggingFace

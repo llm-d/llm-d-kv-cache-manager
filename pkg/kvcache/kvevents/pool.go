@@ -17,11 +17,11 @@ import (
 // Config holds the configuration for the event processing pool.
 type Config struct {
 	// ZMQEndpoint is the ZMQ address to connect to (e.g., "tcp://indexer:5557").
-	ZMQEndpoint string
+	ZMQEndpoint string `json:"zmqEndpoint"`
 	// TopicFilter is the ZMQ subscription filter (e.g., "kv.").
-	TopicFilter string
+	TopicFilter string `json:"topicFilter"`
 	// Concurrency is the number of parallel workers to run.
-	Concurrency int
+	Concurrency int `json:"concurrency"`
 }
 
 // DefaultConfig returns a default configuration for the event processing pool.

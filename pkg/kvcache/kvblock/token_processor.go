@@ -33,13 +33,12 @@ const defaultBlockSize = 16
 
 // TokenProcessorConfig holds the configuration for the token processor.
 type TokenProcessorConfig struct {
-	BlockSize int
+	BlockSize int `json:"blockSize"`
 	// HashSeed is used to prefix initial hash chunks, similarly to vLLM's NONE_HASH.
 	// This should be aligned with vLLM's `PYTHONHASHSEED` environment variable.
 	// The system's deployer is responsible for aligning the vLLM deployments
 	// with the same seed value.
-	HashSeed string
-
+	HashSeed string  `json:"hashSeed"`
 	initHash *uint64 // cache once
 }
 

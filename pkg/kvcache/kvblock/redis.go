@@ -30,15 +30,12 @@ import (
 
 // RedisIndexConfig holds the configuration for the RedisIndex.
 type RedisIndexConfig struct {
-	RedisOpt *redis.Options
+	Address string `json:"address,omitempty"` // Redis server address
 }
 
 func DefaultRedisIndexConfig() *RedisIndexConfig {
 	return &RedisIndexConfig{
-		RedisOpt: &redis.Options{
-			Addr: "localhost:6379",
-			DB:   0,
-		},
+		Address: "redis://127.0.0.1:6379",
 	}
 }
 
@@ -48,11 +45,20 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 		config = DefaultRedisIndexConfig()
 	}
 
-	redisClient := redis.NewClient(config.RedisOpt)
+	if !strings.HasPrefix(config.Address, "redis://") &&
+		!strings.HasPrefix(config.Address, "rediss://") &&
+		!strings.HasPrefix(config.Address, "unix://") {
+		config.Address = "redis://" + config.Address
+	}
 
-	_, err := redisClient.Ping(context.Background()).Result()
+	redisOpt, err := redis.ParseURL(config.Address)
 	if err != nil {
-		return nil, fmt.Errorf("could not connect to Redis: %w", err)
+		return nil, fmt.Errorf("failed to parse redisURL: %w", err)
+	}
+
+	redisClient := redis.NewClient(redisOpt)
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
 	return &RedisIndex{

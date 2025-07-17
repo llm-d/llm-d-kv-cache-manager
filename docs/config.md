@@ -1,0 +1,223 @@
+# Configuration Documentation
+
+This document describes all configuration options available in the llm-d KV Cache Manager. 
+All configurations are JSON-serializable and can be provided via configuration files or environment variables.
+
+## Main Configuration
+
+### Indexer Configuration (`Config`)
+
+The main configuration structure for the KV Cache Indexer module.
+
+```json
+{
+  "prefixStoreConfig": { ... },
+  "tokenProcessorConfig": { ... },
+  "kvBlockIndexConfig": { ... },
+  "tokenizersPoolConfig": { ... }
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `prefixStoreConfig` | [LRUStoreConfig](#lru-store-configuration-lrustoreconfig) | Configuration for the prefix store | See defaults |
+| `tokenProcessorConfig` | [TokenProcessorConfig](#token-processor-configuration-tokenprocessorconfig) | Configuration for token processing | See defaults |
+| `kvBlockIndexConfig` | [IndexConfig](#index-configuration-indexconfig) | Configuration for KV block indexing | See defaults |
+| `tokenizersPoolConfig` | [Config](#tokenization-pool-configuration-config) | Configuration for tokenization pool | See defaults |
+
+## KV Block Index Configuration
+
+### Index Configuration (`IndexConfig`)
+
+Configures the KV-block index backend. Multiple backends can be configured, but only the first available one will be used.
+
+```json
+{
+  "inMemoryConfig": { ... },
+  "redisConfig": { ... },
+  "enableMetrics": false
+}
+```
+
+| Field | Type                                                  | Description | Default |
+|-------|-------------------------------------------------------|-------------|---------|
+| `inMemoryConfig` | [InMemoryIndexConfig](#in-memory-index-configuration) | In-memory index configuration | See defaults |
+| `redisConfig` | [RedisIndexConfig](#redis-index-configuration)        | Redis index configuration | `null` |
+| `enableMetrics` | `boolean`                                             | Enable admissions/evictions/hits/misses recording | `false` |
+
+### In-Memory Index Configuration (`InMemoryIndexConfig`)
+
+Configures the in-memory KV block index implementation.
+
+```json
+{
+  "size": 100000000,
+  "podCacheSize": 10
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `size` | `integer` | Maximum number of keys that can be stored | `100000000` |
+| `podCacheSize` | `integer` | Maximum number of pod entries per key | `10` |
+
+### Redis Index Configuration (`RedisIndexConfig`)
+
+Configures the Redis-backed KV block index implementation.
+
+```json
+{
+  "address": "redis://127.0.0.1:6379"
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `address` | `string` | Redis server address (can include auth: `redis://user:pass@host:port/db`) | `"redis://127.0.0.1:6379"` |
+
+## Token Processing Configuration
+
+### Token Processor Configuration (`TokenProcessorConfig`)
+
+Configures how tokens are converted to KV block keys.
+
+```json
+{
+  "blockSize": 16,
+  "hashSeed": ""
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `blockSize` | `integer` | Number of tokens per block | `16` |
+| `hashSeed` | `string` | Seed for hash generation (should align with vLLM's PYTHONHASHSEED) | `""` |
+
+## Prefix Store Configuration
+
+### LRU Store Configuration (`LRUStoreConfig`)
+
+Configures the LRU-based prefix token store.
+
+```json
+{
+  "cacheSize": 500000,
+  "blockSize": 256
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `cacheSize` | `integer` | Maximum number of blocks the LRU cache can store | `500000` |
+| `blockSize` | `integer` | Number of tokens per block in the prefix cache | `256` |
+
+## Tokenization Configuration
+
+### Tokenization Pool Configuration (`Config`)
+
+Configures the tokenization worker pool.
+
+```json
+{
+  "workersCount": 5,
+  "huggingFaceToken": "",
+  "tokenizersCacheDir": ""
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|--------|
+| `workersCount` | `integer` | Number of tokenization workers | `5` |
+| `huggingFaceToken` | `string` | HuggingFace authentication token | `""` |
+| `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
+
+### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
+
+Configures the HuggingFace tokenizer backend.
+
+```json
+{
+  "huggingFaceToken": "",
+  "tokenizersCacheDir": ""
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `huggingFaceToken` | `string` | HuggingFace API token for accessing models | `""` |
+| `tokenizersCacheDir` | `string` | Local directory for caching downloaded tokenizers | `"./bin"` |
+
+## Event Processing Configuration
+
+### Event Pool Configuration (`Config`)
+
+Configures the ZMQ event processing pool for handling KV cache events.
+
+```json
+{
+  "zmqEndpoint": "tcp://*:5557",
+  "topicFilter": "kv@",
+  "concurrency": 4
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `zmqEndpoint` | `string` | ZMQ address to connect to | `"tcp://*:5557"` |
+| `topicFilter` | `string` | ZMQ subscription filter | `"kv@"` |
+| `concurrency` | `integer` | Number of parallel workers | `4` |
+
+## Complete Example Configuration
+
+Here's a complete configuration example with all options:
+
+```json
+{
+  "prefixStoreConfig": {
+    "cacheSize": 500000,
+    "blockSize": 256
+  },
+  "tokenProcessorConfig": {
+    "blockSize": 16,
+    "hashSeed": "12345"
+  },
+  "kvBlockIndexConfig": {
+    "redisConfig": {
+      "address": "redis://user:password@redis-server:6379/0"
+    },
+    "enableMetrics": true
+  },
+  "tokenizersPoolConfig": {
+    "workersCount": 8,
+    "huggingFaceToken": "your_hf_token_here",
+    "tokenizersCacheDir": "/tmp/tokenizers"
+  }
+}
+```
+
+## Event Processing Configuration Example
+
+For the ZMQ event processing pool:
+
+```json
+{
+  "zmqEndpoint": "tcp://indexer:5557",
+  "topicFilter": "kv@",
+  "concurrency": 8
+}
+```
+
+## Notes
+
+1. **Hash Seed Alignment**: The `hash_seed` in `TokenProcessorConfig` should be aligned with vLLM's `PYTHONHASHSEED` environment variable to ensure consistent hashing across the system.
+
+2. **Memory Considerations**: The `size` parameter in `InMemoryIndexConfig` directly affects memory usage. Each key-value pair consumes memory proportional to the number of associated pods.
+
+3. **Performance Tuning**: 
+   - Increase `workers_count` in tokenization config for higher tokenization throughput
+   - Adjust `concurrency` in event processing for better event handling performance
+   - Tune cache sizes based on available memory and expected workload
+
+4. **Cache Directories**: Ensure the `tokenizers_cache_dir` has sufficient disk space and appropriate permissions for the application to read/write tokenizer files.
+
+5. **Redis Configuration**: When using Redis backend, ensure Redis server is accessible and has sufficient memory. The `address` field supports full Redis URLs including authentication: `redis://user:pass@host:port/db`.
