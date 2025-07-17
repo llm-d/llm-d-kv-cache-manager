@@ -59,6 +59,7 @@ graph TD
 5.  **Index Update**: The **Event Subscriber** consumes these events and updates the **KV-Block Index** in near-real-time
 
 * For a more detailed breakdown, please see the high-level [Architecture Document](docs/architecture.md).
+* For configuration details, see the [Configuration Document](docs/configuration.md).
 
 -----
 
