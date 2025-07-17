@@ -5,6 +5,13 @@ All configurations are JSON-serializable and can be provided via configuration f
 
 ## Main Configuration
 
+This package consists of two components:
+1. **KV Cache Indexer**: Manages the KV cache index, allowing efficient retrieval of cached blocks.
+2. **KV Event Processing**: Handles events from vLLM to update the cache index.
+
+The two components are configured separately, but share the index backend for storing KV block localities.
+The latter is configured via the `kvBlockIndexConfig` field in the KV Cache Indexer configuration.
+
 ### Indexer Configuration (`Config`)
 
 The main configuration structure for the KV Cache Indexer module.
@@ -25,7 +32,37 @@ The main configuration structure for the KV Cache Indexer module.
 | `kvBlockIndexConfig` | [IndexConfig](#index-configuration-indexconfig) | Configuration for KV block indexing | See defaults |
 | `tokenizersPoolConfig` | [Config](#tokenization-pool-configuration-config) | Configuration for tokenization pool | See defaults |
 
-## KV Block Index Configuration
+
+## Complete Example Configuration
+
+Here's a complete configuration example with all options:
+
+```json
+{
+  "prefixStoreConfig": {
+    "cacheSize": 500000,
+    "blockSize": 256
+  },
+  "tokenProcessorConfig": {
+    "blockSize": 16,
+    "hashSeed": "12345"
+  },
+  "kvBlockIndexConfig": {
+    "inMemoryConfig": {
+      "size": 100000000,
+      "podCacheSize": 10
+    },
+    "enableMetrics": true
+  },
+  "tokenizersPoolConfig": {
+    "workersCount": 8,
+    "huggingFaceToken": "your_hf_token_here",
+    "tokenizersCacheDir": "/tmp/tokenizers"
+  }
+}
+```
+
+## KV-Block Index Configuration
 
 ### Index Configuration (`IndexConfig`)
 
@@ -147,9 +184,9 @@ Configures the HuggingFace tokenizer backend.
 | `huggingFaceToken` | `string` | HuggingFace API token for accessing models | `""` |
 | `tokenizersCacheDir` | `string` | Local directory for caching downloaded tokenizers | `"./bin"` |
 
-## Event Processing Configuration
+## KV-Event Processing Configuration
 
-### Event Pool Configuration (`Config`)
+### KV-Event Pool Configuration (`Config`)
 
 Configures the ZMQ event processing pool for handling KV cache events.
 
@@ -158,40 +195,6 @@ Configures the ZMQ event processing pool for handling KV cache events.
   "zmqEndpoint": "tcp://*:5557",
   "topicFilter": "kv@",
   "concurrency": 4
-}
-```
-
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `zmqEndpoint` | `string` | ZMQ address to connect to | `"tcp://*:5557"` |
-| `topicFilter` | `string` | ZMQ subscription filter | `"kv@"` |
-| `concurrency` | `integer` | Number of parallel workers | `4` |
-
-## Complete Example Configuration
-
-Here's a complete configuration example with all options:
-
-```json
-{
-  "prefixStoreConfig": {
-    "cacheSize": 500000,
-    "blockSize": 256
-  },
-  "tokenProcessorConfig": {
-    "blockSize": 16,
-    "hashSeed": "12345"
-  },
-  "kvBlockIndexConfig": {
-    "redisConfig": {
-      "address": "redis://user:password@redis-server:6379/0"
-    },
-    "enableMetrics": true
-  },
-  "tokenizersPoolConfig": {
-    "workersCount": 8,
-    "huggingFaceToken": "your_hf_token_here",
-    "tokenizersCacheDir": "/tmp/tokenizers"
-  }
 }
 ```
 
@@ -207,6 +210,13 @@ For the ZMQ event processing pool:
 }
 ```
 
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `zmqEndpoint` | `string` | ZMQ address to connect to | `"tcp://*:5557"` |
+| `topicFilter` | `string` | ZMQ subscription filter | `"kv@"` |
+| `concurrency` | `integer` | Number of parallel workers | `4` |
+
+---
 ## Notes
 
 1. **Hash Seed Alignment**: The `hash_seed` in `TokenProcessorConfig` should be aligned with vLLM's `PYTHONHASHSEED` environment variable to ensure consistent hashing across the system.
