@@ -52,7 +52,8 @@ Here's a complete configuration example with all options:
       "size": 100000000,
       "podCacheSize": 10
     },
-    "enableMetrics": true
+    "enableMetrics": true,
+    "metricsLoggingInterval": "1m0s"
   },
   "tokenizersPoolConfig": {
     "workersCount": 8,
@@ -81,6 +82,7 @@ Configures the KV-block index backend. Multiple backends can be configured, but 
 | `inMemoryConfig` | [InMemoryIndexConfig](#in-memory-index-configuration) | In-memory index configuration | See defaults |
 | `redisConfig` | [RedisIndexConfig](#redis-index-configuration)        | Redis index configuration | `null` |
 | `enableMetrics` | `boolean`                                             | Enable admissions/evictions/hits/misses recording | `false` |
+| `metricsLoggingInterval` | `string` (duration) | Interval at which metrics are logged (e.g., `"1m0s"`). If zero or omitted, metrics logging is disabled. Requires `enableMetrics` to be `true`. | `"0s"` |
 
 ### In-Memory Index Configuration (`InMemoryIndexConfig`)
 

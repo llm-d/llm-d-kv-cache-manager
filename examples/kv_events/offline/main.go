@@ -106,8 +106,7 @@ func main() {
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	logger := klog.FromContext(ctx)
 
-	//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(getKVCacheIndexerConfig())
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
 	if err != nil {
 		return nil, err
 	}

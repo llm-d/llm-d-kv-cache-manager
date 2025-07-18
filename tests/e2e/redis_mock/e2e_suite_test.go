@@ -69,7 +69,7 @@ func (s *KVCacheSuite) SetupTest() {
 
 	s.Pod1IP = "10.0.0.1"
 
-	s.indexer, err = kvcache.NewKVCacheIndexer(s.config)
+	s.indexer, err = kvcache.NewKVCacheIndexer(s.ctx, s.config)
 	s.kvBlockIndex = s.indexer.KVBlockIndex()
 	s.Require().NoError(err)
 

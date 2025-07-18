@@ -27,7 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -70,6 +69,9 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	if err == nil || blockSize >= 0 {
 		config.TokenProcessorConfig.BlockSize = blockSize
 	}
+
+	config.KVBlockIndexConfig.EnableMetrics = true
+	config.KVBlockIndexConfig.MetricsLoggingInterval = 15 * time.Second
 
 	return config
 }
@@ -116,10 +118,6 @@ func main() {
 
 	eventsPool.Start(ctx)
 	logger.Info("Events pool started and listening for ZMQ messages")
-
-	metrics.Register()
-	metrics.StartMetricsLogging(ctx, time.Second*10)
-	logger.Info("Started metrics thread")
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -171,8 +169,7 @@ func main() {
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	logger := klog.FromContext(ctx)
 
-	//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(getKVCacheIndexerConfig())
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
 	if err != nil {
 		return nil, err
 	}

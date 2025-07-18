@@ -53,6 +53,8 @@ func NewDefaultConfig() *Config {
 
 // Indexer is a concrete implementation of the KVCacheIndex interface.
 type Indexer struct {
+	config *Config
+
 	tokensIndexer   prefixstore.Indexer    // gets tokens for a prompt
 	tokensProcessor kvblock.TokenProcessor // turns tokens to kv block keys
 	kvBlockIndex    kvblock.Index          // looks up pods for block keys
@@ -62,7 +64,7 @@ type Indexer struct {
 }
 
 // NewKVCacheIndexer creates a KVCacheIndex given a Config.
-func NewKVCacheIndexer(config *Config) (*Indexer, error) {
+func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	tokensIndexer, err := prefixstore.NewLRUTokenStore(config.PrefixStoreConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prefixstore.Indexer: %w", err)
@@ -70,7 +72,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 
 	tokensProcessor := kvblock.NewChunkedTokenDatabase(config.TokenProcessorConfig)
 
-	kvBlockIndex, err := kvblock.NewIndex(config.KVBlockIndexConfig)
+	kvBlockIndex, err := kvblock.NewIndex(ctx, config.KVBlockIndexConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
@@ -86,6 +88,7 @@ func NewKVCacheIndexer(config *Config) (*Indexer, error) {
 	}
 
 	return &Indexer{
+		config:          config,
 		tokensIndexer:   tokensIndexer,
 		tokensProcessor: tokensProcessor,
 		kvBlockIndex:    kvBlockIndex,

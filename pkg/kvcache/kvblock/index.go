@@ -19,7 +19,9 @@ package kvblock
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -34,6 +36,10 @@ type IndexConfig struct {
 	// EnableMetrics toggles whether admissions/evictions/hits/misses are
 	// recorded.
 	EnableMetrics bool `json:"enableMetrics"`
+	// MetricsLoggingInterval defines the interval at which metrics are logged.
+	// If zero, metrics logging is disabled.
+	// Requires `EnableMetrics` to be true.
+	MetricsLoggingInterval time.Duration `json:"metricsLoggingInterval"`
 }
 
 // DefaultIndexConfig returns a default configuration for the KV-block index.
@@ -45,7 +51,7 @@ func DefaultIndexConfig() *IndexConfig {
 }
 
 // NewIndex creates a new Index instance.
-func NewIndex(cfg *IndexConfig) (Index, error) {
+func NewIndex(ctx context.Context, cfg *IndexConfig) (Index, error) {
 	if cfg == nil {
 		cfg = DefaultIndexConfig()
 	}
@@ -60,6 +66,7 @@ func NewIndex(cfg *IndexConfig) (Index, error) {
 			return nil, fmt.Errorf("failed to create in-memory index: %w", err)
 		}
 	case cfg.RedisConfig != nil:
+		//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
 		idx, err = NewRedisIndex(cfg.RedisConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Redis index: %w", err)
@@ -71,6 +78,11 @@ func NewIndex(cfg *IndexConfig) (Index, error) {
 	// wrap in metrics only if enabled
 	if cfg.EnableMetrics {
 		idx = NewInstrumentedIndex(idx)
+		metrics.Register()
+		if cfg.MetricsLoggingInterval > 0 {
+			// this is non-blocking
+			metrics.StartMetricsLogging(ctx, cfg.MetricsLoggingInterval)
+		}
 	}
 
 	return idx, nil
