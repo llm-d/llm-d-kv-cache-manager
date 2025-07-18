@@ -146,7 +146,7 @@ Configures the LRU-based prefix token store.
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `cacheSize` | `integer` | Maximum number of blocks the LRU cache can store | `500000` |
-| `blockSize` | `integer` | Number of tokens per block in the prefix cache | `256` |
+| `blockSize` | `integer` | Number of **characters** per block in the tokenization prefix-cache | `256` |
 
 ## Tokenization Configuration
 
