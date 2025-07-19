@@ -15,6 +15,12 @@
 # Dependency directories
 vendor/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # Go workspace file
 go.work
 go.work.sum
@@ -32,6 +38,7 @@ go.work.sum
 *.swo
 *.bak
 *.tmp
+*.code-workspace
 
 # OS-specific
 .DS_Store

@@ -147,7 +147,7 @@ func main() {
 			return
 		}
 
-		pods, err := kvCacheIndexer.GetPodScores(ctx, req.Prompt, modelName, nil)
+		pods, err := kvCacheIndexer.GetPodScores(ctx, req.Prompt, modelName, nil, false)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
 			return
