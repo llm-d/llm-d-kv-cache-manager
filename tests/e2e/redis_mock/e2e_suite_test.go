@@ -19,7 +19,6 @@ package e2e
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -56,16 +55,6 @@ type KVCacheSuite struct {
 func (s *KVCacheSuite) SetupTest() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 
-	// Ensure chat_template_wrapper.py is available in the working directory
-	wrapperSrc := "../../../pkg/tokenization/chat_template_go/chat_template_wrapper.py"
-	wrapperDst := "chat_template_wrapper.py"
-	if _, err := os.Stat(wrapperDst); os.IsNotExist(err) {
-		err := os.Symlink(wrapperSrc, wrapperDst)
-		if err != nil && !os.IsExist(err) {
-			panic("failed to symlink chat_template_wrapper.py: " + err.Error())
-		}
-	}
-
 	var err error
 	s.Require().NoError(err)
 
@@ -85,7 +74,6 @@ func (s *KVCacheSuite) SetupTest() {
 	s.Require().NoError(err)
 
 	go s.indexer.Run(s.ctx)
-
 }
 
 // promptToKeys tokenizes a prompt and returns its corresponding KV block keys.
@@ -94,8 +82,10 @@ func (s *KVCacheSuite) SetupTest() {
 func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
+
 	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, model)
 	s.Require().NotEmpty(blockKeys)
+
 	return blockKeys
 }
 
