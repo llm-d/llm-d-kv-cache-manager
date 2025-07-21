@@ -196,7 +196,7 @@ persistence:
   # -- PVC storage size
   size: 50Gi
   # -- Optional: Storage class name for the PVC
-  storageClassName: "ocs-storagecluster-cephfs"
+  storageClassName: ""
   # -- Mount path inside the VLLM container for Hugging Face cache
   mountPath: /data
 
