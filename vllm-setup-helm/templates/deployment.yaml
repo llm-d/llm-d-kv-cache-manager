@@ -51,14 +51,6 @@ spec:
             - '-c'
           args:
             - |
-              git config --global --add safe.directory /workspace/vllm && \
-              git remote add vllm https://github.com/vllm-project/vllm.git && \
-              git fetch vllm && \
-              git reset --hard 697ef765ee91d1a47b49ae7e43951cfd116b6052 && \
-              VLLM_COMMIT=$(git merge-base HEAD origin/main) && \
-              VLLM_PRECOMPILED_WHEEL_LOCATION=https://wheels.vllm.ai/${VLLM_COMMIT}/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl && \
-              VLLM_USE_PRECOMPILED=1 uv pip install --editable . && \
-              pip install -r requirements/common.txt && \
               {{- if .Values.lmcache.enabled }}
               export LMCACHE_DISTRIBUTED_URL=${POD_IP} && \
               {{- end }}
