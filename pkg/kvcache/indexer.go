@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tracing"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
@@ -117,35 +119,82 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
+	ctx, span := tracing.StartSpan(ctx, "kv-cache-manager.GetPodScores", tracing.OperationGetPodScores)
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String(tracing.AttrGenAIRequestModel, modelName),
+		attribute.Int(tracing.AttrKVCachePodCount, len(podIdentifiers)),
+	)
+
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 	// 0. add to tokenizers pool
 	k.tokenizersPool.AddTask(prompt, modelName)
 
 	// 1. get available tokens of longest prefix
+	ctx, findTokensSpan := tracing.StartSpan(ctx, "kv-cache-manager.FindTokens", tracing.OperationFindTokens)
 	tokens := k.tokensIndexer.FindLongestContainedTokens(prompt, modelName)
 	if len(tokens) == 0 {
+		span.SetAttributes(
+			attribute.Int(tracing.AttrKVCacheTokenCount, 0),
+			attribute.String(tracing.AttrOperationOutcome, tracing.OutcomeSuccess),
+		)
+		tracing.SetSpanError(findTokensSpan, nil)
+		findTokensSpan.End()
 		//nolint:nilnil // no need to return an error
 		return nil, nil
 	}
+	tracing.SetSpanError(findTokensSpan, nil)
+	findTokensSpan.End()
+
+	// Set token count attribute
+	span.SetAttributes(attribute.Int(tracing.AttrKVCacheTokenCount, len(tokens)))
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
+	// Set block keys attribute
+	span.SetAttributes(attribute.Int(tracing.AttrKVCacheBlockKeys, len(blockKeys)))
+
 	// 3. query kvblock indexer for pods
 	keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
+		tracing.SetSpanError(span, err)
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
 	traceLogger.Info("found block keys", "block-keys", blockKeys,
 		"pods", podsPerKeyPrintHelper(keyToPods))
 
 	// 4. score pods
+	_, scorePodSpan := tracing.StartSpan(ctx, "kv-cache-manager.ScorePods", tracing.OperationScorePods)
 	podScores, err := k.kvBlockScorer.Score(blockKeys, keyToPods)
 	if err != nil {
+		tracing.SetSpanError(scorePodSpan, err)
+		scorePodSpan.End()
+		tracing.SetSpanError(span, err)
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
+	tracing.SetSpanError(scorePodSpan, nil)
+	scorePodSpan.End()
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
+
+	// Calculate hit ratio for observability
+	totalPods := len(podIdentifiers)
+	if totalPods == 0 {
+		// If no specific pods requested, use all pods with scores
+		totalPods = len(podScores)
+	}
+
+	var hitRatio float64
+	if totalPods > 0 {
+		hitRatio = float64(len(podScores)) / float64(totalPods)
+	}
+
+	span.SetAttributes(
+		attribute.Float64(tracing.AttrKVCacheHitRatio, hitRatio),
+		attribute.String(tracing.AttrOperationOutcome, tracing.OutcomeSuccess),
+	)
 
 	return podScores, nil
 }
