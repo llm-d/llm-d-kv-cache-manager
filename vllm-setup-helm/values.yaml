@@ -16,9 +16,9 @@ vllm:
 
   image:
     # -- VLLM image repository
-    repository: ghcr.io/llm-d/llm-d-dev
+    repository: vllm/vllm-openai
     # -- VLLM image tag (overrides Chart.yaml appVersion if set)
-    tag: "v0.2.0"
+    tag: "v0.10.0"
     # -- VLLM image pull policy
     pullPolicy: IfNotPresent
 
