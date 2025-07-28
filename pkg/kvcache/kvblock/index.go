@@ -51,6 +51,7 @@ type IndexConfig struct {
 func DefaultIndexConfig() *IndexConfig {
 	return &IndexConfig{
 		InMemoryConfig: DefaultInMemoryIndexConfig(),
+		RedisConfig:    DefaultRedisIndexConfig(),
 		EnableMetrics:  false,
 	}
 }

@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
@@ -122,6 +124,17 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
+	tracer := otel.GetTracerProvider().Tracer("llm-d-epp")
+	ctx, span := tracer.Start(ctx, "kv-cache-manager.GetPodScores")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "get_pod_scores"),
+		attribute.String("gen_ai.request.model", modelName),
+		attribute.Int("llm_d.kv_cache.pod_count", len(podIdentifiers)),
+	)
+
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
@@ -140,6 +153,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	// 3. query kvblock indexer for pods
 	keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
 	traceLogger.Info("found block keys", "block-keys", blockKeys,
@@ -148,9 +162,26 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	// 4. score pods
 	podScores, err := k.kvBlockScorer.Score(blockKeys, keyToPods)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
+
+	// Calculate hit ratio for observability
+	totalPods := len(podIdentifiers)
+	if totalPods == 0 {
+		// If no specific pods requested, use all pods with scores
+		totalPods = len(podScores)
+	}
+
+	var hitRatio float64
+	if totalPods > 0 {
+		hitRatio = float64(len(podScores)) / float64(totalPods)
+	}
+
+	span.SetAttributes(
+		attribute.Float64("llm_d.kv_cache.hit_ratio", hitRatio),
+	)
 
 	return podScores, nil
 }
