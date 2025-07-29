@@ -21,40 +21,52 @@ limitations under the License.
 #include <stdio.h>
 #include <stdlib.h>
 
+// === FUNCTION DECLARATIONS ===
+
 // Initialize Python interpreter
-int Py_InitializeGo() {
-    Py_Initialize();
-    return 0;
-}
+int Py_InitializeGo();
 
 // Finalize Python interpreter
-void Py_FinalizeGo() {
-    Py_Finalize();
-}
+void Py_FinalizeGo();
 
 // CGo cannot call C macros, so we wrap PyRun_SimpleString in a function
-int Go_PyRun_SimpleString(const char* code) {
-    return PyRun_SimpleString(code);
-}
+int Go_PyRun_SimpleString(const char* code);
 
 // Wrapper for PyImport_AddModule
-PyObject* Go_PyImport_AddModule(const char* name) {
-    return PyImport_AddModule(name);
-}
+PyObject* Go_PyImport_AddModule(const char* name);
 
 // Wrapper for PyModule_GetDict
-PyObject* Go_PyModule_GetDict(PyObject* module) {
-    return PyModule_GetDict(module);
-}
+PyObject* Go_PyModule_GetDict(PyObject* module);
 
 // Wrapper for PyDict_GetItemString
-PyObject* Go_PyDict_GetItemString(PyObject* dict, const char* key) {
-    return PyDict_GetItemString(dict, key);
-}
+PyObject* Go_PyDict_GetItemString(PyObject* dict, const char* key);
 
 // Helper function to convert Python string to Go string
-const char* PyUnicode_AsGoString(PyObject* obj) {
-    return PyUnicode_AsUTF8(obj);
-}
+const char* PyUnicode_AsGoString(PyObject* obj);
+
+// === NEW CACHING FUNCTIONS FOR OPTIMIZATION ===
+
+// Global variables to hold cached module and functions
+extern PyObject* g_chat_template_module;
+extern PyObject* g_render_jinja_template_func;
+extern PyObject* g_get_model_chat_template_func;
+
+// Initialize the cached module and functions (call once at startup)
+int Py_InitChatTemplateModule();
+
+// Call the cached render_jinja_template function
+char* Py_CallRenderJinjaTemplate(const char* json_request);
+
+// Internal function that does the actual work
+char* Py_CallRenderJinjaTemplateInternal(const char* json_request);
+
+// Call the cached get_model_chat_template function
+char* Py_CallGetModelChatTemplate(const char* json_request);
+
+// Clean up cached objects
+void Py_CleanupChatTemplateModule();
+
+// Re-initialize Python interpreter state
+int Py_ReinitializeGo();
 
 #endif // CGO_FUNCTIONS_H 
