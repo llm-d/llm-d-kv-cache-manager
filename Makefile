@@ -75,19 +75,66 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 	$(TOOLS_DIR)/verify_boilerplate.py --boilerplate-dir=hack/boilerplate --skip docs
 
 .PHONY: unit-test
-unit-test: download-tokenizer download-zmq
+unit-test: download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -ldflags="$(LDFLAGS)" ./pkg/...
 
 .PHONY: e2e-test
-e2e-test: download-tokenizer download-zmq
-	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
+e2e-test: download-tokenizer detect-python install-python-deps download-zmq
+	@printf "\033[33;1m==== Running e2e tests ====\033[0m\n"
 	go test -v -ldflags="$(LDFLAGS)" ./tests/...
 
 ##@ Build
 
+# Python detection and build configuration
+PYTHON_VERSION := 3.11.7
+PYTHON_DIR = build/python-$(PYTHON_VERSION)
+
+.PHONY: detect-python
+detect-python:
+	@printf "\033[33;1m==== Detecting Python installation ====\033[0m\n"
+	@if python3 -c "import sys; print(sys.version)" >/dev/null 2>&1; then \
+		echo "Using system Python"; \
+		PYTHON_PATH=$$(python3 -c "import sys; print(sys.prefix)"); \
+		PYTHON_VERSION=$$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"); \
+		sed -i.bak "s|{{PYTHON_PATH}}|$$PYTHON_PATH|g; s|{{PYTHON_VERSION}}|$$PYTHON_VERSION|g" \
+			pkg/preprocessing/chat_completions_template/cgo_functions.go; \
+		rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak; \
+	else \
+		echo "System Python not found, downloading..."; \
+		$(MAKE) download-python; \
+	fi
+
+.PHONY: download-python
+download-python:
+	@printf "\033[33;1m==== Downloading Python $(PYTHON_VERSION) ====\033[0m\n"
+	@mkdir -p build
+	@if [ ! -d "$(PYTHON_DIR)" ]; then \
+		if [ "$(TARGETOS)" = "darwin" ]; then \
+			curl -L https://www.python.org/ftp/python/$(PYTHON_VERSION)/python-$(PYTHON_VERSION)-macos11.pkg -o build/python.pkg; \
+			sudo installer -pkg build/python.pkg -target /; \
+		elif [ "$(TARGETOS)" = "linux" ]; then \
+			curl -L https://www.python.org/ftp/python/$(PYTHON_VERSION)/Python-$(PYTHON_VERSION).tgz -o build/python.tgz; \
+			tar -xzf build/python.tgz -C build/; \
+			cd build/Python-$(PYTHON_VERSION) && ./configure --prefix=$(PWD)/$(PYTHON_DIR) && make && make install; \
+		fi; \
+	fi
+	@# Update CGo flags with downloaded Python path
+	@sed -i.bak "s|{{PYTHON_PATH}}|$(PWD)/$(PYTHON_DIR)|g; s|{{PYTHON_VERSION}}|$(PYTHON_VERSION)|g" \
+		pkg/preprocessing/chat_completions_template/cgo_functions.go
+	@rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak
+
+.PHONY: install-python-deps
+install-python-deps: detect-python
+	@printf "\033[33;1m==== Installing Python dependencies ====\033[0m\n"
+	@if [ -d "$(PYTHON_DIR)" ]; then \
+		$(PYTHON_DIR)/bin/pip install -r pkg/preprocessing/chat_completions_template/requirements.txt; \
+	else \
+		python3 -m pip install -r pkg/preprocessing/chat_completions_template/requirements.txt; \
+	fi
+
 .PHONY: build
-build: check-go download-tokenizer download-zmq
+build: check-go download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Building ====\033[0m\n"
 	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
 
@@ -350,6 +397,14 @@ print-namespace: ## Print the current namespace
 .PHONY: print-project-name
 print-project-name: ## Print the current project name
 	@echo "$(PROJECT_NAME)"
+
+.PHONY: clean
+clean: ## Clean build artifacts and restore placeholders
+	@printf "\033[33;1m==== Cleaning build artifacts ====\033[0m\n"
+	@rm -rf build/
+	@# Restore original placeholders
+	@git checkout pkg/preprocessing/chat_completions_template/cgo_functions.go
+	@echo "✅ Build artifacts cleaned and placeholders restored"
 
 .PHONY: install-hooks
 install-hooks: ## Install git hooks
