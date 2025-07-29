@@ -94,11 +94,12 @@ kvCacheManager:
   replicaCount: 1
   image:
     # -- kv-cache-manager image repository
-    repository: quay.io/vmaroon/llm-d-kv-cache-manager/kvevents
+    #repository: quay.io/vmaroon/llm-d-kv-cache-manager/kvevents
+    repository: ghcr.io/llm-d/llm-d-kv-cache-manager
     # -- kv-cache-manager image tag
     tag: 0.0.1
     # -- kv-cache-manager image pull policy
-    pullPolicy: Always
+    pullPolicy: Never
   # -- ZMQ topic for vLLM to publish to and for the manager to subscribe to
   zmqTopic: "kv@"
   # -- Concurrency for the event processing pool in the manager
@@ -189,14 +190,14 @@ persistence:
   # -- Enable persistence using a PersistentVolumeClaim
   enabled: true
   # -- PVC name (if not set, it will be templated)
-  name: ""
+  #name: ""
   # -- PVC access mode
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   # -- PVC storage size
-  size: 50Gi
+  size: 28Gi
   # -- Optional: Storage class name for the PVC
-  storageClassName: ""
+  #storageClassName: ""
   # -- Mount path inside the VLLM container for Hugging Face cache
   mountPath: /data
 

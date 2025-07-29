@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/daulet/tokenizers"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 )
 
 // ContainedTokenStore manages a collection of containedTokenTrie,
@@ -75,6 +76,35 @@ func (s *ContainedTokenStore) FindLongestContainedTokens(prompt, modelName strin
 	}
 
 	return trie.FindLongestContainedTokens(prompt)
+}
+
+// FindLongestContainedTokensWithPodMappings is not implemented for trie store.
+// It falls back to the original behavior of only returning tokens.
+func (s *ContainedTokenStore) FindLongestContainedTokensWithPodMappings(prompt, modelName string, podIdentifiers []string) (*CacheResult, error) {
+	tokens := s.FindLongestContainedTokens(prompt, modelName)
+	return &CacheResult{
+		CacheHit: false,
+		Tokens:   tokens,
+		Mapping:  nil,
+	}, nil
+}
+
+// CachePodMappings is not implemented for trie store.
+func (s *ContainedTokenStore) CachePodMappings(prompt, modelName string, mapping *CachedPodMapping) error {
+	// No-op for trie store
+	return nil
+}
+
+// InvalidatePodMappingsForKeys is not implemented for trie store.
+func (s *ContainedTokenStore) InvalidatePodMappingsForKeys(keys []kvblock.Key) error {
+	// No-op for trie store
+	return nil
+}
+
+// CleanupExpiredMappings is not implemented for trie store.
+func (s *ContainedTokenStore) CleanupExpiredMappings() int {
+	// No-op for trie store
+	return 0
 }
 
 // getOrCreateTrie safely gets or creates a ContainedTokenTrie for a given
