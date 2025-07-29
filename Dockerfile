@@ -26,6 +26,10 @@ RUN dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.
     dnf install -y gcc-c++ libstdc++ libstdc++-devel clang zeromq-devel pkgconfig && \
     dnf clean all
 
+# Install Python 3.9+ for chat template functionality
+RUN dnf install -y python39 python39-pip python39-devel && \
+    dnf clean all
+
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -36,6 +40,9 @@ RUN go mod download
 # Copy the go source
 COPY examples/kv_events examples/kv_events
 COPY . .
+
+# Install Python dependencies for chat template functionality
+RUN python3.9 -m pip install -r pkg/preprocessing/chat_completions_template/requirements.txt
 
 # HuggingFace tokenizer bindings
 RUN mkdir -p lib
@@ -59,9 +66,14 @@ WORKDIR /
 # The final image is UBI9, so we need epel-release-9.
 USER root
 RUN dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm' && \
-    dnf install -y zeromq
+    dnf install -y zeromq python39 python39-pip
+
+# Install Python dependencies in the final image
+COPY pkg/preprocessing/chat_completions_template/requirements.txt /tmp/requirements.txt
+RUN python3.9 -m pip install -r /tmp/requirements.txt
 
 COPY --from=builder /workspace/bin/kv-cache-manager /app/kv-cache-manager
+COPY --from=builder /workspace/pkg/preprocessing/chat_completions_template/chat_template_wrapper.py /app/chat_template_wrapper.py
 USER 65532:65532
 
 # Set the entrypoint to the kv-cache-manager binary
