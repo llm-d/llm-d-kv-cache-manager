@@ -1,3 +1,8 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/llm-d/llm-d-kv-cache-manager)](https://goreportcard.com/report/github.com/llm-d/llm-d-kv-cache-manager)
+[![Go Reference](https://pkg.go.dev/badge/github.com/llm-d/llm-d-kv-cache-manager.svg)](https://pkg.go.dev/github.com/llm-d/llm-d-kv-cache-manager)
+[![License](https://img.shields.io/github/license/llm-d/llm-d-kv-cache-manager)](LICENSE)
+[![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.slack.com/archives/C08TB7ZDV7S)
+
 # KV-Cache Manager
 
 ### Introduction
@@ -16,41 +21,41 @@ See the [Project Northstar](https://docs.google.com/document/d/1EM1QtDUaw7pVRkbH
 
 ## KV-Cache Indexer Overview
 
-One of the major component of this project is the **KVCache Indexer**: a high-performance Go service that maintains a global, near-real-time view of KV-Cache block locality.
+The major component of this project is the **KV-Cache Indexer** is a high-performance library that keeps a global, near-real-time view of KV-Cache block locality across a fleet of vLLM pods.
 
 It is powered by `KVEvents` streamed from vLLM, which provide structured metadata as KV-blocks are created or evicted from a vLLM instance's KV-cache. 
 This allows the indexer to track which blocks reside on which nodes and on which tier (e.g., GPU or CPU). 
-This metadata is the foundation for intelligent routing, enabling schedulers to make optimal, cache-aware placement decisions.
+This metadata is the foundation for intelligent routing, enabling schedulers to make optimal, KV-cache-aware placement decisions.
 
 The diagram below shows the primary data flows: the **Read Path** (scoring) and the **Write Path** (event ingestion).
 
 ```mermaid
 graph TD
-    subgraph Scheduler / Router
+    subgraph "Scheduler"
         A[Scheduler]
     end
-    
-    subgraph KVCacheManager["KV-Cache Manager"]
+
+    subgraph "KV-Cache Manager"
         B[KVCache Indexer API]
         C[KV-Block Index]
         D[Event Subscriber]
     end
 
-    subgraph vLLM Fleet
+    subgraph "vLLM Fleet"
         E[vLLM Pod 1]
         F[vLLM Pod 2]
         G[...]
     end
 
-    A -- "1. Score(prompt, pods)" --> B
-    B -- "2. Query Index" --> C
-    B -- "3. Return Scores" --> A
+    A -->|"1. Score(prompt, pods)"| B
+    B -->|2. Query Index| C
+    B -->|3. Return Scores| A
     
-    E -- "4. Emit KVEvents" --> D
-    F -- "4. Emit KVEvents" --> D
-    D -- "5. Update Index" --> C
-    
+    E -->|A. Emit KVEvents| D
+    F -->|A. Emit KVEvents| D
+    D -->|B. Update Index| C
 ```
+_Note: 1-3 represent the Read Path for scoring pods, while A-B represent the Write Path for ingesting KVEvents._
 
 1.  **Scoring Request**: A scheduler asks the **KVCache Indexer** to score a set of pods for a given prompt
 2.  **Index Query**: The indexer calculates the necessary KV-block keys from the prompt and queries the **KV-Block Index** to see which pods have those blocks

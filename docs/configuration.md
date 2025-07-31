@@ -1,13 +1,15 @@
-# Configuration Documentation
+# Configuration
 
 This document describes all configuration options available in the llm-d KV Cache Manager. 
-All configurations are JSON-serializable and can be provided via configuration files or environment variables.
+All configurations are JSON-serializable.
 
 ## Main Configuration
 
 This package consists of two components:
 1. **KV Cache Indexer**: Manages the KV cache index, allowing efficient retrieval of cached blocks.
 2. **KV Event Processing**: Handles events from vLLM to update the cache index.
+
+See the [Architecture Overview](architecture.md) for a high-level view of how these components work and interact.
 
 The two components are configured separately, but share the index backend for storing KV block localities.
 The latter is configured via the `kvBlockIndexConfig` field in the KV Cache Indexer configuration.
@@ -118,7 +120,7 @@ Configures the Redis-backed KV block index implementation.
 
 ### Token Processor Configuration (`TokenProcessorConfig`)
 
-Configures how tokens are converted to KV block keys.
+Configures how tokens are converted to KV-block keys.
 
 ```json
 {
@@ -221,15 +223,15 @@ For the ZMQ event processing pool:
 ---
 ## Notes
 
-1. **Hash Seed Alignment**: The `hash_seed` in `TokenProcessorConfig` should be aligned with vLLM's `PYTHONHASHSEED` environment variable to ensure consistent hashing across the system.
+1. **Hash Seed Alignment**: The `hashSeed` in `TokenProcessorConfig` should be aligned with vLLM's `PYTHONHASHSEED` environment variable to ensure consistent hashing across the system.
 
 2. **Memory Considerations**: The `size` parameter in `InMemoryIndexConfig` directly affects memory usage. Each key-value pair consumes memory proportional to the number of associated pods.
 
 3. **Performance Tuning**: 
-   - Increase `workers_count` in tokenization config for higher tokenization throughput
+   - Increase `workersCount` in tokenization config for higher tokenization throughput
    - Adjust `concurrency` in event processing for better event handling performance
    - Tune cache sizes based on available memory and expected workload
 
-4. **Cache Directories**: Ensure the `tokenizers_cache_dir` has sufficient disk space and appropriate permissions for the application to read/write tokenizer files.
+4. **Cache Directories**: If used, ensure the `tokenizersCacheDir` has sufficient disk space and appropriate permissions for the application to read/write tokenizer files.
 
 5. **Redis Configuration**: When using Redis backend, ensure Redis server is accessible and has sufficient memory. The `address` field supports full Redis URLs including authentication: `redis://user:pass@host:port/db`.

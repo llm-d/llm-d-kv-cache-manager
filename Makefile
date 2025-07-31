@@ -75,19 +75,19 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 	$(TOOLS_DIR)/verify_boilerplate.py --boilerplate-dir=hack/boilerplate --skip docs
 
 .PHONY: unit-test
-unit-test: download-tokenizer
+unit-test: download-tokenizer download-zmq
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -ldflags="$(LDFLAGS)" ./pkg/...
 
 .PHONY: e2e-test
-e2e-test: download-tokenizer
+e2e-test: download-tokenizer download-zmq
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -v -ldflags="$(LDFLAGS)" ./tests/...
 
 ##@ Build
 
 .PHONY: build
-build: check-go download-tokenizer ##
+build: check-go download-tokenizer download-zmq
 	@printf "\033[33;1m==== Building ====\033[0m\n"
 	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
 
@@ -354,3 +354,36 @@ print-project-name: ## Print the current project name
 .PHONY: install-hooks
 install-hooks: ## Install git hooks
 	git config core.hooksPath hooks
+
+
+##@ ZMQ Setup
+
+.PHONY: download-zmq
+download-zmq: ## Install ZMQ dependencies based on OS/ARCH
+	@echo "Checking if ZMQ is already installed..."
+	@if pkg-config --exists libzmq; then \
+	  echo "✅ ZMQ is already installed."; \
+	else \
+	  echo "Installing ZMQ dependencies..."; \
+	  if [ "$(TARGETOS)" = "linux" ]; then \
+	    if [ -x "$(command -v apt)" ]; then \
+	      apt update && apt install -y libzmq3-dev; \
+	    elif [ -x "$(command -v dnf)" ]; then \
+	      dnf install -y zeromq-devel; \
+	    else \
+	      echo "Unsupported Linux package manager. Install libzmq manually."; \
+	      exit 1; \
+	    fi; \
+	  elif [ "$(TARGETOS)" = "darwin" ]; then \
+	    if [ -x "$(command -v brew)" ]; then \
+	      brew install zeromq; \
+	    else \
+	      echo "Homebrew is not installed and is required to install zeromq. Install it from https://brew.sh/"; \
+	      exit 1; \
+	    fi; \
+	  else \
+	    echo "Unsupported OS: $(TARGETOS). Install libzmq manually - check https://zeromq.org/download/ for guidance."; \
+	    exit 1; \
+	  fi; \
+	  echo "✅ ZMQ dependencies installed."; \
+	fi

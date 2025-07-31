@@ -1,29 +1,23 @@
-# KV-Cache Indexer: A Technical Architecture
+# KV-Cache Indexer: Architecture
 
-The **KV-Cache Indexer** is a high-performance Go service that keeps a global, near-real-time view of KV-Cache block locality across a fleet of vLLM pods. 
-Its purpose is to enable smart routing and scheduling by telling request routers which pods are best-equipped to handle an incoming prompt with the lowest possible latency.
-
-### Core Responsibilities
-
-* **Global Cache Tracking**: Maintains a central index of KV-block locations across all vLLM pods.
-* **Intelligent Pod Scoring**: Scores candidate pods for incoming prompts based on how much of the prompt's prefix they already have cached.
-* **Real-Time Event Processing**: Ingests a high-throughput stream of cache events (`BlockStored`, `BlockRemoved`) from vLLM pods to keep the index fresh.
-* **Ultra-Low-Latency Lookups**: Delivers pod scoring results in sub-millisecond time to ensure scheduling decisions are fast.
+The **KV-Cache Indexer** is a high-performance library that keeps a global, near-real-time view of KV-Cache block locality across a fleet of vLLM pods. 
+Its purpose is the enablement of smart routing and scheduling by exposing a fast, intelligent scoring mechanism for vLLM pods based on their cached KV-blocks.
 
 -----
 
 ## System Architecture
 
-The Indexer is built from several modules that work together, each with a clear job.
+The Indexer is built from several modules that work together, each with clear responsibilities.
+Separating concerns is a guiding principle in the design of this system.
 
-| Module | Purpose | Default Implementation |
-| :--- | :--- | :--- |
-| **`kvcache.Indexer`** | The main orchestrator that handles scoring requests. | Coordinates all internal modules. |
-| **`kvevents.Pool`** | Ingests and processes KV-cache events from vLLM pods. | A sharded worker pool using ZMQ for event subscription. |
-| **`kvblock.Index`** | The core data store mapping KV-block hashes to pod locations. | An in-memory, two-level LRU cache. |
-| **`tokenization.PrefixStore`**| Caches tokenized prompt prefixes to avoid re-work. | An LRU cache storing text chunks and their corresponding tokens. |
-| **`kvblock.TokenProcessor`**| Converts token sequences into content-addressable block keys. | Uses a chunking and hashing algorithm compatible with vLLM. |
-| **`kvblock.Scorer`** | Scores pods based on the sequence of cache hits. | Implements a longest consecutive prefix matching strategy. |
+| Module | Purpose                                                      | Default Implementation                                          |
+| :--- |:-------------------------------------------------------------|:----------------------------------------------------------------|
+| **`kvcache.Indexer`** | The main orchestrator that handles scoring requests          | Coordinates all internal modules                                |
+| **`kvevents.Pool`** | Ingests and processes KV-cache events from vLLM pods         | A sharded worker pool using ZMQ for event subscription          |
+| **`kvblock.Index`** | The core data store mapping KV-block hashes to pod locations | An in-memory, two-level LRU cache                               |
+| **`tokenization.PrefixStore`**| Caches tokenized prompt prefixes to avoid re-work            | An LRU cache storing text chunks and their corresponding tokens |
+| **`kvblock.TokenProcessor`**| Converts token sequences into KV-block keys                  | Uses a chunking and hashing algorithm compatible with vLLM      |
+| **`kvblock.Scorer`** | Scores pods based on the sequence of cache hits              | Implements a longest consecutive prefix matching strategy       |
 
 -----
 
@@ -33,7 +27,9 @@ The system has two primary data flows: the **Read Path** for scoring pods and th
 
 ### Read Path: Scoring a Prompt
 
-When a router needs to pick the best pod for a new prompt, it triggers the Read Path. The goal is to find the pod that has the longest sequence of relevant KV-blocks already in its cache.
+When a router needs to pick the best pod for a new prompt, it triggers the Read Path. 
+The goal is to find the pod that has the longest sequence of relevant KV-blocks already in its cache.
+A list of pods with their scores is returned to the router.
 
 ```mermaid
 sequenceDiagram
@@ -69,6 +65,9 @@ sequenceDiagram
 3.  **Index Lookup**: With the keys, the `Indexer` queries the `kvblock.Index` to see which pods have them. The lookup is optimized to find the longest *consecutive* chain of hits from the start.
 4.  **Scoring**: The `Scorer` takes the hit data and scores each pod based on its number of consecutive matching blocks.
 5.  **Response**: A final map of pod scores is sent back to the router.
+
+Note: step (1) means that the first time a prompt is scored, it may return an empty result while the tokenization happens in the background.
+It is assumed that this cache will be populated with common prompts, so the first scoring request is an edge case.
 
 ### Write Path: Processing Cache Events
 
@@ -118,16 +117,16 @@ sequenceDiagram
 
 To guarantee compatibility, the indexer perfectly matches vLLM's content-addressing logic.
 
-* **Token Chunking**: Prompts are converted to tokens, which are then grouped into fixed-size chunks (default: 256).
-* **Hash Algorithm**: A chained hash is computed. Each block's key is the **lower 64 bits of a SHA-256 hash**, generated from the CBOR-encoded `[parentHash, tokenChunk]` tuple.
-* **Initialization**: The hash chain starts with a configurable `HashSeed`. This value **must** align with the `PYTHONHASHSEED` environment variable in the vLLM pods to ensure hashes are consistent across the entire system.
+* **Token Chunking**: Prompts are converted to tokens, which are then grouped into fixed-size chunks (default: 16).
+* **Hash Algorithm**: A chained hash is computed. Each block's key is the **lower 64 bits of a SHA-256 hash**, generated from the CBOR-encoded `[parentHash, tokenChunk, extraKeys]` tuple.
+* **Initialization**: The hash chain starts with a configurable `HashSeed`. This value's source **must** align with the `PYTHONHASHSEED` environment variable in the vLLM pods to ensure hashes are consistent across the entire system.
 
 #### Index Backends
 
 The `kvblock.Index` is an interface with swappable backends.
 
 * **In-Memory (Default)**: A very fast, thread-safe, two-level LRU cache using `hashicorp/golang-lru`. The first level maps a block key to a second-level cache of pods that have the block. It prioritizes speed over persistence, which is usually the right trade-off for ephemeral cache data.
-* **Redis (Optional)**: A distributed backend that can be shared by multiple indexer replicas. It offers scalability and persistence, but this may be overkill given the short lifetime of most KV-cache blocks.
+* **Redis (Optional)**: A distributed backend that can be shared by multiple indexer replicas. It can offer scalability and persistence, but this may be overkill given the short lifetime of most KV-cache blocks.
 
 #### Tokenization Subsystem
 
@@ -137,4 +136,18 @@ Efficiently handling tokenization is critical for performance. The system is des
 * **Tokenizer Caching**: The actual tokenization is handled by a `CachedHFTokenizer`, which wraps Hugging Face's high-performance Rust tokenizers. To avoid the overhead of repeatedly loading tokenizer models from disk, it maintains an LRU cache of active tokenizer instances.
 * **PrefixStore Backends**: The token cache (`PrefixStore`) is an interface with two available implementations:
     * **`LRUTokenStore` (Default)**: This implementation chunks incoming text, hashes it, and stores blocks of tokens in an LRU cache. It's fast and memory-bounded, making it a reliable default. It's designed to find the longest chain of *blocks* that match a prompt's prefix.
-    * **`TrieTokenStore`**: An alternative implementation that uses a character-based trie. Each node in the trie stores information about the last token that was fully contained within the prefix leading to that node. This approach can be more memory-efficient for prompts with highly repetitive or overlapping prefixes.
+    * **`TrieTokenStore`**: An alternative implementation that uses a character-based trie. Each node in the trie stores information about the last token that was fully contained within the prefix leading to that node. This approach can be more memory-efficient for prompts with highly repetitive or overlapping prefixes, but is generally slower than the LRU-based store. 
+    It is not the default due to its higher complexity and lower performance in most scenarios.
+
+-----
+
+## Dependencies
+
+The Indexer relies on several libraries and tools:
+* **[daulet/tokenizers](https://github.com/daulet/tokenizers)**: Go bindings for the HuggingFace Tokenizers library.
+  * Used for tokenization of prompts. 
+* **[pebbe/zmq4](https://github.com/pebbe/zmq4)**: Go bindings for ZeroMQ.
+  * Used for the event processing pool and communication between components.
+  * Requires `libzmq` library to be installed on the system.
+* **Python**: Required to run a CGO binding for the `chat_completions_template` package.
+  * Used for jinja2 templating of chat completions requests.

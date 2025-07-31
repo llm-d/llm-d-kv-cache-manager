@@ -72,7 +72,7 @@ You should see:
 
 ### Configuration Options
 
-The Helm chart supports various configuration options. See [values.yaml](../../vllm-setup-helm/values.yaml) for all available options.
+The Helm chart supports various configuration options. See [values.yaml](../../../vllm-setup-helm/values.yaml) for all available options.
 
 Key configuration parameters:
 
