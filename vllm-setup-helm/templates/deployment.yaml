@@ -166,6 +166,7 @@ metadata:
     {{- include "chart.labels" . | nindent 4 }}
     app.kubernetes.io/component: vllm
 spec:
+  type: NodePort
   selector:
     {{- include "chart.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: vllm
@@ -174,3 +175,4 @@ spec:
       protocol: TCP
       port: 8000
       targetPort: http
+      nodePort: 30000
