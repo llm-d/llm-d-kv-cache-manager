@@ -31,14 +31,14 @@ The diagram below shows the primary data flows: the **Read Path** (scoring) and 
 
 ```mermaid
 graph TD
-    subgraph "Scheduler"
+    subgraph "Inference Scheduler"
         A[Scheduler]
-    end
 
-    subgraph "KV-Cache Manager"
-        B[KVCache Indexer API]
-        C[KV-Block Index]
-        D[Event Subscriber]
+        subgraph "KV-Cache Manager"
+            B[`kvcache.Indexer`]
+            C[`kvblock.Index`]
+            D[`kvevents.Pool`]
+        end
     end
 
     subgraph "vLLM Fleet"
