@@ -24,7 +24,7 @@ api:
 server:
   type: vllm
   model_name: meta-llama/Llama-3.1-70B-Instruct
-  base_url: http://inference-gateway.e2e-solution2.svc.cluster.local:80
+  base_url: <endpoint>
   ignore_eos: true
 tokenizer:
   pretrained_model_name_or_path: meta-llama/Llama-3.1-70B-Instruct
