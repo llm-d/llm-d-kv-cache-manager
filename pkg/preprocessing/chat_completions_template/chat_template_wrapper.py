@@ -43,6 +43,19 @@ except ImportError:
 # Basic logging setup
 logger = logging.getLogger(__name__)
 
+# Module-level cache for templates and tokenizers
+_template_cache = {}
+_tokenizer_cache = {}
+_cache_lock = None
+
+def _get_cache_lock():
+    """Get or create a threading lock for cache access."""
+    global _cache_lock
+    if _cache_lock is None:
+        import threading
+        _cache_lock = threading.Lock()
+    return _cache_lock
+
 
 def render_jinja_template(request_json):
     """
@@ -62,16 +75,20 @@ def render_jinja_template(request_json):
     """
     
     if not TRANSFORMERS_AVAILABLE:
-        print("[Python] render_jinja_template ERROR - Transformers not available")
         raise ImportError("transformers library is required for render_jinja_template")
         
     # Parse the JSON request
     request = json.loads(request_json)
     
+    # Use the correct approach: spread template_vars as individual arguments
     try:
+        # Get template_vars and spread them as individual arguments
+        template_vars = request.pop('template_vars', {})
+        request.update(template_vars)
+        
         rendered_chats, generation_indices = transformers_render_jinja_template(**request)
+        
     except Exception as e:
-        print(f"[Python] render_jinja_template ERROR - Transformers function failed: {e}")
         raise
     
     # Return as JSON string
@@ -80,6 +97,9 @@ def render_jinja_template(request_json):
         "generation_indices": generation_indices
     })
     return result
+
+
+
 
 
 def get_model_chat_template(request_json):
@@ -112,8 +132,23 @@ def get_model_chat_template(request_json):
         print("[Python] get_model_chat_template ERROR - model_name is required")
         raise ValueError("model_name is required in request")
     
+    # Create cache key
+    cache_key = f"{model_name}:{revision or 'main'}:{token or 'none'}"
+    
+    # Check cache first
+    lock = _get_cache_lock()
+    with lock:
+        if cache_key in _template_cache:
+            cached_result = _template_cache[cache_key]
+            # If a specific chat_template was requested, override the cached template
+            if chat_template is not None:
+                cached_result["template"] = chat_template
+            return json.dumps(cached_result)
+        
+    # Load from Hugging Face
     tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision, token=token, trust_remote_code=True)
-    template = tokenizer.chat_template if chat_template is None else chat_template    
+    template = tokenizer.chat_template if chat_template is None else chat_template
+    
     # Collect special tokens
     template_vars = {}
     for k in ["bos_token", "eos_token", "eot_token", "pad_token", "unk_token", "sep_token", "additional_special_tokens"]:
@@ -121,8 +156,13 @@ def get_model_chat_template(request_json):
         if v is not None:
             template_vars[k] = v
     
-    result = json.dumps({"template": template, "template_vars": template_vars})
-    return result
+    # Cache the result
+    result = {"template": template, "template_vars": template_vars}
+    with lock:
+        _template_cache[cache_key] = result.copy()  # Cache a copy to avoid reference issues
+        _tokenizer_cache[cache_key] = tokenizer  # Also cache the tokenizer for potential future use
+    
+    return json.dumps(result)
 
 
 def main():
