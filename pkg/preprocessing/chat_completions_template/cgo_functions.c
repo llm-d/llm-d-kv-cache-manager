@@ -10,6 +10,7 @@ int g_python_initialized = 0;
 
 // Process-level global initialization tracking
 static int g_process_initialized = 0;
+static int g_finalized = 0;  // Track if Python has been finalized
 static pid_t g_init_pid = 0;
 
 // Thread safety for initialization
@@ -70,7 +71,34 @@ int Py_InitializeGo() {
 
 // Finalize Python interpreter
 void Py_FinalizeGo() {
-    Py_Finalize();
+    // Prevent multiple finalizations
+    if (g_finalized) {
+        printf("[C] Py_FinalizeGo - Already finalized, skipping\n");
+        return;
+    }
+    
+    // Mark as finalized first to prevent race conditions
+    g_finalized = 1;
+    
+    // Clean up module references safely
+    if (g_render_jinja_template_func) {
+        Py_DECREF(g_render_jinja_template_func);
+        g_render_jinja_template_func = NULL;
+    }
+    if (g_get_model_chat_template_func) {
+        Py_DECREF(g_get_model_chat_template_func);
+        g_get_model_chat_template_func = NULL;
+    }
+    if (g_chat_template_module) {
+        Py_DECREF(g_chat_template_module);
+        g_chat_template_module = NULL;
+    }
+    
+    // Reset state without finalizing Python
+    // Python will be cleaned up when the process exits
+    g_python_initialized = 0;
+    g_process_initialized = 0;
+    g_initialized = 0;
 }
 
 // CGo cannot call C macros, so we wrap PyRun_SimpleString in a function

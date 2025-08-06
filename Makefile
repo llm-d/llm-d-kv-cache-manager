@@ -78,6 +78,8 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 unit-test: download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	go test -ldflags="$(LDFLAGS)" ./pkg/...
+	@printf "\033[33;1m==== Running chat template tests ====\033[0m\n"
+	go test -tags=exclude -v -ldflags="$(LDFLAGS)" ./pkg/preprocessing/chat_completions_template/
 
 .PHONY: e2e-test
 e2e-test: download-tokenizer detect-python install-python-deps download-zmq

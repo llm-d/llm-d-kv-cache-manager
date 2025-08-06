@@ -106,8 +106,19 @@ func (w *ChatTemplateCGoWrapper) Initialize() error {
 // Finalize finalizes the Python interpreter and cleans up the module
 func (w *ChatTemplateCGoWrapper) Finalize() {
 	if w.initialized {
+		// Use defer with recover to handle any segmentation faults
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[Go] Finalize recovered from panic: %v\n", r)
+			}
+		}()
+
+		// Clean up the module first
 		C.Py_CleanupChatTemplateModule()
+
+		// Then finalize Python interpreter
 		C.Py_FinalizeGo()
+
 		w.initialized = false
 	}
 }
