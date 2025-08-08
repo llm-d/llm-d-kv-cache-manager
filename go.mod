@@ -3,6 +3,7 @@ module github.com/llm-d/llm-d-kv-cache-manager
 go 1.24.1
 
 require (
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/daulet/tokenizers v1.22.1
 	github.com/fxamacker/cbor/v2 v2.7.0
@@ -44,6 +45,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect

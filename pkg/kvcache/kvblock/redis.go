@@ -126,7 +126,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 
 		var filteredPods []string
 		for _, p := range pods {
-			ip := strings.SplitN(p, ":", 2)[0]
+			ip := strings.SplitN(p, "@", 2)[0]
 			if !filterPods || podIdentifierSet.Has(ip) {
 				filteredPods = append(filteredPods, ip)
 			}
@@ -141,7 +141,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 		podsPerKey[key] = filteredPods
 	}
 
-	return keys[:highestHitIdx], podsPerKey, nil
+	return keys[:highestHitIdx+1], podsPerKey, nil
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
