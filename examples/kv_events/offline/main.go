@@ -136,11 +136,10 @@ func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.
 func setupPublisher(ctx context.Context) (*Publisher, error) {
 	logger := klog.FromContext(ctx)
 
-	cfg := kvevents.DefaultConfig()
+	endpoint := "tcp://localhost:5557"
+	logger.Info("Creating ZMQ publisher (simulating vLLM engines)", "endpoint", endpoint)
 
-	logger.Info("Creating ZMQ publisher (simulating vLLM engines)", "endpoint", cfg.ZMQEndpoint)
-
-	publisher, err := NewPublisher(cfg.ZMQEndpoint)
+	publisher, err := NewPublisher(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ZMQ publisher: %w", err)
 	}
@@ -212,7 +211,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	//nolint // won't fail
 	enc.Encode(&kvevents.BlockRemovedEvent{
 		TypeField:    "BlockRemoved",
-		BlockRemoved: &kvevents.BlockRemoved{BlockHashes: testdata.PromptHashes[:2]},
+		BlockRemoved: &kvevents.BlockRemoved{BlockHashes: testdata.PromptHashes[2:]},
 	})
 
 	removeEventBatch := kvevents.EventBatch{
