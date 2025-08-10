@@ -63,6 +63,12 @@ type BlockStored struct {
 
 func (BlockStored) isEvent() {}
 
+type BlockStoredEvent struct {
+	_         struct{} `msgpack:",array"`
+	TypeField string
+	*BlockStored
+}
+
 // BlockRemoved event.
 type BlockRemoved struct {
 	_           struct{} `msgpack:",array"`
@@ -70,6 +76,12 @@ type BlockRemoved struct {
 }
 
 func (BlockRemoved) isEvent() {}
+
+type BlockRemovedEvent struct {
+	_         struct{} `msgpack:",array"`
+	TypeField string
+	*BlockRemoved
+}
 
 // AllBlocksCleared event.
 type AllBlocksCleared struct {

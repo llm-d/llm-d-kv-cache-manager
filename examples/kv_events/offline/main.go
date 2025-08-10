@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -166,13 +167,21 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	// Simulate vLLM engine publishing BlockStored events
 	logger.Info("@@@ Simulating vLLM engine publishing BlockStored events...")
 
+	var blockStoredPayload bytes.Buffer
+	enc := msgpack.NewEncoder(&blockStoredPayload)
+	enc.UseArrayEncodedStructs(true)
+
 	//nolint // won't fail
-	blockStoredPayloadBytes, _ := msgpack.Marshal(kvevents.BlockStored{BlockHashes: testdata.PromptHashes})
+	enc.Encode(&kvevents.BlockStoredEvent{
+		TypeField:   "BlockStored",
+		BlockStored: &kvevents.BlockStored{BlockHashes: testdata.PromptHashes},
+	})
+
 	dpRank := 0
 
 	eventBatch := kvevents.EventBatch{
 		TS:               float64(time.Now().UnixNano()) / 1e9,
-		Events:           []msgpack.RawMessage{blockStoredPayloadBytes},
+		Events:           []msgpack.RawMessage{blockStoredPayload.Bytes()},
 		DataParallelRank: &dpRank,
 	}
 
@@ -196,14 +205,19 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	// Simulate removing some blocks
 	logger.Info("@@@ Simulating vLLM engine removing some blocks...")
 
+	var blockRemovedPayload bytes.Buffer
+	enc = msgpack.NewEncoder(&blockRemovedPayload)
+	enc.UseArrayEncodedStructs(true)
+
 	//nolint // won't fail
-	blockRemovedPayloadBytes, _ := msgpack.Marshal(kvevents.BlockRemoved{
-		BlockHashes: testdata.PromptHashes[:2],
+	enc.Encode(&kvevents.BlockRemovedEvent{
+		TypeField:    "BlockRemoved",
+		BlockRemoved: &kvevents.BlockRemoved{BlockHashes: testdata.PromptHashes[:2]},
 	})
 
 	removeEventBatch := kvevents.EventBatch{
 		TS:               float64(time.Now().UnixNano()) / 1e9,
-		Events:           []msgpack.RawMessage{blockRemovedPayloadBytes},
+		Events:           []msgpack.RawMessage{blockRemovedPayload.Bytes()},
 		DataParallelRank: &dpRank,
 	}
 
