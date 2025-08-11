@@ -1,5 +1,24 @@
-#include "cgo_functions.h"
+/*
+Copyright 2025 The llm-d Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// System includes first (C standard)
 #include <unistd.h> // for getpid() and usleep()
+
+// Project includes second
+#include "cgo_functions.h"
 
 // Global variables for caching
 PyObject* g_chat_template_module = NULL;
@@ -378,6 +397,47 @@ char* Py_CallGetModelChatTemplate(const char* json_request) {
     PyGILState_Release(gil_state);
     
     return cresult;
+}
+
+// Clear all caches for testing purposes
+char* Py_ClearCaches() {
+    if (!g_initialized) {
+        printf("[C] Py_ClearCaches ERROR - Module not initialized\n");
+        return NULL;
+    }
+    
+    PyGILState_STATE gil_state = PyGILState_Ensure();
+    
+    // Call the clear_caches function
+    PyObject* clear_caches_func = PyDict_GetItemString(PyModule_GetDict(g_chat_template_module), "clear_caches");
+    if (!clear_caches_func || !PyCallable_Check(clear_caches_func)) {
+        printf("[C] Py_ClearCaches ERROR - clear_caches function not found or not callable\n");
+        PyGILState_Release(gil_state);
+        return NULL;
+    }
+    
+    PyObject* result = PyObject_CallObject(clear_caches_func, NULL);
+    if (!result) {
+        printf("[C] Py_ClearCaches ERROR - Failed to call clear_caches function\n");
+        PyErr_Print();
+        PyGILState_Release(gil_state);
+        return NULL;
+    }
+    
+    // Convert result to C string
+    const char* result_str = PyUnicode_AsUTF8(result);
+    if (!result_str) {
+        printf("[C] Py_ClearCaches ERROR - Failed to convert result to string\n");
+        Py_DECREF(result);
+        PyGILState_Release(gil_state);
+        return NULL;
+    }
+    
+    char* c_result = strdup(result_str);
+    Py_DECREF(result);
+    PyGILState_Release(gil_state);
+    
+    return c_result;
 }
 
 // Clean up cached objects

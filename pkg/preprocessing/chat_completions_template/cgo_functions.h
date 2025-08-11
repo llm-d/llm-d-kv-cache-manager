@@ -63,6 +63,9 @@ char* Py_CallRenderJinjaTemplateInternal(const char* json_request);
 // Call the cached get_model_chat_template function
 char* Py_CallGetModelChatTemplate(const char* json_request);
 
+// Clear all caches for testing purposes
+char* Py_ClearCaches(void);
+
 // Clean up cached objects
 void Py_CleanupChatTemplateModule();
 

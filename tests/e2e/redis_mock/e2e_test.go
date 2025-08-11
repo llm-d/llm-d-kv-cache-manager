@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//nolint:testpackage // allow tests to run in the same package
 package e2e
 
 import (
@@ -22,44 +21,44 @@ import (
 	"time"
 )
 
-// ChatMessage represents a single message in a conversation
+// ChatMessage represents a single message in a conversation.
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ChatTemplateRequest represents the request to render a chat template
+// ChatTemplateRequest represents the request to render a chat template.
 type ChatTemplateRequest struct {
 	Conversations [][]ChatMessage        `json:"conversations"`
 	ChatTemplate  string                 `json:"chat_template"`
 	TemplateVars  map[string]interface{} `json:"template_vars,omitempty"`
 }
 
-// ChatTemplateResponse represents the response from the Python function
+// ChatTemplateResponse represents the response from the Python function.
 type ChatTemplateResponse struct {
 	RenderedChats     []string  `json:"rendered_chats"`
 	GenerationIndices [][][]int `json:"generation_indices"`
 }
 
-// GetChatTemplateRequest represents the request to get a model's chat template
+// GetChatTemplateRequest represents the request to get a model's chat template.
 type GetChatTemplateRequest struct {
 	ModelName string `json:"model_name"`
 	Revision  string `json:"revision,omitempty"`
 	Token     string `json:"token,omitempty"`
 }
 
-// MockChatTemplateWrapper provides a mock implementation for testing
+// MockChatTemplateWrapper provides a mock implementation for testing.
 type MockChatTemplateWrapper struct{}
 
 func NewMockChatTemplateWrapper() *MockChatTemplateWrapper {
 	return &MockChatTemplateWrapper{}
 }
 
-func (w *MockChatTemplateWrapper) GetModelChatTemplate(req GetChatTemplateRequest) (string, map[string]interface{}, error) {
-	// Mock implementation that returns a simple template
-	template := `{% for message in messages %}{{ message.role }}: {{ message.content }}
+func (w *MockChatTemplateWrapper) GetModelChatTemplate(req GetChatTemplateRequest) (template string, templateVars map[string]interface{}, err error) {
+	// Mock implementation that returns a simple template.
+	template = `{% for message in messages %}{{ message.role }}: {{ message.content }}
 {% endfor %}`
-	templateVars := map[string]interface{}{
+	templateVars = map[string]interface{}{
 		"bos_token": "<s>",
 		"eos_token": "</s>",
 	}
@@ -67,7 +66,7 @@ func (w *MockChatTemplateWrapper) GetModelChatTemplate(req GetChatTemplateReques
 }
 
 func (w *MockChatTemplateWrapper) RenderChatTemplate(req ChatTemplateRequest) (*ChatTemplateResponse, error) {
-	// Mock implementation that renders the template
+	// Mock implementation that renders the template.
 	var renderedChats []string
 	for _, conversation := range req.Conversations {
 		rendered := ""
@@ -154,7 +153,6 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	// Insert only short prompt
 	blockKeys := s.promptToKeys(shortPrompt, modelName)
 	fakePodList := []string{s.Pod1IP}
-
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Test 1: short prompt
@@ -221,12 +219,12 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.True(len(pods) > 0, "expected at least one pod score for long prompt")
 }
 
-// TestChatCompletionsE2E tests the complete chat completions workflow with KV-cache integration
+// TestChatCompletionsE2E tests the complete chat completions workflow with KV-cache integration.
 func (s *KVCacheSuite) TestChatCompletionsE2E() {
-	// Create a mock wrapper for testing
+	// Create a mock wrapper for testing.
 	wrapper := NewMockChatTemplateWrapper()
 
-	// Create a chat completion conversation
+	// Create a chat completion conversation.
 	conversation := [][]ChatMessage{
 		{
 			{Role: "system", Content: "You are a helpful AI assistant."},
@@ -235,7 +233,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 		},
 	}
 
-	// Step 1: Get the model's chat template
+	// Step 1: Get the model's chat template.
 	templateRequest := GetChatTemplateRequest{
 		ModelName: "ibm-granite/granite-3.3-8b-instruct",
 	}
@@ -243,7 +241,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.Require().NoError(err, "Failed to get model chat template")
 	s.Require().NotEmpty(template, "Template should not be empty")
 
-	// Step 2: Render the conversation using the template
+	// Step 2: Render the conversation using the template.
 	renderRequest := ChatTemplateRequest{
 		Conversations: conversation,
 		ChatTemplate:  template,
@@ -254,27 +252,27 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.Require().NotNil(response, "Response should not be nil")
 	s.Require().NotEmpty(response.RenderedChats, "Rendered chats should not be empty")
 
-	// Step 3: Extract the flattened prompt from the rendered template
+	// Step 3: Extract the flattened prompt from the rendered template.
 	flattenedPrompt := response.RenderedChats[0]
 	s.Require().NotEmpty(flattenedPrompt, "Flattened prompt should not be empty")
 
-	// Step 4: Use the flattened prompt for KV-cache lookup (similar to TestBasicE2E)
+	// Step 4: Use the flattened prompt for KV-cache lookup (similar to TestBasicE2E).
 	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
-	// Add entries to the index
+	// Add entries to the index.
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
-	// First lookup - should return no scores initially
+	// First lookup - should return no scores initially.
 	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
 
-	// Wait for the cache to be populated
+	// Wait for the cache to be populated.
 	time.Sleep(5 * time.Second)
 
-	// Second lookup - should return scores
+	// Second lookup - should return scores.
 	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Second lookup - Received pod scores: %+v", pods)
@@ -284,12 +282,12 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.T().Logf("Chat completions E2E test completed successfully")
 }
 
-// TestLongChatCompletionsE2E tests long chat completions with complex conversations
+// TestLongChatCompletionsE2E tests long chat completions with complex conversations.
 func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
-	// Create a mock wrapper for testing
+	// Create a mock wrapper for testing.
 	wrapper := NewMockChatTemplateWrapper()
 
-	// Create a long, complex conversation
+	// Create a long, complex conversation.
 	longConversation := [][]ChatMessage{
 		{
 			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. Provide detailed, accurate responses."},
@@ -302,7 +300,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 		},
 	}
 
-	// Step 1: Get the model's chat template
+	// Step 1: Get the model's chat template.
 	templateRequest := GetChatTemplateRequest{
 		ModelName: "ibm-granite/granite-3.3-8b-instruct",
 	}
@@ -310,7 +308,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.Require().NoError(err, "Failed to get model chat template")
 	s.Require().NotEmpty(template, "Template should not be empty")
 
-	// Step 2: Render the long conversation
+	// Step 2: Render the long conversation.
 	renderRequest := ChatTemplateRequest{
 		Conversations: longConversation,
 		ChatTemplate:  template,
@@ -321,28 +319,28 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.Require().NotNil(response, "Response should not be nil")
 	s.Require().NotEmpty(response.RenderedChats, "Rendered chats should not be empty")
 
-	// Step 3: Extract the flattened prompt
+	// Step 3: Extract the flattened prompt.
 	flattenedPrompt := response.RenderedChats[0]
 	s.Require().NotEmpty(flattenedPrompt, "Flattened prompt should not be empty")
 	s.Require().Greater(len(flattenedPrompt), 1000, "Long conversation should produce substantial output")
 
-	// Step 4: Test KV-cache with the long flattened prompt
+	// Step 4: Test KV-cache with the long flattened prompt.
 	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
-	// Add entries to the index
+	// Add entries to the index.
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
-	// First lookup
+	// First lookup.
 	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
 
-	// Wait for cache population
+	// Wait for cache population.
 	time.Sleep(5 * time.Second)
 
-	// Second lookup
+	// Second lookup.
 	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Second lookup - Received pod scores: %+v", pods)
@@ -350,12 +348,4 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.True(pods[s.Pod1IP] > 0, "expected positive pod score")
 
 	s.T().Logf("Long chat completions E2E test completed successfully")
-}
-
-// Helper function for min
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

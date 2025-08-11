@@ -43,9 +43,8 @@ except ImportError:
 # Basic logging setup
 logger = logging.getLogger(__name__)
 
-# Module-level cache for templates and tokenizers
+# Module-level cache for templates
 _template_cache = {}
-_tokenizer_cache = {}
 _cache_lock = None
 
 def _get_cache_lock():
@@ -55,6 +54,25 @@ def _get_cache_lock():
         import threading
         _cache_lock = threading.Lock()
     return _cache_lock
+
+
+def _collect_template_vars(tokenizer):
+    """Collect special tokens from a tokenizer for template variables."""
+    template_vars = {}
+    for k in ["bos_token", "eos_token", "eot_token", "pad_token", "unk_token", "sep_token", "additional_special_tokens"]:
+        v = getattr(tokenizer, k, None)
+        if v is not None:
+            template_vars[k] = v
+    return template_vars
+
+
+def clear_caches():
+    """Clear all caches for testing purposes."""
+    lock = _get_cache_lock()
+    with lock:
+        global _template_cache
+        _template_cache.clear()
+    return "Caches cleared"
 
 
 def render_jinja_template(request_json):
@@ -150,17 +168,12 @@ def get_model_chat_template(request_json):
     template = tokenizer.chat_template if chat_template is None else chat_template
     
     # Collect special tokens
-    template_vars = {}
-    for k in ["bos_token", "eos_token", "eot_token", "pad_token", "unk_token", "sep_token", "additional_special_tokens"]:
-        v = getattr(tokenizer, k, None)
-        if v is not None:
-            template_vars[k] = v
+    template_vars = _collect_template_vars(tokenizer)
     
     # Cache the result
     result = {"template": template, "template_vars": template_vars}
     with lock:
         _template_cache[cache_key] = result.copy()  # Cache a copy to avoid reference issues
-        _tokenizer_cache[cache_key] = tokenizer  # Also cache the tokenizer for potential future use
     
     return json.dumps(result)
 

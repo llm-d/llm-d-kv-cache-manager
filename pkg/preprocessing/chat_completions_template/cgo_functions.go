@@ -18,25 +18,22 @@ limitations under the License.
 
 package chat_completions_template
 
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"unsafe"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+	"k8s.io/klog/v2"
+)
+
 /*
-#cgo CFLAGS: -I{{PYTHON_PATH}}/include/python{{PYTHON_VERSION}}
-#cgo LDFLAGS: -L{{PYTHON_PATH}}/lib -lpython{{PYTHON_VERSION}}
+#cgo CFLAGS: -I/Users/guygirmonsky/.pyenv/versions/3.12.11/include/python3.12
+#cgo LDFLAGS: -L/Users/guygirmonsky/.pyenv/versions/3.12.11/lib -lpython3.12
 #include "cgo_functions.h"
 */
 import "C"
-import (
-	"encoding/json"
-	"fmt"
-	"sync"
-	"unsafe"
-)
-
-// Global initialization tracking
-var (
-	globalInitialized bool
-	globalInitOnce    sync.Once
-	globalInitMutex   sync.Mutex
-)
 
 // ChatMessage represents a single message in a conversation
 type ChatMessage struct {
@@ -63,40 +60,28 @@ type ChatTemplateResponse struct {
 }
 
 // ChatTemplateCGoWrapper wraps the CGo functions for chat template operations
+// SIMPLIFIED: Removed redundant tracking since C handles everything
 type ChatTemplateCGoWrapper struct {
-	initialized bool
-	mu          sync.Mutex
-	initOnce    sync.Once
+	// REMOVED: initialized bool - C tracks this
+	// REMOVED: mu sync.Mutex - C handles thread safety
+	// REMOVED: initOnce sync.Once - C ensures single initialization
 }
 
-// NewChatTemplateCGoWrapper creates a new CGo wrapper
+// NewChatTemplateCGoWrapper creates a new CGo wrapper.
+// SIMPLIFIED: No initialization tracking needed
 func NewChatTemplateCGoWrapper() *ChatTemplateCGoWrapper {
-	return &ChatTemplateCGoWrapper{
-		initialized: false,
-	}
+	return &ChatTemplateCGoWrapper{}
 }
 
 // Initialize initializes the Python interpreter and caches the module
+// SIMPLIFIED: Just call C functions - let C handle all tracking
 func (w *ChatTemplateCGoWrapper) Initialize() error {
-	// Use global initialization to ensure Python is only initialized once
-	globalInitOnce.Do(func() {
-		// Initialize Python interpreter
-		C.Py_InitializeGo()
+	// Initialize Python interpreter - C handles process-level tracking
+	C.Py_InitializeGo()
 
-		// Initialize chat template module
-		result := C.Py_InitChatTemplateModule()
-		if result != 0 {
-			fmt.Printf("[Go] Global Initialize ERROR - Failed to initialize chat template module\n")
-			return
-		}
-
-		globalInitialized = true
-	})
-
-	// Set this instance as initialized
-	w.initialized = true
-
-	if !globalInitialized {
+	// Initialize chat template module - C handles module-level tracking
+	result := C.Py_InitChatTemplateModule()
+	if result != 0 {
 		return fmt.Errorf("failed to initialize chat template module")
 	}
 
@@ -104,46 +89,30 @@ func (w *ChatTemplateCGoWrapper) Initialize() error {
 }
 
 // Finalize finalizes the Python interpreter and cleans up the module
+// SIMPLIFIED: Just call C functions - let C handle all cleanup
 func (w *ChatTemplateCGoWrapper) Finalize() {
-	if w.initialized {
-		// Use defer with recover to handle any segmentation faults
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("[Go] Finalize recovered from panic: %v\n", r)
-			}
-		}()
+	// Clean up the module first
+	C.Py_CleanupChatTemplateModule()
 
-		// Clean up the module first
-		C.Py_CleanupChatTemplateModule()
-
-		// Then finalize Python interpreter
-		C.Py_FinalizeGo()
-
-		w.initialized = false
-	}
+	// Then finalize Python interpreter
+	C.Py_FinalizeGo()
 }
 
-// RenderChatTemplate renders a chat template using the cached Python function
-func (w *ChatTemplateCGoWrapper) RenderChatTemplate(req ChatTemplateRequest) (*ChatTemplateResponse, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	// Initialize if needed (sync.Once ensures this only happens once)
-	if err := w.Initialize(); err != nil {
-		fmt.Printf("[Go] RenderChatTemplate ERROR - Failed to initialize: %v\n", err)
-		return nil, fmt.Errorf("failed to initialize Python: %w", err)
-	}
+// RenderChatTemplate renders a chat template using the cached Python function.
+// REQUIRES: The wrapper must be initialized before calling this method.
+func (w *ChatTemplateCGoWrapper) RenderChatTemplate(ctx context.Context, req ChatTemplateRequest) (*ChatTemplateResponse, error) {
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("chat-template.RenderChatTemplate")
 
 	// Convert request to JSON
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
-		fmt.Printf("[Go] RenderChatTemplate ERROR - Failed to marshal request: %v\n", err)
+		traceLogger.Error(err, "Failed to marshal request")
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 	// Call the cached Python function
 	cResult := C.Py_CallRenderJinjaTemplate(C.CString(string(reqJSON)))
 	if cResult == nil {
-		fmt.Printf("[Go] RenderChatTemplate ERROR - C function returned nil\n")
+		traceLogger.Error(nil, "C function returned nil")
 		return nil, fmt.Errorf("python render_jinja_template failed")
 	}
 	defer C.free(unsafe.Pointer(cResult))
@@ -152,7 +121,7 @@ func (w *ChatTemplateCGoWrapper) RenderChatTemplate(req ChatTemplateRequest) (*C
 	// Parse the response
 	var response ChatTemplateResponse
 	if err := json.Unmarshal([]byte(resultJSON), &response); err != nil {
-		fmt.Printf("[Go] RenderChatTemplate ERROR - Failed to unmarshal response: %v\n", err)
+		traceLogger.Error(err, "Failed to unmarshal response")
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -175,27 +144,21 @@ type GetModelChatTemplateResponse struct {
 	TemplateVars map[string]interface{} `json:"template_vars"`
 }
 
-// GetModelChatTemplate fetches the model chat template using the cached Python function
-func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(req GetChatTemplateRequest) (string, map[string]interface{}, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	// Initialize if needed (sync.Once ensures this only happens once)
-	if err := w.Initialize(); err != nil {
-		fmt.Printf("[Go] GetModelChatTemplate ERROR - Failed to initialize: %v\n", err)
-		return "", nil, fmt.Errorf("failed to initialize Python: %w", err)
-	}
+// GetModelChatTemplate fetches the model chat template using the cached Python function.
+// REQUIRES: The wrapper must be initialized before calling this method.
+func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(ctx context.Context, req GetChatTemplateRequest) (string, map[string]interface{}, error) {
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("chat-template.GetModelChatTemplate")
 
 	// Convert request to JSON
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
-		fmt.Printf("[Go] GetModelChatTemplate ERROR - Failed to marshal request: %v\n", err)
+		traceLogger.Error(err, "Failed to marshal request")
 		return "", nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 	// Call the cached Python function
 	cResult := C.Py_CallGetModelChatTemplate(C.CString(string(reqJSON)))
 	if cResult == nil {
-		fmt.Printf("[Go] GetModelChatTemplate ERROR - C function returned nil\n")
+		traceLogger.Error(nil, "C function returned nil")
 		return "", nil, fmt.Errorf("python get_model_chat_template failed")
 	}
 	defer C.free(unsafe.Pointer(cResult))
@@ -204,9 +167,25 @@ func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(req GetChatTemplateRequest
 	// Parse the response
 	var response GetModelChatTemplateResponse
 	if err := json.Unmarshal([]byte(resultJSON), &response); err != nil {
-		fmt.Printf("[Go] GetModelChatTemplate ERROR - Failed to unmarshal response: %v\n", err)
+		traceLogger.Error(err, "Failed to unmarshal response")
 		return "", nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	return response.Template, response.TemplateVars, nil
+}
+
+// ClearCaches clears all caches for testing purposes.
+// REQUIRES: The wrapper must be initialized before calling this method.
+func (w *ChatTemplateCGoWrapper) ClearCaches(ctx context.Context) error {
+	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("chat-template.ClearCaches")
+
+	// Call the C function
+	cResult := C.Py_ClearCaches()
+	if cResult == nil {
+		traceLogger.Error(nil, "Failed to clear caches")
+		return fmt.Errorf("failed to clear caches")
+	}
+	defer C.free(unsafe.Pointer(cResult))
+
+	return nil
 }

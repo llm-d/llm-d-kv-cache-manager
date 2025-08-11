@@ -19,6 +19,7 @@ limitations under the License.
 package chat_completions_template
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -62,17 +63,16 @@ func cleanupGlobalWrapper() {
 		}()
 
 		// Check if Python is still initialized before finalizing
-		if globalWrapper.initialized {
-			// Try to finalize gracefully, but don't panic if it fails
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						fmt.Printf("Recovered from panic during Finalize(): %v\n", r)
-					}
-				}()
-				globalWrapper.Finalize()
+		// SIMPLIFIED: No need to check initialized field - C handles this
+		// Try to finalize gracefully, but don't panic if it fails
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("Recovered from panic during Finalize(): %v\n", r)
+				}
 			}()
-		}
+			globalWrapper.Finalize()
+		}()
 		globalWrapper = nil
 	}
 }
@@ -80,6 +80,10 @@ func cleanupGlobalWrapper() {
 // TestGetModelChatTemplate tests the get_model_chat_template function
 func TestGetModelChatTemplate(t *testing.T) {
 	wrapper := getGlobalWrapper()
+
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
 
 	tests := []struct {
 		name           string
@@ -91,6 +95,11 @@ func TestGetModelChatTemplate(t *testing.T) {
 		{
 			name:           "IBM Granite Model",
 			modelName:      "ibm-granite/granite-3.3-8b-instruct",
+			expectTemplate: true,
+		},
+		{
+			name:           "DialoGPT Model",
+			modelName:      "microsoft/DialoGPT-medium",
 			expectTemplate: true,
 		},
 	}
@@ -105,7 +114,7 @@ func TestGetModelChatTemplate(t *testing.T) {
 
 			// Profile the function call
 			start := time.Now()
-			template, templateVars, err := wrapper.GetModelChatTemplate(request)
+			template, templateVars, err := wrapper.GetModelChatTemplate(context.Background(), request)
 			duration := time.Since(start)
 
 			// Log performance
@@ -133,6 +142,10 @@ func TestGetModelChatTemplate(t *testing.T) {
 // TestRenderJinjaTemplate tests the render_jinja_template function
 func TestRenderJinjaTemplate(t *testing.T) {
 	wrapper := getGlobalWrapper()
+
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
 
 	// Simple template for testing
 	simpleTemplate := `{% for message in messages %}{{ message.role }}: {{ message.content }}
@@ -198,7 +211,7 @@ func TestRenderJinjaTemplate(t *testing.T) {
 
 			// Profile the function call
 			start := time.Now()
-			response, err := wrapper.RenderChatTemplate(request)
+			response, err := wrapper.RenderChatTemplate(context.Background(), request)
 			duration := time.Since(start)
 
 			// Assertions
@@ -233,6 +246,10 @@ func TestRenderJinjaTemplate(t *testing.T) {
 func TestTemplateCaching(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
+	// Clear all caches to ensure we start with a clean state
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
+
 	modelName := "ibm-granite/granite-3.3-8b-instruct"
 	request := GetChatTemplateRequest{
 		ModelName: modelName,
@@ -241,14 +258,14 @@ func TestTemplateCaching(t *testing.T) {
 	// First call - should be cache miss
 	t.Log("=== First call (Cache MISS) ===")
 	start := time.Now()
-	template1, vars1, err := wrapper.GetModelChatTemplate(request)
+	template1, vars1, err := wrapper.GetModelChatTemplate(context.Background(), request)
 	duration1 := time.Since(start)
 	require.NoError(t, err, "First call should not return an error")
 
 	// Second call - should be cache hit
 	t.Log("=== Second call (Cache HIT) ===")
 	start = time.Now()
-	template2, vars2, err := wrapper.GetModelChatTemplate(request)
+	template2, vars2, err := wrapper.GetModelChatTemplate(context.Background(), request)
 	duration2 := time.Since(start)
 	require.NoError(t, err, "Second call should not return an error")
 
@@ -267,6 +284,10 @@ func TestTemplateCaching(t *testing.T) {
 // TestChatCompletionsIntegration tests the complete chat completions workflow
 func TestChatCompletionsIntegration(t *testing.T) {
 	wrapper := getGlobalWrapper()
+
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
 
 	tests := []struct {
 		name         string
@@ -310,16 +331,29 @@ func TestChatCompletionsIntegration(t *testing.T) {
 			},
 			description: "Conversation with system message and code generation",
 		},
+		{
+			name:      "Simple Conversation (Repeated)",
+			modelName: "ibm-granite/granite-3.3-8b-instruct",
+			conversation: [][]ChatMessage{
+				{
+					{Role: "user", Content: "What is the capital of France?"},
+					{Role: "assistant", Content: "The capital of France is Paris."},
+				},
+			},
+			description: "Basic question and answer conversation (repeated to test render caching)",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Logf("Testing: %s - %s", tt.name, tt.description)
+
 			// Step 1: Get the model's chat template
 			start := time.Now()
 			templateRequest := GetChatTemplateRequest{
 				ModelName: tt.modelName,
 			}
-			template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
+			template, templateVars, err := wrapper.GetModelChatTemplate(context.Background(), templateRequest)
 			templateDuration := time.Since(start)
 			require.NoError(t, err, "Failed to get model chat template")
 			assert.NotEmpty(t, template, "Template should not be empty")
@@ -331,7 +365,7 @@ func TestChatCompletionsIntegration(t *testing.T) {
 				ChatTemplate:  template,
 				TemplateVars:  templateVars,
 			}
-			response, err := wrapper.RenderChatTemplate(renderRequest)
+			response, err := wrapper.RenderChatTemplate(context.Background(), renderRequest)
 			renderDuration := time.Since(start)
 			require.NoError(t, err, "Failed to render chat template")
 			assert.NotNil(t, response, "Response should not be nil")
@@ -375,6 +409,10 @@ func TestVLLMValidation(t *testing.T) {
 func TestLongChatCompletions(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
+
 	// Create a long conversation
 	longConversation := [][]ChatMessage{
 		{
@@ -398,7 +436,7 @@ func TestLongChatCompletions(t *testing.T) {
 		templateRequest := GetChatTemplateRequest{
 			ModelName: modelName,
 		}
-		template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
+		template, templateVars, err := wrapper.GetModelChatTemplate(context.Background(), templateRequest)
 		templateDuration := time.Since(start)
 		require.NoError(t, err, "Failed to get model chat template")
 
@@ -409,7 +447,7 @@ func TestLongChatCompletions(t *testing.T) {
 			ChatTemplate:  template,
 			TemplateVars:  templateVars,
 		}
-		response, err := wrapper.RenderChatTemplate(renderRequest)
+		response, err := wrapper.RenderChatTemplate(context.Background(), renderRequest)
 		renderDuration := time.Since(start)
 		require.NoError(t, err, "Failed to render long conversation")
 
@@ -435,26 +473,58 @@ func TestLongChatCompletions(t *testing.T) {
 func BenchmarkGetModelChatTemplate(b *testing.B) {
 	wrapper := getGlobalWrapper()
 
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(b, err, "Failed to clear caches")
+
 	request := GetChatTemplateRequest{
 		ModelName: "ibm-granite/granite-3.3-8b-instruct",
 	}
 
+	// Track first iteration time and total time
+	var firstIterationTime time.Duration
+	var totalTime time.Duration
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, err := wrapper.GetModelChatTemplate(request)
+		start := time.Now()
+		_, _, err := wrapper.GetModelChatTemplate(context.Background(), request)
 		require.NoError(b, err, "Benchmark should not return errors")
+		iterTime := time.Since(start)
+
+		if i == 0 {
+			firstIterationTime = iterTime
+		}
+		totalTime += iterTime
 	}
+
+	// Calculate both overall average and warm performance average
+	overallAvg := totalTime / time.Duration(b.N)
+
+	var warmAvg time.Duration
+	if b.N > 1 {
+		warmAvg = (totalTime - firstIterationTime) / time.Duration(b.N-1)
+	} else {
+		warmAvg = overallAvg // If only one iteration, warm avg = overall avg
+	}
+
+	b.ReportMetric(float64(overallAvg.Nanoseconds()), "ns/op_overall")
+	b.ReportMetric(float64(warmAvg.Nanoseconds()), "ns/op_warm")
 }
 
 // BenchmarkRenderJinjaTemplate benchmarks the template rendering performance
 func BenchmarkRenderJinjaTemplate(b *testing.B) {
 	wrapper := getGlobalWrapper()
 
+	// Clear caches to ensure accurate timing measurements
+	err := wrapper.ClearCaches(context.Background())
+	require.NoError(b, err, "Failed to clear caches")
+
 	// Get template first
 	templateRequest := GetChatTemplateRequest{
 		ModelName: "ibm-granite/granite-3.3-8b-instruct",
 	}
-	template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
+	template, templateVars, err := wrapper.GetModelChatTemplate(context.Background(), templateRequest)
 	require.NoError(b, err, "Failed to get template for benchmark")
 
 	request := ChatTemplateRequest{
@@ -468,15 +538,39 @@ func BenchmarkRenderJinjaTemplate(b *testing.B) {
 		TemplateVars: templateVars,
 	}
 
+	// Track first iteration time and total time
+	var firstIterationTime time.Duration
+	var totalTime time.Duration
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := wrapper.RenderChatTemplate(request)
+		start := time.Now()
+		_, err := wrapper.RenderChatTemplate(context.Background(), request)
 		require.NoError(b, err, "Benchmark should not return errors")
+		iterTime := time.Since(start)
+
+		if i == 0 {
+			firstIterationTime = iterTime
+		}
+		totalTime += iterTime
 	}
+
+	// Calculate both overall average and warm performance average
+	overallAvg := totalTime / time.Duration(b.N)
+
+	var warmAvg time.Duration
+	if b.N > 1 {
+		warmAvg = (totalTime - firstIterationTime) / time.Duration(b.N-1)
+	} else {
+		warmAvg = overallAvg // If only one iteration, warm avg = overall avg
+	}
+
+	b.ReportMetric(float64(overallAvg.Nanoseconds()), "ns/op_overall")
+	b.ReportMetric(float64(warmAvg.Nanoseconds()), "ns/op_warm")
 }
 
 // Helper function
-func min(a, b int) int {
+func minLength(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -549,7 +643,7 @@ func runVLLMValidationTest(t *testing.T, modelName, expectedVLLMOutput string) {
 	templateRequest := GetChatTemplateRequest{
 		ModelName: modelName,
 	}
-	template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
+	template, templateVars, err := wrapper.GetModelChatTemplate(context.Background(), templateRequest)
 	require.NoError(t, err, "Failed to get chat template")
 	assert.NotEmpty(t, template, "Template should not be empty")
 
@@ -561,7 +655,7 @@ func runVLLMValidationTest(t *testing.T, modelName, expectedVLLMOutput string) {
 	}
 
 	// Step 3: Render the conversation with the template
-	response, err := wrapper.RenderChatTemplate(request)
+	response, err := wrapper.RenderChatTemplate(context.Background(), request)
 	require.NoError(t, err, "Failed to render chat template")
 	require.Len(t, response.RenderedChats, 1, "Should have one rendered chat")
 
@@ -594,7 +688,7 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 	t.Logf("❌ FAILED: Our output does not match VLLM expected output (even after date normalization). Our output length: %d, Expected length: %d, Normalized output: %q", len(renderedOutput), len(expectedVLLMOutput), normalizedOutput)
 
 	// Find the first difference
-	minLen := min(len(normalizedOutput), len(expectedVLLMOutput))
+	minLen := minLength(len(normalizedOutput), len(expectedVLLMOutput))
 	for i := 0; i < minLen; i++ {
 		if normalizedOutput[i] != expectedVLLMOutput[i] {
 			t.Logf("   First difference at position %d: our='%c' (0x%02x), expected='%c' (0x%02x)",
