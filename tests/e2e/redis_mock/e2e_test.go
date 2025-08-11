@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:testpackage // allow tests to run in the same package
 package e2e
 
 import (
@@ -30,19 +31,19 @@ type ChatMessage struct {
 // ChatTemplateRequest represents the request to render a chat template.
 type ChatTemplateRequest struct {
 	Conversations [][]ChatMessage        `json:"conversations"`
-	ChatTemplate  string                 `json:"chat_template"`
-	TemplateVars  map[string]interface{} `json:"template_vars,omitempty"`
+	ChatTemplate  string                 `json:"chatTemplate"`
+	TemplateVars  map[string]interface{} `json:"templateVars,omitempty"`
 }
 
 // ChatTemplateResponse represents the response from the Python function.
 type ChatTemplateResponse struct {
-	RenderedChats     []string  `json:"rendered_chats"`
-	GenerationIndices [][][]int `json:"generation_indices"`
+	RenderedChats     []string  `json:"renderedChats"`
+	GenerationIndices [][][]int `json:"generationIndices"`
 }
 
 // GetChatTemplateRequest represents the request to get a model's chat template.
 type GetChatTemplateRequest struct {
-	ModelName string `json:"model_name"`
+	ModelName string `json:"modelName"`
 	Revision  string `json:"revision,omitempty"`
 	Token     string `json:"token,omitempty"`
 }
@@ -54,11 +55,13 @@ func NewMockChatTemplateWrapper() *MockChatTemplateWrapper {
 	return &MockChatTemplateWrapper{}
 }
 
-func (w *MockChatTemplateWrapper) GetModelChatTemplate(req GetChatTemplateRequest) (template string, templateVars map[string]interface{}, err error) {
+func (w *MockChatTemplateWrapper) GetModelChatTemplate(
+	req GetChatTemplateRequest,
+) (string, map[string]interface{}, error) {
 	// Mock implementation that returns a simple template.
-	template = `{% for message in messages %}{{ message.role }}: {{ message.content }}
+	template := `{% for message in messages %}{{ message.role }}: {{ message.content }}
 {% endfor %}`
-	templateVars = map[string]interface{}{
+	templateVars := map[string]interface{}{
 		"bos_token": "<s>",
 		"eos_token": "</s>",
 	}
@@ -67,7 +70,7 @@ func (w *MockChatTemplateWrapper) GetModelChatTemplate(req GetChatTemplateReques
 
 func (w *MockChatTemplateWrapper) RenderChatTemplate(req ChatTemplateRequest) (*ChatTemplateResponse, error) {
 	// Mock implementation that renders the template.
-	var renderedChats []string
+	renderedChats := make([]string, 0, len(req.Conversations))
 	for _, conversation := range req.Conversations {
 		rendered := ""
 		for _, message := range conversation {
@@ -185,7 +188,8 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	base := "The quick brown fox jumps over the lazy dog"
 	modelName := defaultModelName
-	s.T().Logf("s.config.PrefixStoreConfig: %+v, TokenProcessorConfig: %+v", s.config.PrefixStoreConfig.LRUStoreConfig, s.config.TokenProcessorConfig)
+	s.T().Logf("s.config.PrefixStoreConfig: %+v, TokenProcessorConfig: %+v",
+		s.config.PrefixStoreConfig.LRUStoreConfig, s.config.TokenProcessorConfig)
 	// Generate long prompts
 	shortPrompt := strings.Repeat(base, 2)
 	midPrompt := strings.Repeat(base, 100)  // ~900 tokens
@@ -290,13 +294,18 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	// Create a long, complex conversation.
 	longConversation := [][]ChatMessage{
 		{
-			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. Provide detailed, accurate responses."},
+			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. " +
+				"Provide detailed, accurate responses."},
 			{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me design the architecture?"},
-			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend starting with a layered architecture. Let's break this down into components."},
+			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend starting with a layered architecture. " +
+				"Let's break this down into components."},
 			{Role: "user", Content: "What about memory management and eviction policies?"},
-			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an LRU (Least Recently Used) eviction policy with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a doubly-linked list for tracking access order."},
+			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an LRU (Least Recently Used) eviction policy " +
+				"with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a doubly-linked list for tracking access order."},
 			{Role: "user", Content: "How should I handle concurrent access and thread safety?"},
-			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is to use sync.RWMutex for read-write locks, allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map for simpler cases or implement a lock-free design with atomic operations for maximum performance."},
+			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is to use sync.RWMutex for read-write locks, " +
+				"allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map for simpler cases or implement a lock-free design " +
+				"with atomic operations for maximum performance."},
 		},
 	}
 

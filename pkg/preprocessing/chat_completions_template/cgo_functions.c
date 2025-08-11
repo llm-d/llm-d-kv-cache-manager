@@ -14,10 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// System includes first (C standard)
 #include <unistd.h> // for getpid() and usleep()
 
-// Project includes second
 #include "cgo_functions.h"
 
 // Global variables for caching
@@ -29,7 +27,7 @@ int g_python_initialized = 0;
 
 // Process-level global initialization tracking
 static int g_process_initialized = 0;
-static int g_finalized = 0;  // Track if Python has been finalized
+static int g_finalized = 0; 
 static pid_t g_init_pid = 0;
 
 // Thread safety for initialization
