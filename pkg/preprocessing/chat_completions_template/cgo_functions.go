@@ -29,8 +29,8 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I/Users/guygirmonsky/.pyenv/versions/3.12.11/include/python3.12
-#cgo LDFLAGS: -L/Users/guygirmonsky/.pyenv/versions/3.12.11/lib -lpython3.12
+#cgo CFLAGS: -I{{PYTHON_PATH}}/include/python{{PYTHON_VERSION}}
+#cgo LDFLAGS: -L{{PYTHON_PATH}}/lib -lpython{{PYTHON_VERSION}}
 #include "cgo_functions.h"
 */
 import "C"
@@ -60,21 +60,16 @@ type ChatTemplateResponse struct {
 }
 
 // ChatTemplateCGoWrapper wraps the CGo functions for chat template operations
-// SIMPLIFIED: Removed redundant tracking since C handles everything
 type ChatTemplateCGoWrapper struct {
-	// REMOVED: initialized bool - C tracks this
-	// REMOVED: mu sync.Mutex - C handles thread safety
-	// REMOVED: initOnce sync.Once - C ensures single initialization
 }
 
 // NewChatTemplateCGoWrapper creates a new CGo wrapper.
-// SIMPLIFIED: No initialization tracking needed
+// IMPORTANT: You must call Initialize() on the returned wrapper before using any methods.
 func NewChatTemplateCGoWrapper() *ChatTemplateCGoWrapper {
 	return &ChatTemplateCGoWrapper{}
 }
 
 // Initialize initializes the Python interpreter and caches the module
-// SIMPLIFIED: Just call C functions - let C handle all tracking
 func (w *ChatTemplateCGoWrapper) Initialize() error {
 	// Initialize Python interpreter - C handles process-level tracking
 	C.Py_InitializeGo()
@@ -89,7 +84,6 @@ func (w *ChatTemplateCGoWrapper) Initialize() error {
 }
 
 // Finalize finalizes the Python interpreter and cleans up the module
-// SIMPLIFIED: Just call C functions - let C handle all cleanup
 func (w *ChatTemplateCGoWrapper) Finalize() {
 	// Clean up the module first
 	C.Py_CleanupChatTemplateModule()
