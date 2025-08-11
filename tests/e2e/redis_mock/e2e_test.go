@@ -57,11 +57,11 @@ func NewMockChatTemplateWrapper() *MockChatTemplateWrapper {
 
 func (w *MockChatTemplateWrapper) GetModelChatTemplate(
 	req GetChatTemplateRequest,
-) (string, map[string]interface{}, error) {
+) (template string, templateVars map[string]interface{}, err error) {
 	// Mock implementation that returns a simple template.
-	template := `{% for message in messages %}{{ message.role }}: {{ message.content }}
+	template = `{% for message in messages %}{{ message.role }}: {{ message.content }}
 {% endfor %}`
-	templateVars := map[string]interface{}{
+	templateVars = map[string]interface{}{
 		"bos_token": "<s>",
 		"eos_token": "</s>",
 	}
@@ -294,18 +294,22 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	// Create a long, complex conversation.
 	longConversation := [][]ChatMessage{
 		{
-			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. " +
-				"Provide detailed, accurate responses."},
-			{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me design the architecture?"},
-			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend starting with a layered architecture. " +
-				"Let's break this down into components."},
+			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, " +
+				"and system design. Provide detailed, accurate responses."},
+			{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me " +
+				"design the architecture?"},
+			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend " +
+				"starting with a layered architecture. Let's break this down into components."},
 			{Role: "user", Content: "What about memory management and eviction policies?"},
-			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an LRU (Least Recently Used) eviction policy " +
-				"with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a doubly-linked list for tracking access order."},
+			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing " +
+				"an LRU (Least Recently Used) eviction policy with configurable memory limits. " +
+				"You can use a combination of a hash map for O(1) lookups and a doubly-linked list " +
+				"for tracking access order."},
 			{Role: "user", Content: "How should I handle concurrent access and thread safety?"},
-			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is to use sync.RWMutex for read-write locks, " +
-				"allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map for simpler cases or implement a lock-free design " +
-				"with atomic operations for maximum performance."},
+			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is " +
+				"to use sync.RWMutex for read-write locks, allowing multiple concurrent readers " +
+				"but exclusive writers. Alternatively, you could use sync.Map for simpler cases " +
+				"or implement a lock-free design with atomic operations for maximum performance."},
 		},
 	}
 
