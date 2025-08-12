@@ -55,6 +55,7 @@ func NewMockChatTemplateWrapper() *MockChatTemplateWrapper {
 	return &MockChatTemplateWrapper{}
 }
 
+// nolint: nonamedreturns // No need here.
 func (w *MockChatTemplateWrapper) GetModelChatTemplate(
 	req GetChatTemplateRequest,
 ) (template string, templateVars map[string]interface{}, err error) {
