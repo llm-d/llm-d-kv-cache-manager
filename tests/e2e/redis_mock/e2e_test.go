@@ -55,7 +55,7 @@ func NewMockChatTemplateWrapper() *MockChatTemplateWrapper {
 	return &MockChatTemplateWrapper{}
 }
 
-// nolint: nonamedreturns // No need here.
+//nolint:nonamedreturns // Mock implementation uses named returns for clarity and consistency with interface.
 func (w *MockChatTemplateWrapper) GetModelChatTemplate(
 	req GetChatTemplateRequest,
 ) (template string, templateVars map[string]interface{}, err error) {
