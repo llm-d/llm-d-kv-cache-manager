@@ -13,13 +13,15 @@
 # - Ephemeral per request = L_question+L_live = 512+96 = 608
 # - Ephemeral per pod = C*608 = 6*608 = 3,648
 # - Remaining per pod for shared prefixes = 141,056 − 3,648 = 137,408
-# - Slots per pod = floor(137,408 / 3,500
-# - Slots cluster-wide = 4 * 40 = 160
+# - Slots per pod = floor(137,408 / 3,500) ≈ 39
+# - Slots cluster-wide = 4 * 39 = 156
 #
 # OVERFILL %
-# - Used groups = G = 120 (cluster-wide)
-# - Overfill% = (120 − 160) / 160 * 100 = −25%   # i.e., ~25% headroom; zero thrash expected
-# - If evenly balanced: 30 groups/pod, which is 30/40 ≈ 75% of per-pod slots
+# - Used groups = G = 100 (cluster-wide)
+# - Slots available (cluster) = 156
+# - Overfill% = (G − slots_cluster) / slots_cluster × 100
+#   = (100 − 156) / 156 ≈ −35.9%  → ~36% headroom (no thrash expected)
+# If evenly distributed, 25 groups per pod, which is 25/39 ≈ 64% of the slots per pod.
 #
 # SET SIZE & PER-STAGE COVERAGE
 # - One FULL SET = S = G*P = 100*2 = 200 requests
