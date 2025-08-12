@@ -1,5 +1,5 @@
 packaging==24.2
-pillow==11.2.1
+pillow==11.3.0
 torch==2.5.1
 transformers>=4.53.0
 jinja2>=2.11
