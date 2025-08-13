@@ -80,14 +80,13 @@ var _ Index = &RedisIndex{}
 // If the podIdentifierSet is empty, all pods are returned.
 //
 // It returns:
-// 1. A slice of the hit keys.
-// 2. A map where the keys are those in (1) and the values are pod-identifiers.
-// 3. An error if any occurred during the operation.
+// 1. A map where the keys are those in (1) and the values are pod-identifiers.
+// 2. An error if any occurred during the operation.
 func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) ([]Key, map[Key][]string, error) {
+) (map[Key][]string, error) {
 	if len(keys) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	logger := klog.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
@@ -105,11 +104,10 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 
 	_, execErr := pipe.Exec(ctx)
 	if execErr != nil {
-		return nil, nil, fmt.Errorf("redis pipeline execution failed: %w", execErr)
+		return nil, fmt.Errorf("redis pipeline execution failed: %w", execErr)
 	}
 
 	filterPods := len(podIdentifierSet) > 0 // predicate for filtering
-	highestHitIdx := 0
 
 	for idx, cmd := range results {
 		key := keys[idx]
@@ -121,7 +119,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 				logger.Error(cmdErr, "failed to get pods for key", "key", key)
 			}
 
-			return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
+			return podsPerKey, nil // early stop since prefix-chain breaks here
 		}
 
 		var filteredPods []string
@@ -134,14 +132,13 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 
 		if len(filteredPods) == 0 {
 			logger.Info("no pods found for key, cutting search", "key", key)
-			return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
+			return podsPerKey, nil // early stop since prefix-chain breaks here
 		}
 
-		highestHitIdx = idx
 		podsPerKey[key] = filteredPods
 	}
 
-	return keys[:highestHitIdx+1], podsPerKey, nil
+	return podsPerKey, nil
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
