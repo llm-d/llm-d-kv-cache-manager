@@ -39,9 +39,9 @@ func testAddBasic(t *testing.T, index kvblock.Index) {
 	assert.NoError(t, err)
 
 	// Lookup after add
-	hitKeys, podsPerKey, err := index.Lookup(t.Context(), []kvblock.Key{key}, sets.Set[string]{})
+	podsPerKey, err := index.Lookup(t.Context(), []kvblock.Key{key}, sets.Set[string]{})
 	assert.NoError(t, err)
-	assert.Len(t, hitKeys, 1)
-	assert.Equal(t, key, hitKeys[0])
+	assert.Len(t, podsPerKey, 1)
+	assert.Contains(t, podsPerKey, key)
 	assert.Equal(t, podsPerKey[key], []string{"10.0.0.1", "10.0.0.2"})
 }
