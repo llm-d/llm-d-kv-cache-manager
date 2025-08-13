@@ -34,14 +34,13 @@ func (m *instrumentedIndex) Lookup(
 	ctx context.Context,
 	keys []Key,
 	podIdentifierSet sets.Set[string],
-) ([]Key, map[Key][]string, error) {
+) (map[Key][]string, error) {
 	timer := prometheus.NewTimer(metrics.LookupLatency)
 	defer timer.ObserveDuration()
 
 	metrics.LookupRequests.Inc()
 
-	hitKeys, pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
-	metrics.LookupHits.Add(float64(len(hitKeys)))
+	pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
 
-	return hitKeys, pods, err
+	return pods, err
 }
