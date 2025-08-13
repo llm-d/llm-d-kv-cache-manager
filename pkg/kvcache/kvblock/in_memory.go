@@ -89,14 +89,13 @@ type PodCache struct {
 // If the podIdentifierSet is empty, all pods are returned.
 //
 // It returns:
-// 1. A slice of the hit keys.
-// 2. A map where the keys are those in (1) and the values are pod-identifiers.
-// 3. An error if any occurred during the operation.
+// 1. A map where the keys are those in (1) and the values are pod-identifiers.
+// 2. An error if any occurred during the operation.
 func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) ([]Key, map[Key][]string, error) {
+) (map[Key][]string, error) {
 	if len(keys) == 0 {
-		return nil, nil, fmt.Errorf("no keys provided for lookup")
+		return nil, fmt.Errorf("no keys provided for lookup")
 	}
 
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
@@ -108,7 +107,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 		if pods, found := m.data.Get(key); found { //nolint:nestif // TODO: can this be optimized?
 			if pods == nil || pods.cache.Len() == 0 {
 				traceLogger.Info("no pods found for key, cutting search", "key", key)
-				return keys[:idx], podsPerKey, nil // early stop since prefix-chain breaks here
+				return podsPerKey, nil // early stop since prefix-chain breaks here
 			}
 
 			highestHitIdx = idx
@@ -135,7 +134,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	traceLogger.Info("lookup completed", "highest-hit-index", highestHitIdx,
 		"pods-per-key", podsPerKeyPrintHelper(podsPerKey))
 
-	return keys[:highestHitIdx+1], podsPerKey, nil
+	return podsPerKey, nil
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
