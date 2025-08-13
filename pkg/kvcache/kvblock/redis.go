@@ -86,7 +86,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
 ) (map[Key][]string, error) {
 	if len(keys) == 0 {
-		return nil, nil
+		return make(map[Key][]string), nil
 	}
 
 	logger := klog.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
