@@ -133,7 +133,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
-	strBlockKeys, keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
+	keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
@@ -141,7 +141,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 		"pods", podsPerKeyPrintHelper(keyToPods))
 
 	// 4. score pods
-	podScores, err := k.kvBlockScorer.Score(strBlockKeys, keyToPods)
+	podScores, err := k.kvBlockScorer.Score(blockKeys, keyToPods)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
