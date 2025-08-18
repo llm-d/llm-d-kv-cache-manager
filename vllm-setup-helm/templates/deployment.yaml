@@ -91,6 +91,8 @@ spec:
           startupProbe:
             {{- toYaml .Values.vllm.startupProbe | nindent 12 }}
           env:
+            - name: HOME
+              value: {{ .Values.persistence.mountPath }}
             - name: HF_HOME
               value: {{ .Values.persistence.mountPath }}
             - name: POD_IP

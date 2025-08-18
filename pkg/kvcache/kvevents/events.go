@@ -1,14 +1,22 @@
 package kvevents
 
 import (
-	"fmt"
-
 	"github.com/vmihailenco/msgpack/v5"
+)
+
+const (
+	// BlockStoredEventTag is the tag for BlockStored events.
+	BlockStoredEventTag = "BlockStored"
+	// BlockRemovedEventTag is the tag for BlockRemoved events.
+	BlockRemovedEventTag = "BlockRemoved"
+	// AllBlocksClearedEventTag is the tag for AllBlocksCleared events.
+	AllBlocksClearedEventTag = "AllBlocksCleared"
 )
 
 // event is a marker interface for KV-cache events.
 type event interface {
 	isEvent()
+	ToTaggedUnion() []any
 }
 
 // EventBatch represents a batch of events.
@@ -18,37 +26,6 @@ type EventBatch struct {
 	TS               float64
 	Events           []msgpack.RawMessage
 	DataParallelRank *int `msgpack:",omitempty"`
-}
-
-// DecodeMsgpack allows 2- or 3-element array-encoded batches.
-func (e *EventBatch) DecodeMsgpack(decoder *msgpack.Decoder) error {
-	length, err := decoder.DecodeArrayLen()
-	if err != nil {
-		return err
-	}
-	if length < 2 {
-		return fmt.Errorf("EventBatch: expected at least 2 fields, got %d", length)
-	}
-	if e.TS, err = decoder.DecodeFloat64(); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&e.Events); err != nil {
-		return err
-	}
-	if length > 2 {
-		var rank int
-		if err := decoder.Decode(&rank); err != nil {
-			return err
-		}
-		e.DataParallelRank = &rank
-	}
-	// skip any extra
-	for i := 3; i < length; i++ {
-		if err := decoder.Skip(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // BlockStored event.
@@ -61,13 +38,18 @@ type BlockStored struct {
 	LoraID          *int
 }
 
-func (BlockStored) isEvent() {}
-
-type BlockStoredEvent struct {
-	_         struct{} `msgpack:",array"`
-	TypeField string
-	*BlockStored
+func (bs BlockStored) ToTaggedUnion() []any {
+	return []any{
+		BlockStoredEventTag,
+		bs.BlockHashes,
+		bs.ParentBlockHash,
+		bs.TokenIds,
+		bs.BlockSize,
+		bs.LoraID,
+	}
 }
+
+func (BlockStored) isEvent() {}
 
 // BlockRemoved event.
 type BlockRemoved struct {
@@ -75,17 +57,24 @@ type BlockRemoved struct {
 	BlockHashes []uint64
 }
 
-func (BlockRemoved) isEvent() {}
-
-type BlockRemovedEvent struct {
-	_         struct{} `msgpack:",array"`
-	TypeField string
-	*BlockRemoved
+func (br BlockRemoved) ToTaggedUnion() []any {
+	return []any{
+		BlockRemovedEventTag,
+		br.BlockHashes,
+	}
 }
+
+func (BlockRemoved) isEvent() {}
 
 // AllBlocksCleared event.
 type AllBlocksCleared struct {
 	_ struct{} `msgpack:",array"`
+}
+
+func (ac AllBlocksCleared) ToTaggedUnion() []any {
+	return []any{
+		AllBlocksClearedEventTag,
+	}
 }
 
 func (AllBlocksCleared) isEvent() {}

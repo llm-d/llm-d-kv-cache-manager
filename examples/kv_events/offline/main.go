@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -166,22 +165,21 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	// Simulate vLLM engine publishing BlockStored events
 	logger.Info("@@@ Simulating vLLM engine publishing BlockStored events...")
 
-	var blockStoredPayload bytes.Buffer
-	enc := msgpack.NewEncoder(&blockStoredPayload)
-	enc.UseArrayEncodedStructs(true)
+	blockStoredEvent := kvevents.BlockStored{
+		BlockHashes:     testdata.PromptHashes,
+		ParentBlockHash: nil,
+		TokenIds:        []uint32{1, 2, 3},
+		BlockSize:       256,
+		LoraID:          nil,
+	}
 
 	//nolint // won't fail
-	enc.Encode(&kvevents.BlockStoredEvent{
-		TypeField:   "BlockStored",
-		BlockStored: &kvevents.BlockStored{BlockHashes: testdata.PromptHashes},
-	})
-
-	dpRank := 0
+	blockStoredPayload, _ := msgpack.Marshal(blockStoredEvent.ToTaggedUnion())
 
 	eventBatch := kvevents.EventBatch{
 		TS:               float64(time.Now().UnixNano()) / 1e9,
-		Events:           []msgpack.RawMessage{blockStoredPayload.Bytes()},
-		DataParallelRank: &dpRank,
+		Events:           []msgpack.RawMessage{blockStoredPayload},
+		DataParallelRank: nil,
 	}
 
 	topic := fmt.Sprintf("kv@vllm-pod1@%s", testdata.ModelName)
@@ -204,20 +202,17 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	// Simulate removing some blocks
 	logger.Info("@@@ Simulating vLLM engine removing some blocks...")
 
-	var blockRemovedPayload bytes.Buffer
-	enc = msgpack.NewEncoder(&blockRemovedPayload)
-	enc.UseArrayEncodedStructs(true)
+	blockRemovedEvent := kvevents.BlockRemoved{
+		BlockHashes: testdata.PromptHashes[2:], // Remove last blocks
+	}
 
 	//nolint // won't fail
-	enc.Encode(&kvevents.BlockRemovedEvent{
-		TypeField:    "BlockRemoved",
-		BlockRemoved: &kvevents.BlockRemoved{BlockHashes: testdata.PromptHashes[2:]},
-	})
+	blockRemovedPayload, _ := msgpack.Marshal(blockRemovedEvent.ToTaggedUnion())
 
 	removeEventBatch := kvevents.EventBatch{
 		TS:               float64(time.Now().UnixNano()) / 1e9,
-		Events:           []msgpack.RawMessage{blockRemovedPayload.Bytes()},
-		DataParallelRank: &dpRank,
+		Events:           []msgpack.RawMessage{blockRemovedPayload},
+		DataParallelRank: nil,
 	}
 
 	if err := publisher.PublishEvent(ctx, topic, removeEventBatch); err != nil {
