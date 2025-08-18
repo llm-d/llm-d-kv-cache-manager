@@ -62,16 +62,16 @@ The templating process (steps 1.1-1.4) handles the conversion from structured re
     └── cgo_functions.go:NewChatTemplateCGoWrapper()
         └── Creates ChatTemplateCGoWrapper struct with initialized=false
 
-1.2. **Template Fetching**: wrapper.GetModelChatTemplate(getReq)
-    ├── cgo_functions.go:GetModelChatTemplate(req)
+1.2. **Template Fetching**: wrapper.GetModelChatTemplate(ctx, getReq)
+    ├── cgo_functions.go:GetModelChatTemplate(ctx, req)
     │   ├── Initialize() Python interpreter via CGO
     │   ├── executePythonCode() - **CGO Binding** to Python
     │   └── **Python Wrapper**: chat_template_wrapper.py:get_model_chat_template()
     │       └── Uses Hugging Face AutoTokenizer to fetch model template
     └── Returns: (template, template_vars)
 
-1.3. **Template Rendering**: wrapper.RenderChatTemplate(req)
-    ├── cgo_functions.go:RenderChatTemplate(req)
+1.3. **Template Rendering**: wrapper.RenderChatTemplate(ctx, req)
+    ├── cgo_functions.go:RenderChatTemplate(ctx, req)
     │   ├── Initialize() Python interpreter via CGO (if not already done)
     │   ├── executePythonCode() - **CGO Binding** to Python
     │   └── **Python Wrapper**: chat_template_wrapper.py:render_jinja_template()

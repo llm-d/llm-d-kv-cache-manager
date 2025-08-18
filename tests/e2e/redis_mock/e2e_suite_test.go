@@ -77,8 +77,6 @@ func (s *KVCacheSuite) SetupTest() {
 }
 
 // promptToKeys tokenizes a prompt and returns its corresponding KV block keys.
-//
-//nolint:unparam // allow future support for multiple models
 func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)

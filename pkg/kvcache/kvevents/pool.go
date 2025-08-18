@@ -193,13 +193,13 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 		var unmarshalErr error
 		switch tag {
 		case "BlockStored":
-			var bs BlockStoredEvent
-			unmarshalErr = msgpack.Unmarshal(rawEvent, &bs)
-			event = bs.BlockStored
+			var bs BlockStored
+			unmarshalErr = msgpack.Unmarshal(payloadBytes, &bs)
+			event = bs
 		case "BlockRemoved":
-			var br BlockRemovedEvent
-			unmarshalErr = msgpack.Unmarshal(rawEvent, &br)
-			event = br.BlockRemoved
+			var br BlockRemoved
+			unmarshalErr = msgpack.Unmarshal(payloadBytes, &br)
+			event = br
 		case "AllBlocksCleared":
 			var ac AllBlocksCleared
 			unmarshalErr = msgpack.Unmarshal(payloadBytes, &ac)
