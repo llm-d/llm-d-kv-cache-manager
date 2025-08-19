@@ -27,17 +27,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockTokenizer implements the Tokenizer interface for testing
+// MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
 	mock.Mock
 }
 
 func (m *MockTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
 	args := m.Called(input, modelName)
-	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2) //nolint:errcheck
+	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2) //nolint:errcheck // return mocked values
 }
 
-// MockIndexer implements the prefixstore.Indexer interface for testing
+// MockIndexer implements the prefixstore.Indexer interface for testing.
 type MockIndexer struct {
 	mock.Mock
 }
@@ -49,7 +49,7 @@ func (m *MockIndexer) AddTokenization(modelName string, prompt string, tokens []
 
 func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) []uint32 {
 	args := m.Called(prompt, modelName)
-	return args.Get(0).([]uint32) //nolint:errcheck
+	return args.Get(0).([]uint32) //nolint:errcheck // unused mock
 }
 
 func TestPool_ProcessTask(t *testing.T) {
