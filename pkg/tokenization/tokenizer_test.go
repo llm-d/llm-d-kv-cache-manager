@@ -13,15 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tokenization_test
+package tokenization
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
 // This should be skipped in fast unit tests.
@@ -32,10 +30,10 @@ func TestCachedHFTokenizer_Encode(t *testing.T) {
 		t.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	config := &tokenization.HFTokenizerConfig{
+	config := &HFTokenizerConfig{
 		TokenizersCacheDir: t.TempDir(),
 	}
-	tokenizer, err := tokenization.NewCachedHFTokenizer(config)
+	tokenizer, err := NewCachedHFTokenizer(config)
 	require.NoError(t, err)
 	require.NotNil(t, tokenizer)
 
@@ -78,8 +76,6 @@ func TestCachedHFTokenizer_CacheTokenizer(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tokenizer)
 
-	cachedTokenizer := tokenizer.(*CachedHFTokenizer) //nolint:errcheck // test assertion is controlled
-
 	// Test that the same model is cached
 	input := "test input"
 
@@ -101,7 +97,7 @@ func TestCachedHFTokenizer_InvalidModel(t *testing.T) {
 		t.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	tokenizer, err := tokenization.NewCachedHFTokenizer(&tokenization.HFTokenizerConfig{
+	tokenizer, err := NewCachedHFTokenizer(&HFTokenizerConfig{
 		TokenizersCacheDir: t.TempDir(),
 	})
 	require.NoError(t, err)
