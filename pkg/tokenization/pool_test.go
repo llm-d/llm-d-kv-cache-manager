@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:testpackage // need to test internal types
 package tokenization
 
 import (
@@ -42,7 +43,7 @@ type MockIndexer struct {
 	mock.Mock
 }
 
-func (m *MockIndexer) AddTokenization(modelName string, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
+func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
 	args := m.Called(modelName, prompt, tokens, offsets)
 	return args.Error(0)
 }
