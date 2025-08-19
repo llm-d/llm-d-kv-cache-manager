@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tokenization
+package tokenization_test
 
 import (
 	"context"
@@ -25,44 +25,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
-// MockTokenizer implements the Tokenizer interface for testing
+// MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
 	mock.Mock
 }
 
 func (m *MockTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
 	args := m.Called(input, modelName)
-	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2)
+	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2) //nolint:errcheck // mock data
 }
 
-// MockIndexer implements the prefixstore.Indexer interface for testing
+// MockIndexer implements the prefixstore.Indexer interface for testing.
 type MockIndexer struct {
 	mock.Mock
 }
 
-func (m *MockIndexer) AddTokenization(modelName string, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
+func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
 	args := m.Called(modelName, prompt, tokens, offsets)
 	return args.Error(0)
 }
 
 func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) []uint32 {
 	args := m.Called(prompt, modelName)
-	return args.Get(0).([]uint32)
+	return args.Get(0).([]uint32) //nolint:errcheck // mock data
 }
 
 func TestPool_ProcessTask(t *testing.T) {
 	mockIndexer := &MockIndexer{}
 	mockTokenizer := &MockTokenizer{}
 
-	pool := &Pool{
-		workers:   1,
-		indexer:   mockIndexer,
-		tokenizer: mockTokenizer,
+	config := &tokenization.Config{
+		WorkersCount: 1,
+		HFTokenizerConfig: &tokenization.HFTokenizerConfig{
+			TokenizersCacheDir: t.TempDir(),
+		},
 	}
+	pool, err := tokenization.NewTokenizationPool(config, mockIndexer)
+	require.NoError(t, err)
 
-	task := Task{
+	task := tokenization.Task{
 		Prompt:    "hello world",
 		ModelName: testModelName,
 	}
@@ -77,7 +82,7 @@ func TestPool_ProcessTask(t *testing.T) {
 	mockIndexer.On("AddTokenization", task.ModelName, task.Prompt, expectedTokens, expectedOffsets).Return(nil)
 
 	// Execute
-	err := pool.processTask(task)
+	err = pool.ProcessTask(task)
 
 	// Assert
 	assert.NoError(t, err)
@@ -100,14 +105,14 @@ func TestPool_RunIntegration(t *testing.T) {
 			mock.Anything, mock.Anything).Return(nil).Once()
 	}
 
-	config := &Config{
+	config := &tokenization.Config{
 		WorkersCount: 2,
-		HFTokenizerConfig: &HFTokenizerConfig{
+		HFTokenizerConfig: &tokenization.HFTokenizerConfig{
 			TokenizersCacheDir: t.TempDir(),
 		},
 	}
 
-	pool, err := NewTokenizationPool(config, mockIndexer)
+	pool, err := tokenization.NewTokenizationPool(config, mockIndexer)
 	require.NoError(t, err)
 
 	// Create context for the pool
