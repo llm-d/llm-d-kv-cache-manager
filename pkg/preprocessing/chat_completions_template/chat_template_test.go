@@ -1,4 +1,4 @@
-//go:build exclude
+//go:build exclude || chat_completions
 
 /*
 Copyright 2025 The llm-d Authors.
@@ -16,6 +16,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:staticcheck // ST1003: package name uses underscores but we want to keep it for clarity.
+//nolint:testpackage // testpackage: we want to test internal functions from the same package.
 package chat_completions_template
 
 import (
@@ -31,14 +33,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Global singleton wrapper to prevent multiple Python interpreter initializations
+// Global singleton wrapper to prevent multiple Python interpreter initializations.
 var (
 	globalWrapper     *ChatTemplateCGoWrapper
 	globalWrapperOnce sync.Once
 	globalWrapperMu   sync.Mutex
 )
 
-// getGlobalWrapper returns a singleton wrapper instance
+// getGlobalWrapper returns a singleton wrapper instance.
 func getGlobalWrapper() *ChatTemplateCGoWrapper {
 	globalWrapperOnce.Do(func() {
 		globalWrapper = NewChatTemplateCGoWrapper()
@@ -50,7 +52,7 @@ func getGlobalWrapper() *ChatTemplateCGoWrapper {
 	return globalWrapper
 }
 
-// cleanupGlobalWrapper finalizes the global wrapper (called once at the end of all tests)
+// cleanupGlobalWrapper finalizes the global wrapper (called once at the end of all tests).
 func cleanupGlobalWrapper() {
 	globalWrapperMu.Lock()
 	defer globalWrapperMu.Unlock()
@@ -77,7 +79,7 @@ func cleanupGlobalWrapper() {
 	}
 }
 
-// TestGetModelChatTemplate tests the get_model_chat_template function
+// TestGetModelChatTemplate tests the get_model_chat_template function.
 func TestGetModelChatTemplate(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
@@ -139,7 +141,7 @@ func TestGetModelChatTemplate(t *testing.T) {
 	}
 }
 
-// TestRenderJinjaTemplate tests the render_jinja_template function
+// TestRenderJinjaTemplate tests the render_jinja_template function.
 func TestRenderJinjaTemplate(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
@@ -237,12 +239,11 @@ func TestRenderJinjaTemplate(t *testing.T) {
 					}
 				}
 			}
-			return
 		})
 	}
 }
 
-// TestTemplateCaching tests the caching functionality
+// TestTemplateCaching tests the caching functionality.
 func TestTemplateCaching(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
@@ -274,14 +275,14 @@ func TestTemplateCaching(t *testing.T) {
 	assert.Equal(t, vars1, vars2, "Cached and non-cached vars should be identical")
 
 	// Verify performance improvement
-	t.Logf("First call duration: %v, Second call duration: %v, Speedup: %.1fx", duration1, duration2, float64(duration1)/float64(duration2))
+	t.Logf("First call duration: %v, Second call duration: %v, Speedup: %.1fx",
+		duration1, duration2, float64(duration1)/float64(duration2))
 
 	// Cache hit should be significantly faster
 	assert.Less(t, duration2, duration1, "Cache hit should be faster than cache miss")
-	return
 }
 
-// TestChatCompletionsIntegration tests the complete chat completions workflow
+// TestChatCompletionsIntegration tests the complete chat completions workflow.
 func TestChatCompletionsIntegration(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
@@ -314,7 +315,8 @@ func TestChatCompletionsIntegration(t *testing.T) {
 					{Role: "user", Content: "Hello, how are you?"},
 					{Role: "assistant", Content: "I'm doing well, thank you! How can I help you today?"},
 					{Role: "user", Content: "Can you tell me about machine learning?"},
-					{Role: "assistant", Content: "Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed."},
+					{Role: "assistant", Content: "Machine learning is a subset of artificial intelligence " +
+						"that enables computers to learn and make decisions from data without being explicitly programmed."},
 				},
 			},
 			description: "Multi-turn conversation with follow-up questions",
@@ -326,7 +328,8 @@ func TestChatCompletionsIntegration(t *testing.T) {
 				{
 					{Role: "system", Content: "You are a helpful AI assistant specialized in coding."},
 					{Role: "user", Content: "Write a Python function to calculate fibonacci numbers."},
-					{Role: "assistant", Content: "Here's a Python function to calculate fibonacci numbers:\n\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"},
+					{Role: "assistant", Content: "Here's a Python function to calculate fibonacci numbers:\n" +
+						"def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"},
 				},
 			},
 			description: "Conversation with system message and code generation",
@@ -383,17 +386,25 @@ func TestChatCompletionsIntegration(t *testing.T) {
 			}
 
 			// Log performance metrics
-			t.Logf("Template fetch duration: %v, Render duration: %v, Total duration: %v", templateDuration, renderDuration, templateDuration+renderDuration)
+			t.Logf("Template fetch duration: %v, Render duration: %v, Total duration: %v",
+				templateDuration, renderDuration, templateDuration+renderDuration)
 		})
 	}
-	return
 }
 
-// TestVLLMValidation tests that our chat template rendering matches VLLM's expected output
+// TestVLLMValidation tests that our chat template rendering matches VLLM's expected output.
 func TestVLLMValidation(t *testing.T) {
 	// Test IBM Granite model
 	t.Run("IBM_Granite", func(t *testing.T) {
-		expectedVLLMOutput := "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024.\nToday's Date: August 06, 2025.\nYou are Granite, developed by IBM. Write the response to the user's input by strictly aligning with the facts in the provided documents. If the information needed to answer the question is not available in the documents, inform the user that the question cannot be answered based on the available data.<|end_of_text|>\n<|start_of_role|>document {\"document_id\": \"\"}<|end_of_role|>\nThe weather in Paris is sunny and 25°C.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>What is the weather in Paris?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Let me check that for you.<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+		expectedVLLMOutput := "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024.\n" +
+			"Today's Date: August 06, 2025.\n" +
+			"You are Granite, developed by IBM. Write the response to the user's input by strictly aligning with the facts in the provided documents. " +
+			"If the information needed to answer the question is not available in the documents, inform the user that the question cannot be answered based on the available data.<|end_of_text|>\n" +
+			"<|start_of_role|>document {\"document_id\": \"\"}<|end_of_role|>\n" +
+			"The weather in Paris is sunny and 25°C.<|end_of_text|>\n" +
+			"<|start_of_role|>user<|end_of_role|>What is the weather in Paris?<|end_of_text|>\n" +
+			"<|start_of_role|>assistant<|end_of_role|>Let me check that for you.<|end_of_text|>\n" +
+			"<|start_of_role|>assistant<|end_of_role|>"
 		runVLLMValidationTest(t, "ibm-granite/granite-3.3-8b-instruct", expectedVLLMOutput)
 	})
 
@@ -402,10 +413,9 @@ func TestVLLMValidation(t *testing.T) {
 		expectedVLLMOutput := "<|user|>\nWhat is the weather in Paris?</s>\n<|assistant|>\nLet me check that for you.</s>\n<|assistant|>\n"
 		runVLLMValidationTest(t, "TinyLlama/TinyLlama-1.1B-Chat-v1.0", expectedVLLMOutput)
 	})
-	return
 }
 
-// TestLongChatCompletions tests with longer, more complex conversations
+// TestLongChatCompletions tests with longer, more complex conversations.
 func TestLongChatCompletions(t *testing.T) {
 	wrapper := getGlobalWrapper()
 
@@ -416,15 +426,20 @@ func TestLongChatCompletions(t *testing.T) {
 	// Create a long conversation
 	longConversation := [][]ChatMessage{
 		{
-			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. Provide detailed, accurate responses."},
+			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, and system design. " +
+				"Provide detailed, accurate responses."},
 			{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me design the architecture?"},
 			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend starting with a layered architecture. Let's break this down into components."},
 			{Role: "user", Content: "What about memory management and eviction policies?"},
-			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an LRU (Least Recently Used) eviction policy with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a doubly-linked list for tracking access order."},
+			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an LRU (Least Recently Used) eviction policy " +
+				"with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a doubly-linked list for tracking access order."},
 			{Role: "user", Content: "How should I handle concurrent access and thread safety?"},
-			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is to use sync.RWMutex for read-write locks, allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map for simpler cases or implement a lock-free design with atomic operations for maximum performance."},
+			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is to use sync.RWMutex for read-write locks, " +
+				"allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map for simpler cases or implement a lock-free design " +
+				"with atomic operations for maximum performance."},
 			{Role: "user", Content: "What about persistence and recovery?"},
-			{Role: "assistant", Content: "For persistence, consider using a write-ahead log (WAL) pattern. This involves logging all mutations to disk before applying them to memory. For recovery, you can replay the log to reconstruct the cache state. You might also want to implement periodic snapshots for faster recovery."},
+			{Role: "assistant", Content: "For persistence, consider using a write-ahead log (WAL) pattern. This involves logging all mutations to disk before applying them to memory. " +
+				"For recovery, you can replay the log to reconstruct the cache state. You might also want to implement periodic snapshots for faster recovery."},
 		},
 	}
 
@@ -454,22 +469,25 @@ func TestLongChatCompletions(t *testing.T) {
 		// Verify results
 		rendered := response.RenderedChats[0]
 		assert.NotEmpty(t, rendered, "Long conversation should render successfully")
-		assert.Greater(t, len(rendered), 1000, "Long conversation should produce substantial output")
+		assert.Greater(t, len(rendered), 1000,
+			"Long conversation should produce substantial output")
 
 		// Performance metrics
-		t.Logf("Template fetch: %v, Long conversation render: %v, Total processing time: %v", templateDuration, renderDuration, templateDuration+renderDuration)
+		t.Logf("Template fetch: %v, Long conversation render: %v, Total processing time: %v",
+			templateDuration, renderDuration, templateDuration+renderDuration)
 
 		// Verify all messages are present
 		for _, conversation := range longConversation {
 			for _, message := range conversation {
-				assert.Contains(t, rendered, message.Content, "All message content should be present in rendered output")
+				assert.Contains(t, rendered, message.Content,
+					"All message content should be present in rendered output")
 			}
 		}
 	})
 	return
 }
 
-// BenchmarkGetModelChatTemplate benchmarks the template fetching performance
+// BenchmarkGetModelChatTemplate benchmarks the template fetching performance.
 func BenchmarkGetModelChatTemplate(b *testing.B) {
 	wrapper := getGlobalWrapper()
 
@@ -512,7 +530,7 @@ func BenchmarkGetModelChatTemplate(b *testing.B) {
 	b.ReportMetric(float64(warmAvg.Nanoseconds()), "ns/op_warm")
 }
 
-// BenchmarkRenderJinjaTemplate benchmarks the template rendering performance
+// BenchmarkRenderJinjaTemplate benchmarks the template rendering performance.
 func BenchmarkRenderJinjaTemplate(b *testing.B) {
 	wrapper := getGlobalWrapper()
 
@@ -569,7 +587,7 @@ func BenchmarkRenderJinjaTemplate(b *testing.B) {
 	b.ReportMetric(float64(warmAvg.Nanoseconds()), "ns/op_warm")
 }
 
-// Helper function
+// Helper function.
 func minLength(a, b int) int {
 	if a < b {
 		return a
@@ -577,7 +595,8 @@ func minLength(a, b int) int {
 	return b
 }
 
-// normalizeDateInOutput replaces the date in the output with the expected date for comparison. This is for TestVLLMValidation2, which tests Granite, that has a system prompt with today's date.
+// normalizeDateInOutput replaces the date in the output with the expected date for comparison.
+// This is for TestVLLMValidation2, which tests Granite, that has a system prompt with today's date.
 func normalizeDateInOutput(output, expected string) string {
 	// Find the date pattern in our output: "Today's Date: " followed by date and ".\n"
 	datePattern := "Today's Date: "
@@ -614,8 +633,9 @@ func normalizeDateInOutput(output, expected string) string {
 	return beforeDate + expectedDate + afterDate
 }
 
-// runVLLMValidationTest runs a VLLM validation test with the given model and expected output
+// runVLLMValidationTest runs a VLLM validation test with the given model and expected output.
 func runVLLMValidationTest(t *testing.T, modelName, expectedVLLMOutput string) {
+	t.Helper()
 	wrapper := getGlobalWrapper()
 
 	// Test case based on the provided VLLM request
@@ -665,8 +685,9 @@ func runVLLMValidationTest(t *testing.T, modelName, expectedVLLMOutput string) {
 	compareVLLMOutput(t, renderedOutput, expectedVLLMOutput)
 }
 
-// compareVLLMOutput compares our rendered output with expected VLLM output and reports the result
+// compareVLLMOutput compares our rendered output with expected VLLM output and reports the result.
 func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) {
+	t.Helper()
 	// Create a flexible comparison that handles dynamic dates
 	// Replace the date in our output with the expected date for comparison
 	normalizedOutput := normalizeDateInOutput(renderedOutput, expectedVLLMOutput)
@@ -680,12 +701,15 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 	// Option 2: Perfect prefix (our output is a prefix of expected, after date normalization)
 	if strings.HasPrefix(expectedVLLMOutput, normalizedOutput) {
 		suffix := expectedVLLMOutput[len(normalizedOutput):]
-		t.Logf("✅ PERFECT PREFIX: Our output is a perfect prefix of VLLM expected output (after date normalization). Missing suffix: %q. This might be expected if VLLM adds additional tokens", suffix)
+		t.Logf("✅ PERFECT PREFIX: Our output is a perfect prefix of VLLM expected output (after date normalization). "+
+			"Missing suffix: %q. This might be expected if VLLM adds additional tokens", suffix)
 		return
 	}
 
 	// Option 3: Neither - failed result
-	t.Logf("❌ FAILED: Our output does not match VLLM expected output (even after date normalization). Our output length: %d, Expected length: %d, Normalized output: %q", len(renderedOutput), len(expectedVLLMOutput), normalizedOutput)
+	t.Logf("❌ FAILED: Our output does not match VLLM expected output (even after date normalization). "+
+		"Our output length: %d, Expected length: %d, Normalized output: %q",
+		len(renderedOutput), len(expectedVLLMOutput), normalizedOutput)
 
 	// Find the first difference
 	minLen := minLength(len(normalizedOutput), len(expectedVLLMOutput))
@@ -700,7 +724,7 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 	t.Fail() // Mark test as failed
 }
 
-// TestMain runs before and after all tests
+// TestMain runs before and after all tests.
 func TestMain(m *testing.M) {
 	// Run all tests
 	code := m.Run()

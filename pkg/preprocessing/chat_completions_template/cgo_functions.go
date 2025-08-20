@@ -1,5 +1,6 @@
-//go:build exclude
+//go:build exclude || chat_completions
 
+//nolint:gocritic // dupImport: false positive, imports are correct.
 /*
 Copyright 2025 The llm-d Authors.
 
@@ -16,6 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:staticcheck // ST1003: package name uses underscores but we want to keep it for clarity.
 package chat_completions_template
 
 import (
@@ -35,33 +37,32 @@ import (
 */
 import "C"
 
-// ChatMessage represents a single message in a conversation
+// ChatMessage represents a single message in a conversation.
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ChatTemplateRequest represents the request to render a chat template
+// ChatTemplateRequest represents the request to render a chat template.
 type ChatTemplateRequest struct {
 	Conversations             [][]ChatMessage        `json:"conversations"`
 	Tools                     []interface{}          `json:"tools,omitempty"`
 	Documents                 []interface{}          `json:"documents,omitempty"`
-	ChatTemplate              string                 `json:"chat_template,omitempty"`
-	ReturnAssistantTokensMask bool                   `json:"return_assistant_tokens_mask,omitempty"`
-	ContinueFinalMessage      bool                   `json:"continue_final_message,omitempty"`
-	AddGenerationPrompt       bool                   `json:"add_generation_prompt,omitempty"`
-	TemplateVars              map[string]interface{} `json:"template_vars,omitempty"`
+	ChatTemplate              string                 `json:"chatTemplate,omitempty"`
+	ReturnAssistantTokensMask bool                   `json:"returnAssistantTokensMask,omitempty"`
+	ContinueFinalMessage      bool                   `json:"continueFinalMessage,omitempty"`
+	AddGenerationPrompt       bool                   `json:"addGenerationPrompt,omitempty"`
+	TemplateVars              map[string]interface{} `json:"templateVars,omitempty"`
 }
 
-// ChatTemplateResponse represents the response from the Python function
+// ChatTemplateResponse represents the response from the Python function.
 type ChatTemplateResponse struct {
-	RenderedChats     []string  `json:"rendered_chats"`
-	GenerationIndices [][][]int `json:"generation_indices"`
+	RenderedChats     []string  `json:"renderedChats"`
+	GenerationIndices [][][]int `json:"generationIndices"`
 }
 
-// ChatTemplateCGoWrapper wraps the CGo functions for chat template operations
-type ChatTemplateCGoWrapper struct {
-}
+// ChatTemplateCGoWrapper wraps the CGo functions for chat template operations.
+type ChatTemplateCGoWrapper struct{}
 
 // NewChatTemplateCGoWrapper creates a new CGo wrapper.
 // IMPORTANT: You must call Initialize() on the returned wrapper before using any methods.
@@ -69,7 +70,7 @@ func NewChatTemplateCGoWrapper() *ChatTemplateCGoWrapper {
 	return &ChatTemplateCGoWrapper{}
 }
 
-// Initialize initializes the Python interpreter and caches the module
+// Initialize initializes the Python interpreter and caches the module.
 func (w *ChatTemplateCGoWrapper) Initialize() error {
 	// Initialize Python interpreter - C handles process-level tracking
 	C.Py_InitializeGo()
@@ -83,7 +84,7 @@ func (w *ChatTemplateCGoWrapper) Initialize() error {
 	return nil
 }
 
-// Finalize finalizes the Python interpreter and cleans up the module
+// Finalize finalizes the Python interpreter and cleans up the module.
 func (w *ChatTemplateCGoWrapper) Finalize() {
 	// Clean up the module first
 	C.Py_CleanupChatTemplateModule()
@@ -94,6 +95,8 @@ func (w *ChatTemplateCGoWrapper) Finalize() {
 
 // RenderChatTemplate renders a chat template using the cached Python function.
 // REQUIRES: The wrapper must be initialized before calling this method.
+//
+//nolint:gocritic // hugeParam: req is passed by value intentionally for immutability, but can consider using pointer.
 func (w *ChatTemplateCGoWrapper) RenderChatTemplate(ctx context.Context, req ChatTemplateRequest) (*ChatTemplateResponse, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("chat-template.RenderChatTemplate")
 
@@ -122,25 +125,30 @@ func (w *ChatTemplateCGoWrapper) RenderChatTemplate(ctx context.Context, req Cha
 	return &response, nil
 }
 
-// Struct for the chat template fetch request
+// Struct for the chat template fetch request.
 type GetChatTemplateRequest struct {
-	ModelName    string        `json:"model_name"`
-	ChatTemplate string        `json:"chat_template,omitempty"`
+	ModelName    string        `json:"modelName"`
+	ChatTemplate string        `json:"chatTemplate,omitempty"`
 	Tools        []interface{} `json:"tools,omitempty"`
 	Revision     string        `json:"revision,omitempty"`
 	Token        string        `json:"token,omitempty"`
 }
 
-// Struct for the response
-// GetModelChatTemplateResponse holds the template and template variables
+// Struct for the response.
+// GetModelChatTemplateResponse holds the template and template variables.
 type GetModelChatTemplateResponse struct {
 	Template     string                 `json:"template"`
-	TemplateVars map[string]interface{} `json:"template_vars"`
+	TemplateVars map[string]interface{} `json:"templateVars"`
 }
 
 // GetModelChatTemplate fetches the model chat template using the cached Python function.
 // REQUIRES: The wrapper must be initialized before calling this method.
-func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(ctx context.Context, req GetChatTemplateRequest) (string, map[string]interface{}, error) {
+//
+//nolint:gocritic // hugeParam: req is passed by value intentionally for immutability, but can consider using pointer.
+func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(
+	ctx context.Context,
+	req GetChatTemplateRequest,
+) (template string, templateVars map[string]interface{}, err error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("chat-template.GetModelChatTemplate")
 
 	// Convert request to JSON
@@ -165,7 +173,9 @@ func (w *ChatTemplateCGoWrapper) GetModelChatTemplate(ctx context.Context, req G
 		return "", nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return response.Template, response.TemplateVars, nil
+	template = response.Template
+	templateVars = response.TemplateVars
+	return
 }
 
 // ClearCaches clears all caches for testing purposes.

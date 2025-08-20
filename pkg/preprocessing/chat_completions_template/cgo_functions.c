@@ -176,17 +176,9 @@ int Py_InitChatTemplateModule() {
     // Acquire GIL for module initialization
     PyGILState_STATE gil_state = PyGILState_Ensure();
     
-    // Add current directory to Python path
-    PyObject* sys_path = PySys_GetObject("path");
-    if (sys_path) {
-        PyObject* current_dir = PyUnicode_FromString(".");
-        if (current_dir) {
-            PyList_Insert(sys_path, 0, current_dir);
-            Py_DECREF(current_dir);
-        }
-    }
+
     
-    // Import the chat template wrapper module
+    // Import the chat template wrapper module AFTER setting up the path
     g_chat_template_module = PyImport_ImportModule("chat_template_wrapper");
     if (!g_chat_template_module) {
         printf("[C] Py_InitChatTemplateModule ERROR - Failed to import chat_template_wrapper module\n");
@@ -233,22 +225,18 @@ int Py_InitChatTemplateModule() {
     return 0;
 }
 
+
+
 // Call the cached render_jinja_template function
 char* Py_CallRenderJinjaTemplate(const char* json_request) {
-    // Try the call first
+    // Try direct call first (fast path)
     char* result = Py_CallRenderJinjaTemplateInternal(json_request);
     if (result != NULL) {
-        return result;
+        return result;  // Success on first try
     }
     
-    int reinit_result = Py_ReinitializeGo();
-    if (reinit_result != 0) {
-        printf("[C] Py_CallRenderJinjaTemplate ERROR - Failed to re-initialize\n");
+    // If failed, just return NULL (no retry, no reload)
         return NULL;
-    }
-    
-    printf("[C] Py_CallRenderJinjaTemplate - Re-initialized, trying call again\n");
-    return Py_CallRenderJinjaTemplateInternal(json_request);
 }
 
 // Internal function that does the actual work
@@ -315,16 +303,28 @@ char* Py_CallRenderJinjaTemplateInternal(const char* json_request) {
 
 // Call the cached get_model_chat_template function
 char* Py_CallGetModelChatTemplate(const char* json_request) {    
+    // Try direct call first (fast path)
+    char* result = Py_CallGetModelChatTemplateInternal(json_request);
+    if (result != NULL) {
+        return result;  // Success on first try
+    }
+    
+    // If failed, just return NULL (no retry, no reload)
+    return NULL;
+}
+
+// Internal function that does the actual work
+char* Py_CallGetModelChatTemplateInternal(const char* json_request) {    
     // Check if Python is initialized
     if (!g_python_initialized) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Python not initialized\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Python not initialized\n");
         fflush(stdout);
         return NULL;
     }
     
     // Validate cached function
     if (!g_get_model_chat_template_func) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Cached function is NULL\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Cached function is NULL\n");
         fflush(stdout);
         return NULL;
     }
@@ -332,14 +332,14 @@ char* Py_CallGetModelChatTemplate(const char* json_request) {
     // Validate that the cached function is still a valid Python object
     fflush(stdout);
     if (!PyCallable_Check(g_get_model_chat_template_func)) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Cached function is not callable (corrupted?)\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Cached function is not callable (corrupted?)\n");
         fflush(stdout);
         return NULL;
     }
     
     // Validate input
     if (!json_request) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Input is NULL\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Input is NULL\n");
         fflush(stdout);
         return NULL;
     }
@@ -350,7 +350,7 @@ char* Py_CallGetModelChatTemplate(const char* json_request) {
     // Create Python string from JSON request
     PyObject* py_json = PyUnicode_FromString(json_request);
     if (!py_json) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Failed to create Python string\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Failed to create Python string\n");
         fflush(stdout);
         PyGILState_Release(gil_state);
         return NULL;
@@ -359,7 +359,7 @@ char* Py_CallGetModelChatTemplate(const char* json_request) {
     // Create arguments tuple
     PyObject* args = PyTuple_Pack(1, py_json);
     if (!args) {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Failed to create args tuple\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Failed to create args tuple\n");
         fflush(stdout);
         Py_DECREF(py_json);
         PyGILState_Release(gil_state);
@@ -380,12 +380,12 @@ char* Py_CallGetModelChatTemplate(const char* json_request) {
         if (s) {
             cresult = strdup(s);
         } else {
-            printf("[C] Py_CallGetModelChatTemplate ERROR - Failed to convert result to C string\n");
+            printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Failed to convert result to C string\n");
             fflush(stdout);
         }
         Py_DECREF(py_result);
     } else {
-        printf("[C] Py_CallGetModelChatTemplate ERROR - Python function returned NULL\n");
+        printf("[C] Py_CallGetModelChatTemplateInternal ERROR - Python function returned NULL\n");
         fflush(stdout);
         PyErr_Print();
         fflush(stderr);

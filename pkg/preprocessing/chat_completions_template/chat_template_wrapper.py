@@ -23,22 +23,25 @@ import logging
 import sys
 from typing import Optional, Union
 
-# Import core functions from transformers
-try:
-    from transformers.utils.chat_template_utils import render_jinja_template as transformers_render_jinja_template, get_json_schema
-    from transformers import AutoTokenizer
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    # Fallback: if transformers is not available, we'll provide a minimal implementation
-    def transformers_render_jinja_template(*args, **kwargs):
-        raise ImportError("transformers library is required but not available")
-    
-    def get_json_schema(*args, **kwargs):
-        raise ImportError("transformers library is required but not available")
-    
-    def AutoTokenizer(*args, **kwargs):
-        raise ImportError("transformers library is required but not available")
+# Import core functions from transformers - moved to function level to avoid import errors
+TRANSFORMERS_AVAILABLE = None  # Will be set when first needed
+
+def _ensure_transformers_available():
+    """Ensure transformers is available, importing it if needed."""
+    global TRANSFORMERS_AVAILABLE
+    if TRANSFORMERS_AVAILABLE is None:
+        try:
+            print("[Python] Attempting to import transformers...")
+            from transformers.utils.chat_template_utils import render_jinja_template as transformers_render_jinja_template, get_json_schema
+            from transformers import AutoTokenizer
+            print("[Python] Successfully imported transformers!")
+            TRANSFORMERS_AVAILABLE = True
+            return True
+        except ImportError as e:
+            print(f"[Python] Failed to import transformers: {e}")
+            TRANSFORMERS_AVAILABLE = False
+            return False
+    return TRANSFORMERS_AVAILABLE
 
 # Basic logging setup
 logger = logging.getLogger(__name__)
@@ -92,8 +95,11 @@ def render_jinja_template(request_json):
         str: JSON string containing 'rendered_chats' and 'generation_indices' keys.
     """
     
-    if not TRANSFORMERS_AVAILABLE:
+    if not _ensure_transformers_available():
         raise ImportError("transformers library is required for render_jinja_template")
+        
+    # Import the modules we need
+    from transformers.utils.chat_template_utils import render_jinja_template as transformers_render_jinja_template
         
     # Parse the JSON request
     request = json.loads(request_json)
@@ -101,8 +107,12 @@ def render_jinja_template(request_json):
     # Use the correct approach: spread template_vars as individual arguments
     try:
         # Get template_vars and spread them as individual arguments
-        template_vars = request.pop('template_vars', {})
+        template_vars = request.pop('templateVars', {})
         request.update(template_vars)
+        
+        # Extract and rename fields to match what transformers expects
+        if 'chatTemplate' in request:
+            request['chat_template'] = request.pop('chatTemplate')
         
         rendered_chats, generation_indices = transformers_render_jinja_template(**request)
         
@@ -111,8 +121,8 @@ def render_jinja_template(request_json):
     
     # Return as JSON string
     result = json.dumps({
-        "rendered_chats": rendered_chats,
-        "generation_indices": generation_indices
+        "renderedChats": rendered_chats,
+        "generationIndices": generation_indices
     })
     return result
 
@@ -133,15 +143,15 @@ def get_model_chat_template(request_json):
     Returns:
         str: JSON string containing 'template' and 'template_vars' keys.
     """    
-    if not TRANSFORMERS_AVAILABLE:
+    if not _ensure_transformers_available():
         print("[Python] get_model_chat_template ERROR - Transformers not available")
         raise ImportError("transformers library is required for get_model_chat_template")
     
     # Parse the JSON request
     request = json.loads(request_json)
     
-    model_name = request.get("model_name")
-    chat_template = request.get("chat_template")
+    model_name = request.get("modelName")
+    chat_template = request.get("chatTemplate")
     tools = request.get("tools")
     revision = request.get("revision")
     token = request.get("token")
@@ -163,6 +173,9 @@ def get_model_chat_template(request_json):
                 cached_result["template"] = chat_template
             return json.dumps(cached_result)
         
+    # Import the modules we need
+    from transformers import AutoTokenizer
+    
     # Load from Hugging Face
     tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision, token=token, trust_remote_code=True)
     template = tokenizer.chat_template if chat_template is None else chat_template
@@ -171,7 +184,7 @@ def get_model_chat_template(request_json):
     template_vars = _collect_template_vars(tokenizer)
     
     # Cache the result
-    result = {"template": template, "template_vars": template_vars}
+    result = {"template": template, "templateVars": template_vars}
     with lock:
         _template_cache[cache_key] = result.copy()  # Cache a copy to avoid reference issues
     
@@ -180,7 +193,7 @@ def get_model_chat_template(request_json):
 
 def main():
     """Example usage and testing function."""
-    if not TRANSFORMERS_AVAILABLE:
+    if not _ensure_transformers_available():
         print("Error: transformers library is required but not available")
         print("Please install transformers: pip install transformers")
         return

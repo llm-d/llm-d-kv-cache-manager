@@ -27,6 +27,8 @@ help: ## Print help
 LDFLAGS ?= -extldflags '-L$(shell pwd)/lib'
 CGO_ENABLED=1
 TOKENIZER_LIB = lib/libtokenizers.a
+
+
 # Extract RELEASE_VERSION from Dockerfile
 TOKENIZER_VERSION := $(shell grep '^ARG RELEASE_VERSION=' Dockerfile | cut -d'=' -f2)
 
@@ -77,16 +79,16 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 .PHONY: unit-test
 unit-test: download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
-	go test -ldflags="$(LDFLAGS)" ./pkg/...
+	PYTHONPATH=$(PWD)/pkg/preprocessing/chat_completions_template go test -ldflags="$(LDFLAGS)" ./pkg/...
 	@printf "\033[33;1m==== Running chat template tests ====\033[0m\n"
-	go test -tags=exclude -v -ldflags="$(LDFLAGS)" ./pkg/preprocessing/chat_completions_template/
+	PYTHONPATH=$(PWD)/pkg/preprocessing/chat_completions_template go test -tags=exclude -v -ldflags="$(LDFLAGS)" ./pkg/preprocessing/chat_completions_template/
 	@printf "\033[33;1m==== Running chat template benchmarks ====\033[0m\n"
-	go test -tags=exclude -bench=. -benchmem -ldflags="$(LDFLAGS)" ./pkg/preprocessing/chat_completions_template/
+	PYTHONPATH=$(PWD)/pkg/preprocessing/chat_completions_template go test -tags=exclude -bench=. -benchmem -ldflags="$(LDFLAGS)" ./pkg/preprocessing/chat_completions_template/
 
 .PHONY: e2e-test
 e2e-test: download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Running e2e tests ====\033[0m\n"
-	go test -v -ldflags="$(LDFLAGS)" ./tests/...
+	PYTHONPATH=$(PWD)/pkg/preprocessing/chat_completions_template go test -v -ldflags="$(LDFLAGS)" ./tests/...
 
 ##@ Build
 
@@ -101,9 +103,14 @@ detect-python:
 		echo "Using system Python"; \
 		PYTHON_PATH=$$(python3 -c "import sys; print(sys.prefix)"); \
 		PYTHON_VERSION=$$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"); \
-		sed -i.bak "s|{{PYTHON_PATH}}|$$PYTHON_PATH|g; s|{{PYTHON_VERSION}}|$$PYTHON_VERSION|g" \
-			pkg/preprocessing/chat_completions_template/cgo_functions.go; \
-		rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak; \
+		if [[ "$(TARGETOS)" = "darwin" ]]; then \
+			sed -i '' "s|{{PYTHON_PATH}}|$$PYTHON_PATH|g; s|{{PYTHON_VERSION}}|$$PYTHON_VERSION|g" \
+				pkg/preprocessing/chat_completions_template/cgo_functions.go; \
+		else \
+			sed -i.bak "s|{{PYTHON_PATH}}|$$PYTHON_PATH|g; s|{{PYTHON_VERSION}}|$$PYTHON_VERSION|g" \
+				pkg/preprocessing/chat_completions_template/cgo_functions.go; \
+			rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak; \
+		fi; \
 	else \
 		echo "System Python not found, downloading..."; \
 		$(MAKE) download-python; \
@@ -124,9 +131,14 @@ download-python:
 		fi; \
 	fi
 	@# Update CGo flags with downloaded Python path
-	@sed -i.bak "s|{{PYTHON_PATH}}|$(PWD)/$(PYTHON_DIR)|g; s|{{PYTHON_VERSION}}|$(PYTHON_VERSION)|g" \
-		pkg/preprocessing/chat_completions_template/cgo_functions.go
-	@rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak
+	@if [[ "$(TARGETOS)" = "darwin" ]]; then \
+		sed -i '' "s|{{PYTHON_PATH}}|$(PWD)/$(PYTHON_DIR)|g; s|{{PYTHON_VERSION}}|$(PYTHON_VERSION)|g" \
+			pkg/preprocessing/chat_completions_template/cgo_functions.go; \
+	else \
+		sed -i.bak "s|{{PYTHON_PATH}}|$(PWD)/$(PYTHON_DIR)|g; s|{{PYTHON_VERSION}}|$(PYTHON_VERSION)|g" \
+			pkg/preprocessing/chat_completions_template/cgo_functions.go; \
+		rm -f pkg/preprocessing/chat_completions_template/cgo_functions.go.bak; \
+	fi
 
 .PHONY: install-python-deps
 install-python-deps: detect-python
@@ -140,7 +152,7 @@ install-python-deps: detect-python
 .PHONY: build
 build: check-go download-tokenizer detect-python install-python-deps download-zmq
 	@printf "\033[33;1m==== Building ====\033[0m\n"
-	go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
+	PYTHONPATH=$(PWD)/pkg/preprocessing/chat_completions_template go build -ldflags="$(LDFLAGS)" -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
 
 .PHONY:	image-build
 image-build: check-container-tool load-version-json ## Build Docker image ## Build Docker image using $(CONTAINER_TOOL)
