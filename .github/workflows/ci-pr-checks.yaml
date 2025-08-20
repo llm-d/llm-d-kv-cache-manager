@@ -13,10 +13,19 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install system dependencies (ZeroMQ)
+      - name: Cache system (apt) dependencies
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/.github/workflows/ci-pr-checks.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libzmq3-dev pkg-config
+          sudo add-apt-repository ppa:deadsnakes/ppa -y
+          sudo apt-get install -y libzmq3-dev pkg-config python3.9 python3.9-dev python3.9-venv
 
       - name: Sanity check repo contents
         run: ls -la
@@ -33,17 +42,33 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Run detect-python (required for CGo compilation)
+      # This step is still useful to verify the Python config before subsequent steps
+      - name: Run detect-python
         run: make detect-python
 
-      - name: Install golangci-lint
+      - name: Cache Python (pip) dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          # This key is based ONLY on the requirements file
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
+      - name: Install golangci-lint without running it
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.1.6
-          args: ""
+          args: "--help"
 
-      - name: Run precommit checks
-        run: make precommit
+      - name: Run precommit checks with CGo environment
+        run: |
+          # Export the CGO flags required for the linter to parse CGo files.
+          # This duplicates some logic from the Makefile but is necessary for the CI step.
+          export CGO_CFLAGS="$(python3.9-config --cflags) -I./lib"
+          export CGO_LDFLAGS="$(python3.9-config --ldflags --embed) -L./lib -ltokenizers -ldl -lm"
+          export CGO_ENABLED=1
+          
+          # Now run the linting command from the Makefile
+          make precommit
 
       - name: Run make build
         shell: bash

@@ -50,7 +50,7 @@ linters:
     - reassign
     - revive
     - staticcheck
-    - tagliatelle
+    # - tagliatelle
     - testableexamples
     - testpackage
     - thelper

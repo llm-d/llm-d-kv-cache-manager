@@ -244,7 +244,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	}
 	template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
 	s.Require().NoError(err, "Failed to get model chat template")
-	s.Require().NotEmpty(template, "Template should not be empty")
+	s.Require().NotEmpty(template, "ChatTemplate should not be empty")
 
 	// Step 2: Render the conversation using the template.
 	renderRequest := ChatTemplateRequest{
@@ -320,7 +320,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	}
 	template, templateVars, err := wrapper.GetModelChatTemplate(templateRequest)
 	s.Require().NoError(err, "Failed to get model chat template")
-	s.Require().NotEmpty(template, "Template should not be empty")
+	s.Require().NotEmpty(template, "ChatTemplate should not be empty")
 
 	// Step 2: Render the long conversation.
 	renderRequest := ChatTemplateRequest{

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,11 +32,11 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 )
 
 const (
 	envHFToken     = "HF_TOKEN"
-	envModelName   = "MODEL_NAME"
 	envZMQEndpoint = "ZMQ_ENDPOINT"
 	envZMQTopic    = "ZMQ_TOPIC"
 
@@ -52,6 +52,107 @@ const (
 	defaultHTTPPort = "8080"
 )
 
+// ChatCompletionsRequest holds the fields needed for chat-completions rendering.
+type ChatCompletionsRequest struct {
+	Model string `json:"model"`
+	*preprocessing.RenderJinjaTemplateRequest
+}
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	logger := klog.FromContext(ctx)
+
+	if err := run(ctx); err != nil {
+		logger.Error(err, "Failed to run unified KV-cache service")
+		return
+	}
+}
+
+func run(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
+
+	// Create a cancellable context for the service
+	serviceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Setup Python path environment for chat completions
+	logger.Info("Setting up Python path environment...")
+	if err := setupPythonPath(ctx); err != nil {
+		logger.Error(err, "Failed to setup Python path")
+		return err
+	}
+
+	// Setup chat-templating processor
+	logger.Info("Initializing chat-templating processor...")
+	chatTemplatingProcessor, err := setupChatTemplatingProcessor()
+	if err != nil {
+		logger.Error(err, "Failed to setup chat-templating processor")
+		return err
+	}
+	defer chatTemplatingProcessor.Finalize()
+	logger.Info("Chat-templating processor initialized successfully")
+
+	// Setup KV Cache Indexer
+	kvCacheIndexer, err := setupKVCacheIndexer(serviceCtx)
+	if err != nil {
+		logger.Error(err, "failed to setup KVCacheIndexer")
+		return err
+	}
+
+	// Setup events pool
+	eventsPool := setupEventsPool(serviceCtx, kvCacheIndexer.KVBlockIndex())
+	eventsPool.Start(serviceCtx)
+	logger.Info("Events pool started and listening for ZMQ messages")
+
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		logger.Info("Received shutdown signal")
+		cancel()
+	}()
+
+	// Setup HTTP endpoints
+	setupUnifiedHTTPEndpoints(serviceCtx, kvCacheIndexer, chatTemplatingProcessor)
+
+	logger.Info("=== Online KV Events Example Started ===")
+	logger.Info("HTTP server running on http://localhost:8080")
+	logger.Info("Available endpoints:")
+	logger.Info("  - POST /score_completions - Score /v1/completions requests")
+	logger.Info("  - POST /score_chat_completions - Score /v1/chat_completions requests")
+
+	// Wait for shutdown
+	<-serviceCtx.Done()
+	logger.Info("Shutting down KV-cache service...")
+	return nil
+}
+
+func setupPythonPath(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
+
+	// Check if PYTHONPATH is already set
+	pythonPath := os.Getenv("PYTHONPATH")
+	if pythonPath == "" {
+		err := fmt.Errorf("PYTHONPATH environment variable must be set to run this example")
+		logger.Error(err, "PYTHONPATH not set")
+		return err
+	}
+
+	logger.Info("PYTHONPATH is set", "path", pythonPath)
+	return nil
+}
+
+func setupChatTemplatingProcessor() (*preprocessing.ChatTemplatingProcessor, error) {
+	wrapper := preprocessing.NewChatTemplatingProcessor()
+	if err := wrapper.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize chat-templating processor: %w", err)
+	}
+	return wrapper, nil
+}
+
 func getKVCacheIndexerConfig() *kvcache.Config {
 	config := kvcache.NewDefaultConfig()
 
@@ -66,12 +167,12 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	}
 
 	blockSize, err := strconv.Atoi(os.Getenv(blockSizeEnvVar))
-	if err == nil || blockSize >= 0 {
+	if err == nil && blockSize >= 0 {
 		config.TokenProcessorConfig.BlockSize = blockSize
 	}
 
 	config.KVBlockIndexConfig.EnableMetrics = true
-	config.KVBlockIndexConfig.MetricsLoggingInterval = 15 * time.Second
+	config.KVBlockIndexConfig.MetricsLoggingInterval = 30 * time.Second
 
 	return config
 }
@@ -101,71 +202,6 @@ func getEventsPoolConfig() *kvevents.Config {
 	}
 }
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	logger := klog.FromContext(ctx)
-	logger.Info("Starting KV Events Pool Example")
-
-	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
-	if err != nil {
-		logger.Error(err, "failed to setup KVCacheIndexer")
-		return
-	}
-
-	eventsPool := setupEventsPool(ctx, kvCacheIndexer.KVBlockIndex())
-
-	eventsPool.Start(ctx)
-	logger.Info("Events pool started and listening for ZMQ messages")
-
-	// Setup graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		logger.Info("Received shutdown signal")
-		cancel()
-	}()
-
-	// Expose HTTP endpoint for prompts
-	modelName := os.Getenv(envModelName)
-	httpPort := os.Getenv(envHTTPPort)
-	if httpPort == "" {
-		httpPort = defaultHTTPPort
-	}
-	http.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Prompt string `json:"prompt"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return
-		}
-		if req.Prompt == "" {
-			http.Error(w, "field 'prompt' required", http.StatusBadRequest)
-			return
-		}
-
-		pods, err := kvCacheIndexer.GetPodScores(ctx, req.Prompt, modelName, nil)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(pods); err != nil {
-			logger.Error(err, "failed to encode response")
-		}
-	})
-	logger.Info("HTTP endpoint /score exposed", "port", httpPort)
-	//nolint:gosec // no timeout
-	if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
-		logger.Error(err, "HTTP server error")
-		return
-	}
-}
-
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	logger := klog.FromContext(ctx)
 
@@ -191,4 +227,119 @@ func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.
 	pool := kvevents.NewPool(cfg, kvBlockIndex)
 
 	return pool
+}
+
+func setupUnifiedHTTPEndpoints(
+	ctx context.Context,
+	kvCacheIndexer *kvcache.Indexer,
+	chatTemplatingProcessor *preprocessing.ChatTemplatingProcessor,
+) {
+	logger := klog.FromContext(ctx)
+
+	http.HandleFunc("/score_completions", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Prompt string `json:"prompt"`
+			Model  string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+			return
+		}
+		if req.Prompt == "" {
+			http.Error(w, "field 'prompt' required", http.StatusBadRequest)
+			return
+		}
+
+		pods, err := kvCacheIndexer.GetPodScores(ctx, req.Prompt, req.Model, nil)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(pods); err != nil {
+			logger.Error(err, "failed to encode response")
+		}
+	})
+
+	http.HandleFunc("/score_chat_completions", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req ChatCompletionsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Get chat template for the model if not provided
+		if req.ChatTemplate == "" {
+			templateReq := preprocessing.FetchChatTemplateRequest{
+				Model: req.Model,
+				Token: os.Getenv(envHFToken),
+			}
+
+			var err error
+			req.ChatTemplate, req.ChatTemplateKWArgs, err = chatTemplatingProcessor.FetchChatTemplate(ctx, templateReq)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to get chat template: %v", err), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		response, err := chatTemplatingProcessor.RenderChatTemplate(ctx, req.RenderJinjaTemplateRequest)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to render chat template: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Use KV-cache to score the rendered template
+		if len(response.RenderedChats) == 0 {
+			http.Error(w, "No rendered chats found in response", http.StatusInternalServerError)
+			return
+		}
+
+		renderedPrompt := response.RenderedChats[0]
+
+		// Get score
+		pods, err := kvCacheIndexer.GetPodScores(ctx, renderedPrompt, req.Model, nil)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to get score request: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		scoreResponse := struct {
+			PodScores        map[string]int                `json:"podScores"`
+			RenderedTemplate string                        `json:"templated_messages"`
+			OriginalMessages [][]preprocessing.ChatMessage `json:"original_messages"`
+		}{
+			PodScores:        pods,
+			RenderedTemplate: renderedPrompt,
+			OriginalMessages: req.Conversations,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(scoreResponse); err != nil {
+			logger.Error(err, "Failed to encode score response")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// Start HTTP server
+	httpPort := os.Getenv(envHTTPPort)
+	if httpPort == "" {
+		httpPort = defaultHTTPPort
+	}
+
+	go func() {
+		logger.Info("HTTP endpoint /score_completions exposed", "port", httpPort)
+		logger.Info("HTTP endpoint /score_chat_completions exposed", "port", httpPort)
+		//nolint:gosec // no timeout
+		if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
+			logger.Error(err, "HTTP server error")
+		}
+	}()
 }

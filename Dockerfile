@@ -21,9 +21,10 @@ WORKDIR /workspace
 
 USER root
 # Install EPEL repository directly and then ZeroMQ, as epel-release is not in default repos.
+# Install all necessary dependencies including Python 3.9 for chat-completions templating.
 # The builder is based on UBI8, so we need epel-release-8.
 RUN dnf install -y 'https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm' && \
-    dnf install -y gcc-c++ libstdc++ libstdc++-devel clang zeromq-devel pkgconfig && \
+    dnf install -y gcc-c++ libstdc++ libstdc++-devel clang zeromq-devel pkgconfig python39-devel python39-pip && \
     dnf clean all
 
 # Copy the Go Modules manifests
@@ -43,13 +44,22 @@ ARG RELEASE_VERSION=v1.22.1
 RUN curl -L https://github.com/daulet/tokenizers/releases/download/${RELEASE_VERSION}/libtokenizers.${TARGETOS}-${TARGETARCH}.tar.gz | tar -xz -C lib
 RUN ranlib lib/*.a
 
-# Build
-# the GOARCH has not a default value to allow the binary be built according to the host where the command
-# was called. For example, if we call make image-build in a local env which has the Apple Silicon M1 SO
-# the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
-# by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
+# Install Python dependencies for chat completions
+COPY pkg/preprocessing/chat_completions/requirements.txt /workspace/requirements.txt
+RUN python3.9 -m pip install --upgrade pip setuptools wheel && \
+    python3.9 -m pip install -r /workspace/requirements.txt
 
-RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-extldflags '-L$(pwd)/lib'" -a -o bin/kv-cache-manager examples/kv_events/online/main.go
+# Set up Python environment variables
+ENV PYTHONPATH=/workspace/pkg/preprocessing/chat_completions:/usr/local/lib64/python3.9/site-packages:/usr/local/lib/python3.9/site-packages:/usr/lib64/python3.9/site-packages:/usr/lib/python3.9/site-packages:$PYTHONPATH
+ENV PYTHON=python3.9
+
+# Build the application with CGO enabled.
+# We export CGO_CFLAGS and CGO_LDFLAGS using python3.9-config to ensure the Go compiler
+# can find the Python headers and libraries correctly. This mirrors the fix from the Makefile.
+RUN export CGO_CFLAGS="$(python3.9-config --cflags) -I/workspace/lib" && \
+    export CGO_LDFLAGS="$(python3.9-config --ldflags --embed) -L/workspace/lib -ltokenizers -ldl -lm" && \
+    CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -a -o bin/kv-cache-manager examples/kv_events/online/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

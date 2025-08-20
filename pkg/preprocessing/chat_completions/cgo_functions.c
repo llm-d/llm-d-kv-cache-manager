@@ -38,7 +38,6 @@ static PyThread_type_lock g_python_init_lock = NULL;
 
 // Initialize Python interpreter
 int Py_InitializeGo() {
-    
     // Process-level initialization check
     if (g_process_initialized) {
         if (g_init_pid != getpid()) {
@@ -48,7 +47,7 @@ int Py_InitializeGo() {
         }
         return 0;
     }
-    
+
     // Thread-safe initialization check
     if (g_python_init_lock == NULL) {
         g_python_init_lock = PyThread_allocate_lock();
@@ -57,32 +56,26 @@ int Py_InitializeGo() {
             return -1;
         }
     }
-    
+
     PyThread_acquire_lock(g_python_init_lock, NOWAIT_LOCK);
-    
+
     // Double-check after acquiring lock
     if (g_python_initialized) {
         printf("[C] Py_InitializeGo - Python already initialized globally\n");
         PyThread_release_lock(g_python_init_lock);
         return 0;
     }
-    
-    if (!Py_IsInitialized()) {        
+
+    if (!Py_IsInitialized()) {
         // Initialize Python interpreter
         Py_Initialize();
-        
-        // Initialize threading support BEFORE any other operations
-        PyEval_InitThreads();
-        
-        // Release the GIL so other threads can acquire it
-        PyEval_ReleaseThread(PyThreadState_Get());        
     }
-    
+
     g_python_initialized = 1;
     g_process_initialized = 1;
     g_init_pid = getpid();
     PyThread_release_lock(g_python_init_lock);
-    
+
     return 0;
 }
 
@@ -179,9 +172,9 @@ int Py_InitChatTemplateModule() {
 
     
     // Import the chat template wrapper module AFTER setting up the path
-    g_chat_template_module = PyImport_ImportModule("chat_template_wrapper");
+    g_chat_template_module = PyImport_ImportModule("render_jinja_template_wrapper");
     if (!g_chat_template_module) {
-        printf("[C] Py_InitChatTemplateModule ERROR - Failed to import chat_template_wrapper module\n");
+        printf("[C] Py_InitChatTemplateModule ERROR - Failed to import render_jinja_template_wrapper module\n");
         PyErr_Print();
         PyGILState_Release(gil_state);
         PyThread_release_lock(g_init_lock);
@@ -488,4 +481,4 @@ int Py_ReinitializeGo() {
     }
     
     return 0;
-} 
+}

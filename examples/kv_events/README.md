@@ -30,9 +30,7 @@ The demo will progress through:
 
 ## Online
 
-The online example requires deploying the vLLM helm chart with the KV-Cache Manager enabled and KV-Events enabled in vLLM.
-In this example we will deploy the KV-Cache Manager within a REST endpoint that scores prompts, with vLLM instances publishing
-KV-Events to the manager.
+The online example demonstrates how to deploy the KV-Cache Manager with real-time KV-Events processing and HTTP endpoints for scoring prompts and chat completions.
 
 ### Prerequisites
 
@@ -54,25 +52,68 @@ and the vLLM service is port-forwarded to `localhost:8000`, run:
 
 ```bash
 export TEXT="lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst. sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida. Duis ac tellus et risus vulputate vehicula. Donec lobortis risus a elit. Etiam tempor. Ut ullamcorper, ligula eu tempor congue, eros est euismod turpis, id tincidunt sapien risus a quam. Maecenas fermentum consequat mi. Donec fermentum. Pellentesque malesuada nulla a mi. Duis sapien sem, aliquet nec, commodo eget, consequat quis, neque. Aliquam faucibus, elit ut dictum aliquet, felis nisl adipiscing sapien, sed malesuada diam lacus eget erat. Cras mollis scelerisque nunc. Nullam arcu. Aliquam consequat. Curabitur augue lorem, dapibus quis, laoreet et, pretium ac, nisi. Aenean magna nisl, mollis quis, molestie eu, feugiat in, orci. In hac habitasse platea dictumst."
+export MODEL="meta-llama/Llama-3.1-8B-Instruct"
 ```
+
+#### /v1/completions
 
 1. Send a long prompt to the manager (expect no pod scores):
 ```bash
 curl -X POST "http://localhost:8080/score" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"'"${TEXT}"'"}'
+  -d '{"prompt":"'"${TEXT}"'", "model":"'"${MODEL}"'"}'
 ```
 
-2. Send an inference request to the vLLM endpoint (`v1/completions`):
+1. Send an inference request to the vLLM endpoint (`v1/completions`):
 ```bash
 curl -X POST "http://localhost:8000/v1/completions" \
   -H "Content-Type: application/json" \
   -d '{"prompt":"'"${TEXT}"'","max_tokens":50,"temperature":0.7}'
 ```
 
-3. Query the manager again with the same prompt:
+1. Query the manager again with the same prompt:
 ```bash
-curl -X POST "http://localhost:8080/score" \
+curl -X POST "http://localhost:8080/score_completions" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"'"${TEXT}"'"}'
+  -d '{"prompt":"'"${TEXT}"'", "model":"'"${MODEL}"'"}'
 ```
+
+#### /v1/chat_completions
+
+1. Send a long prompt to the manager (expect no pod scores):
+```bash
+curl -X POST "http://localhost:8080/score_chat_completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "messages": [
+      {"role": "user", "content": "'"${TEXT}"'"}
+    ]
+  }'
+```
+
+1. Send an inference request to the vLLM endpoint (`v1/chat_completions`):
+```bash
+curl -X POST "http://localhost:8080/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "messages": [
+      {"role": "user", "content": "'"${TEXT}"'"}
+    ],
+  }'
+```
+
+1. Query the manager again with the same prompt:
+```bash
+curl -X POST "http://localhost:8080/score_chat_completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "messages": [
+      {"role": "user", "content": "'"${TEXT}"'"}
+    ]
+  }'
+```
+
+These endpoints allow for scoring rendered chat templates and generating full chat completions using the KV-Cache Manager.
