@@ -85,7 +85,7 @@ curl -X POST "http://localhost:8080/score_completions" \
 curl -X POST "http://localhost:8080/score_chat_completions" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "model":"'"${MODEL}"'"
     "messages": [
       {"role": "user", "content": "'"${TEXT}"'"}
     ]
@@ -97,7 +97,7 @@ curl -X POST "http://localhost:8080/score_chat_completions" \
 curl -X POST "http://localhost:8080/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "model":"'"${MODEL}"'"
     "messages": [
       {"role": "user", "content": "'"${TEXT}"'"}
     ],
@@ -109,7 +109,7 @@ curl -X POST "http://localhost:8080/v1/chat/completions" \
 curl -X POST "http://localhost:8080/score_chat_completions" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "model":"'"${MODEL}"'"
     "messages": [
       {"role": "user", "content": "'"${TEXT}"'"}
     ]
