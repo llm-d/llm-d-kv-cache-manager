@@ -12,7 +12,7 @@ vllm:
   # -- Inference pool label key
   poolLabelKey: app
   # -- Inference pool label value
-  poolLabelValue: vllm-llama3-8b-instruct
+  poolLabelValue: vllm-qwen3-8b
 
   image:
     # -- VLLM image repository
@@ -24,9 +24,9 @@ vllm:
 
   model:
     # -- Hugging Face model name (e.g., mistralai/Mistral-7B-Instruct-v0.2)
-    name: meta-llama/Llama-3.1-8B-Instruct
+    name: Qwen/Qwen3-8B
     # -- Label used for Kubernetes resources related to this model instance
-    label: llama3-8b-instruct
+    label: qwen3-8b
     # -- Maximum model length parameter for VLLM
     maxModelLen: 16384
 
@@ -96,7 +96,7 @@ kvCacheManager:
     # -- kv-cache-manager image repository
     repository: quay.io/vmaroon/llm-d-kv-cache-manager/kvevents
     # -- kv-cache-manager image tag
-    tag: 0.0.1
+    tag: 0.0.3
     # -- kv-cache-manager image pull policy
     pullPolicy: Always
   # -- ZMQ topic for vLLM to publish to and for the manager to subscribe to

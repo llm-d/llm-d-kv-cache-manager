@@ -107,11 +107,11 @@ def render_jinja_template(request_json):
 
     # Align Go's `messages` field with transformers' `conversations` parameter.
     if 'messages' in request:
-        request['conversations'] = request.pop('messages')
+        request['conversations'] = [request.pop('messages')] # wrap to match expected format
 
     try:
         # Get template_vars and spread them as individual arguments
-        template_vars = request.pop('kwargs', {})
+        template_vars = request.pop('chat_template_kwargs', {})
         request.update(template_vars)
 
         rendered_chats, generation_indices = transformers_render_jinja_template(**request)
@@ -181,7 +181,7 @@ def get_model_chat_template(request_json):
     template_vars = _collect_template_vars(tokenizer)
 
     # Cache the result, aligning with the Go response struct.
-    result = {"template": template, "kwargs": template_vars}
+    result = {"chat_template": template, "chat_template_kwargs": template_vars}
     with lock:
         _template_cache[cache_key] = result.copy()  # Cache a copy to avoid reference issues
 

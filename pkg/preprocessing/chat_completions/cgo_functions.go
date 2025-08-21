@@ -42,14 +42,15 @@ type ChatMessage struct {
 // RenderJinjaTemplateRequest represents the request to render a chat template.
 type RenderJinjaTemplateRequest struct {
 	// `conversations` is the transformers name, but we use `messages` for consistency with OpenAI API.
-	Conversations             [][]ChatMessage        `json:"messages"`
+	// The Python wrapper will handle converting this to a batched list if needed.
+	Conversations             []ChatMessage          `json:"messages"`
 	Tools                     []interface{}          `json:"tools,omitempty"`
 	Documents                 []interface{}          `json:"documents,omitempty"`
 	ChatTemplate              string                 `json:"chat_template,omitempty"`
 	ReturnAssistantTokensMask bool                   `json:"return_assistant_tokens_mask,omitempty"`
 	ContinueFinalMessage      bool                   `json:"continue_final_message,omitempty"`
 	AddGenerationPrompt       bool                   `json:"add_generation_prompt,omitempty"`
-	ChatTemplateKWArgs        map[string]interface{} `json:"kwargs,omitempty"`
+	ChatTemplateKWArgs        map[string]interface{} `json:"chat_template_kwargs,omitempty"`
 }
 
 // RenderJinjaTemplateResponse represents the response from rendering a chat template.
@@ -73,8 +74,8 @@ type FetchChatTemplateRequest struct {
 
 // FetchChatTemplateResponse represents the response from fetching a chat template.
 type FetchChatTemplateResponse struct {
-	ChatTemplate       string                 `json:"template,omitempty"`
-	ChatTemplateKWArgs map[string]interface{} `json:"kwargs,omitempty"`
+	ChatTemplate       string                 `json:"chat_template,omitempty"`
+	ChatTemplateKWArgs map[string]interface{} `json:"chat_template_kwargs,omitempty"`
 }
 
 // ChatTemplatingProcessor is a processor that handles chat template rendering

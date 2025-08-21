@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -64,6 +65,15 @@ func main() {
 
 	logger := klog.FromContext(ctx)
 
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		logger.Info("Received shutdown signal")
+		cancel()
+	}()
+
 	if err := run(ctx); err != nil {
 		logger.Error(err, "Failed to run unified KV-cache service")
 		return
@@ -72,10 +82,6 @@ func main() {
 
 func run(ctx context.Context) error {
 	logger := klog.FromContext(ctx)
-
-	// Create a cancellable context for the service
-	serviceCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Setup Python path environment for chat completions
 	logger.Info("Setting up Python path environment...")
@@ -95,28 +101,19 @@ func run(ctx context.Context) error {
 	logger.Info("Chat-templating processor initialized successfully")
 
 	// Setup KV Cache Indexer
-	kvCacheIndexer, err := setupKVCacheIndexer(serviceCtx)
+	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
 	if err != nil {
 		logger.Error(err, "failed to setup KVCacheIndexer")
 		return err
 	}
 
 	// Setup events pool
-	eventsPool := setupEventsPool(serviceCtx, kvCacheIndexer.KVBlockIndex())
-	eventsPool.Start(serviceCtx)
+	eventsPool := setupEventsPool(ctx, kvCacheIndexer.KVBlockIndex())
+	eventsPool.Start(ctx)
 	logger.Info("Events pool started and listening for ZMQ messages")
 
-	// Setup graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		logger.Info("Received shutdown signal")
-		cancel()
-	}()
-
-	// Setup HTTP endpoints
-	setupUnifiedHTTPEndpoints(serviceCtx, kvCacheIndexer, chatTemplatingProcessor)
+	// Setup HTTP server
+	httpServer := setupUnifiedHTTPEndpoints(ctx, kvCacheIndexer, chatTemplatingProcessor)
 
 	logger.Info("=== Online KV Events Example Started ===")
 	logger.Info("HTTP server running on http://localhost:8080")
@@ -125,8 +122,17 @@ func run(ctx context.Context) error {
 	logger.Info("  - POST /score_chat_completions - Score /v1/chat_completions requests")
 
 	// Wait for shutdown
-	<-serviceCtx.Done()
+	<-ctx.Done()
 	logger.Info("Shutting down KV-cache service...")
+
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error(err, "HTTP server shutdown error")
+	}
+
 	return nil
 }
 
@@ -146,11 +152,11 @@ func setupPythonPath(ctx context.Context) error {
 }
 
 func setupChatTemplatingProcessor() (*preprocessing.ChatTemplatingProcessor, error) {
-	wrapper := preprocessing.NewChatTemplatingProcessor()
-	if err := wrapper.Initialize(); err != nil {
+	processor := preprocessing.NewChatTemplatingProcessor()
+	if err := processor.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize chat-templating processor: %w", err)
 	}
-	return wrapper, nil
+	return processor, nil
 }
 
 func getKVCacheIndexerConfig() *kvcache.Config {
@@ -233,10 +239,12 @@ func setupUnifiedHTTPEndpoints(
 	ctx context.Context,
 	kvCacheIndexer *kvcache.Indexer,
 	chatTemplatingProcessor *preprocessing.ChatTemplatingProcessor,
-) {
+) *http.Server {
 	logger := klog.FromContext(ctx)
 
-	http.HandleFunc("/score_completions", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/score_completions", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Prompt string `json:"prompt"`
 			Model  string `json:"model"`
@@ -262,7 +270,9 @@ func setupUnifiedHTTPEndpoints(
 		}
 	})
 
-	http.HandleFunc("/score_chat_completions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/score_chat_completions", func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("Received request for /score_chat_completions", "body", r.Body)
+
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -273,6 +283,8 @@ func setupUnifiedHTTPEndpoints(
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
+
+		logger.Info("Created ChatCompletions", "req", req)
 
 		// Get chat template for the model if not provided
 		if req.ChatTemplate == "" {
@@ -311,13 +323,11 @@ func setupUnifiedHTTPEndpoints(
 		}
 
 		scoreResponse := struct {
-			PodScores        map[string]int                `json:"podScores"`
-			RenderedTemplate string                        `json:"templated_messages"`
-			OriginalMessages [][]preprocessing.ChatMessage `json:"original_messages"`
+			PodScores        map[string]int `json:"podScores"`
+			RenderedTemplate string         `json:"templated_messages"`
 		}{
 			PodScores:        pods,
 			RenderedTemplate: renderedPrompt,
-			OriginalMessages: req.Conversations,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -328,18 +338,26 @@ func setupUnifiedHTTPEndpoints(
 		}
 	})
 
-	// Start HTTP server
+	// Get HTTP port
 	httpPort := os.Getenv(envHTTPPort)
 	if httpPort == "" {
 		httpPort = defaultHTTPPort
 	}
 
+	server := &http.Server{
+		Addr:              ":" + httpPort,
+		Handler:           mux,
+		ReadHeaderTimeout: 20 * time.Second,
+		ReadTimeout:       1 * time.Minute,
+		WriteTimeout:      1 * time.Minute,
+	}
+
+	// Start HTTP server in goroutine
 	go func() {
-		logger.Info("HTTP endpoint /score_completions exposed", "port", httpPort)
-		logger.Info("HTTP endpoint /score_chat_completions exposed", "port", httpPort)
-		//nolint:gosec // no timeout
-		if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error(err, "HTTP server error")
 		}
 	}()
+
+	return server
 }

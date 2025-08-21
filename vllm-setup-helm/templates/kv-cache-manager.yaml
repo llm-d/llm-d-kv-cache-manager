@@ -56,6 +56,8 @@ spec:
               containerPort: {{ .Values.kvCacheManager.service.httpPort }}
               protocol: TCP
           env:
+            - name: HF_HOME # for chat-completions tokenizer cache
+              value: /tmp/huggingface
             - name: MODEL_NAME
               value: {{ .Values.vllm.model.name | quote }}
             - name: ZMQ_ENDPOINT

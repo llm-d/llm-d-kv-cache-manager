@@ -41,7 +41,7 @@ $(TOKENIZER_LIB):
 
 ##@ Python Configuration
 
-PYTHON_VERSION := 3.9
+PYTHON_VERSION := 3.12
 VENV_DIR := $(shell pwd)/build/venv
 VENV_BIN := $(VENV_DIR)/bin
 
@@ -171,12 +171,17 @@ bench: download-tokenizer install-python-deps download-zmq ## Run benchmarks
 	@printf "\033[33;1m==== Running chat template benchmarks ====\033[0m\n"
 	@go test -bench=. -benchmem ./pkg/preprocessing/chat_completions/
 
+.PHONY: run
+run: build ## Run the application locally
+	@printf "\033[33;1m==== Running application ====\033[0m\n"
+	@./bin/$(PROJECT_NAME)
+
 ##@ Build
 
 .PHONY: build
 build: check-go download-tokenizer install-python-deps download-zmq ## Build the application binary
 	@printf "\033[33;1m==== Building application binary ====\033[0m\n"
-	@go build -o bin/$(PROJECT_NAME) examples/kv_cache_index/main.go
+	@go build -o bin/$(PROJECT_NAME) examples/kv_events/online/main.go
 
 
 .PHONY:	image-build

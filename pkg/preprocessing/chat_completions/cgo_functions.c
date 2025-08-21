@@ -69,6 +69,12 @@ int Py_InitializeGo() {
     if (!Py_IsInitialized()) {
         // Initialize Python interpreter
         Py_Initialize();
+
+        // Initialize threading support BEFORE any other operations
+        PyEval_InitThreads();
+
+        // Release the GIL so other threads can acquire it
+        PyEval_ReleaseThread(PyThreadState_Get());
     }
 
     g_python_initialized = 1;

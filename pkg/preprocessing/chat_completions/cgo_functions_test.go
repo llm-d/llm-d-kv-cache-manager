@@ -51,33 +51,6 @@ func getGlobalWrapper() *preprocessing.ChatTemplatingProcessor {
 	return globalWrapper
 }
 
-// cleanupGlobalWrapper finalizes the global wrapper (called once at the end of all tests).
-func cleanupGlobalWrapper() {
-	globalWrapperMu.Lock()
-	defer globalWrapperMu.Unlock()
-	if globalWrapper != nil {
-		// Use a defer with recover to handle any segmentation faults during cleanup
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Recovered from panic during cleanup: %v\n", r)
-			}
-		}()
-
-		// Check if Python is still initialized before finalizing
-		// SIMPLIFIED: No need to check initialized field - C handles this
-		// Try to finalize gracefully, but don't panic if it fails
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					fmt.Printf("Recovered from panic during Finalize(): %v\n", r)
-				}
-			}()
-			globalWrapper.Finalize()
-		}()
-		globalWrapper = nil
-	}
-}
-
 // TestGetModelChatTemplate tests the get_model_chat_template function.
 func TestGetModelChatTemplate(t *testing.T) {
 	wrapper := getGlobalWrapper()
@@ -168,37 +141,31 @@ func TestRenderJinjaTemplate(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		messages [][]preprocessing.ChatMessage
+		messages []preprocessing.ChatMessage
 	}{
 		{
 			name:     "Simple ChatTemplate",
 			template: simpleTemplate,
-			messages: [][]preprocessing.ChatMessage{
-				{
-					{Role: "user", Content: "Hello"},
-					{Role: "assistant", Content: "Hi there!"},
-				},
+			messages: []preprocessing.ChatMessage{
+				{Role: "user", Content: "Hello"},
+				{Role: "assistant", Content: "Hi there!"},
 			},
 		},
 		{
 			name:     "Complex ChatTemplate with System Message",
 			template: complexTemplate,
-			messages: [][]preprocessing.ChatMessage{
-				{
-					{Role: "system", Content: "You are a helpful AI assistant."},
-					{Role: "user", Content: "What is the weather like?"},
-					{Role: "assistant", Content: "I don't have access to real-time weather data."},
-				},
+			messages: []preprocessing.ChatMessage{
+				{Role: "system", Content: "You are a helpful AI assistant."},
+				{Role: "user", Content: "What is the weather like?"},
+				{Role: "assistant", Content: "I don't have access to real-time weather data."},
 			},
 		},
 		{
 			name:     "Complex ChatTemplate without System Message",
 			template: complexTemplate,
-			messages: [][]preprocessing.ChatMessage{
-				{
-					{Role: "user", Content: "Tell me a joke"},
-					{Role: "assistant", Content: "Why don't scientists trust atoms? Because they make up everything!"},
-				},
+			messages: []preprocessing.ChatMessage{
+				{Role: "user", Content: "Tell me a joke"},
+				{Role: "assistant", Content: "Why don't scientists trust atoms? Because they make up everything!"},
 			},
 		},
 	}
@@ -219,23 +186,20 @@ func TestRenderJinjaTemplate(t *testing.T) {
 			require.NoError(t, err, "RenderChatTemplate should not return an error")
 			assert.NotNil(t, response, "Response should not be nil")
 			assert.NotEmpty(t, response.RenderedChats, "Rendered chats should not be empty")
-			assert.Equal(t, len(tt.messages), len(response.RenderedChats), "Should have one rendered chat per conversation")
 
 			// Log performance
 			t.Logf("ChatTemplate: %s, Duration: %v, Rendered length: %d", tt.name, duration, len(response.RenderedChats[0]))
 
 			// Verify rendered content
 			rendered := response.RenderedChats[0]
-			for _, conversation := range tt.messages {
-				for _, message := range conversation {
-					// For complex templates, the role might not be explicitly shown in output
-					// but the content should always be present
-					assert.Contains(t, rendered, message.Content, "Rendered content should contain message content")
+			for _, message := range tt.messages {
+				// For complex templates, the role might not be explicitly shown in output
+				// but the content should always be present
+				assert.Contains(t, rendered, message.Content, "Rendered content should contain message content")
 
-					// Only check for role if it's a simple template (not complex with system message)
-					if !strings.Contains(tt.name, "Complex") {
-						assert.Contains(t, rendered, message.Role, "Rendered content should contain role")
-					}
+				// Only check for role if it's a simple template (not complex with system message)
+				if !strings.Contains(tt.name, "Complex") {
+					assert.Contains(t, rendered, message.Role, "Rendered content should contain role")
 				}
 			}
 		})
@@ -292,55 +256,47 @@ func TestChatCompletionsIntegration(t *testing.T) {
 	tests := []struct {
 		name         string
 		modelName    string
-		conversation [][]preprocessing.ChatMessage
+		conversation []preprocessing.ChatMessage
 		description  string
 	}{
 		{
 			name:      "Simple Conversation",
 			modelName: "ibm-granite/granite-3.3-8b-instruct",
-			conversation: [][]preprocessing.ChatMessage{
-				{
-					{Role: "user", Content: "What is the capital of France?"},
-					{Role: "assistant", Content: "The capital of France is Paris."},
-				},
+			conversation: []preprocessing.ChatMessage{
+				{Role: "user", Content: "What is the capital of France?"},
+				{Role: "assistant", Content: "The capital of France is Paris."},
 			},
 			description: "Basic question and answer conversation",
 		},
 		{
 			name:      "Multi-turn Conversation",
 			modelName: "microsoft/DialoGPT-medium",
-			conversation: [][]preprocessing.ChatMessage{
-				{
-					{Role: "user", Content: "Hello, how are you?"},
-					{Role: "assistant", Content: "I'm doing well, thank you! How can I help you today?"},
-					{Role: "user", Content: "Can you tell me about machine learning?"},
-					{Role: "assistant", Content: "Machine learning is a subset of artificial intelligence " +
-						"that enables computers to learn and make decisions from data without being explicitly programmed."},
-				},
+			conversation: []preprocessing.ChatMessage{
+				{Role: "user", Content: "Hello, how are you?"},
+				{Role: "assistant", Content: "I'm doing well, thank you! How can I help you today?"},
+				{Role: "user", Content: "Can you tell me about machine learning?"},
+				{Role: "assistant", Content: "Machine learning is a subset of artificial intelligence " +
+					"that enables computers to learn and make decisions from data without being explicitly programmed."},
 			},
 			description: "Multi-turn conversation with follow-up questions",
 		},
 		{
 			name:      "System Message Conversation",
 			modelName: "ibm-granite/granite-3.3-8b-instruct",
-			conversation: [][]preprocessing.ChatMessage{
-				{
-					{Role: "system", Content: "You are a helpful AI assistant specialized in coding."},
-					{Role: "user", Content: "Write a Python function to calculate fibonacci numbers."},
-					{Role: "assistant", Content: "Here's a Python function to calculate fibonacci numbers:\n" +
-						"def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"},
-				},
+			conversation: []preprocessing.ChatMessage{
+				{Role: "system", Content: "You are a helpful AI assistant specialized in coding."},
+				{Role: "user", Content: "Write a Python function to calculate fibonacci numbers."},
+				{Role: "assistant", Content: "Here's a Python function to calculate fibonacci numbers:\n" +
+					"def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"},
 			},
 			description: "Conversation with system message and code generation",
 		},
 		{
 			name:      "Simple Conversation (Repeated)",
 			modelName: "ibm-granite/granite-3.3-8b-instruct",
-			conversation: [][]preprocessing.ChatMessage{
-				{
-					{Role: "user", Content: "What is the capital of France?"},
-					{Role: "assistant", Content: "The capital of France is Paris."},
-				},
+			conversation: []preprocessing.ChatMessage{
+				{Role: "user", Content: "What is the capital of France?"},
+				{Role: "assistant", Content: "The capital of France is Paris."},
 			},
 			description: "Basic question and answer conversation (repeated to test render caching)",
 		},
@@ -378,10 +334,8 @@ func TestChatCompletionsIntegration(t *testing.T) {
 			assert.NotEmpty(t, rendered, "Rendered chat should not be empty")
 
 			// Verify all conversation messages are present in the rendered output
-			for _, conversation := range tt.conversation {
-				for _, message := range conversation {
-					assert.Contains(t, rendered, message.Content, "Rendered content should contain message content")
-				}
+			for _, message := range tt.conversation {
+				assert.Contains(t, rendered, message.Content, "Rendered content should contain message content")
 			}
 
 			// Log performance metrics
@@ -426,32 +380,30 @@ func TestLongChatCompletions(t *testing.T) {
 	require.NoError(t, err, "Failed to clear caches")
 
 	// Create a long conversation
-	longConversation := [][]preprocessing.ChatMessage{
-		{
-			{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, " +
-				"and system design. " +
-				"Provide detailed, accurate responses."},
-			{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me design " +
-				"the architecture?"},
-			{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend " +
-				"starting with a layered architecture. Let's break this down into components."},
-			{Role: "user", Content: "What about memory management and eviction policies?"},
-			{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an " +
-				"LRU (Least Recently Used) eviction policy " +
-				"with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a " +
-				"doubly-linked list for tracking access order."},
-			{Role: "user", Content: "How should I handle concurrent access and thread safety?"},
-			{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is " +
-				"to use sync.RWMutex for read-write locks, " +
-				"allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map " +
-				"for simpler cases or implement a lock-free design " +
-				"with atomic operations for maximum performance."},
-			{Role: "user", Content: "What about persistence and recovery?"},
-			{Role: "assistant", Content: "For persistence, consider using a write-ahead log (WAL) pattern. This " +
-				"involves logging all mutations to disk before applying them to memory. " +
-				"For recovery, you can replay the log to reconstruct the cache state. You might also want to " +
-				"implement periodic snapshots for faster recovery."},
-		},
+	longConversation := []preprocessing.ChatMessage{
+		{Role: "system", Content: "You are an expert software engineer with deep knowledge of Go, Python, " +
+			"and system design. " +
+			"Provide detailed, accurate responses."},
+		{Role: "user", Content: "I'm building a high-performance caching system in Go. Can you help me design " +
+			"the architecture?"},
+		{Role: "assistant", Content: "Absolutely! For a high-performance caching system in Go, I'd recommend " +
+			"starting with a layered architecture. Let's break this down into components."},
+		{Role: "user", Content: "What about memory management and eviction policies?"},
+		{Role: "assistant", Content: "Great question! Memory management is crucial. I'd suggest implementing an " +
+			"LRU (Least Recently Used) eviction policy " +
+			"with configurable memory limits. You can use a combination of a hash map for O(1) lookups and a " +
+			"doubly-linked list for tracking access order."},
+		{Role: "user", Content: "How should I handle concurrent access and thread safety?"},
+		{Role: "assistant", Content: "For thread safety, you have several options. The most common approach is " +
+			"to use sync.RWMutex for read-write locks, " +
+			"allowing multiple concurrent readers but exclusive writers. Alternatively, you could use sync.Map " +
+			"for simpler cases or implement a lock-free design " +
+			"with atomic operations for maximum performance."},
+		{Role: "user", Content: "What about persistence and recovery?"},
+		{Role: "assistant", Content: "For persistence, consider using a write-ahead log (WAL) pattern. This " +
+			"involves logging all mutations to disk before applying them to memory. " +
+			"For recovery, you can replay the log to reconstruct the cache state. You might also want to " +
+			"implement periodic snapshots for faster recovery."},
 	}
 
 	modelName := "ibm-granite/granite-3.3-8b-instruct"
@@ -488,11 +440,9 @@ func TestLongChatCompletions(t *testing.T) {
 			templateDuration, renderDuration, templateDuration+renderDuration)
 
 		// Verify all messages are present
-		for _, conversation := range longConversation {
-			for _, message := range conversation {
-				assert.Contains(t, rendered, message.Content,
-					"All message content should be present in rendered output")
-			}
+		for _, message := range longConversation {
+			assert.Contains(t, rendered, message.Content,
+				"All message content should be present in rendered output")
 		}
 	})
 }
@@ -556,11 +506,9 @@ func BenchmarkRenderJinjaTemplate(b *testing.B) {
 	require.NoError(b, err, "Failed to get template for benchmark")
 
 	request := &preprocessing.RenderJinjaTemplateRequest{
-		Conversations: [][]preprocessing.ChatMessage{
-			{
-				{Role: "user", Content: "Hello"},
-				{Role: "assistant", Content: "Hi there!"},
-			},
+		Conversations: []preprocessing.ChatMessage{
+			{Role: "user", Content: "Hello"},
+			{Role: "assistant", Content: "Hi there!"},
 		},
 		ChatTemplate:       template,
 		ChatTemplateKWArgs: templateVars,
@@ -650,11 +598,9 @@ func runVLLMValidationTest(t *testing.T, modelName, expectedVLLMOutput string) {
 
 	// Test case based on the provided vLLM request
 	request := &preprocessing.RenderJinjaTemplateRequest{
-		Conversations: [][]preprocessing.ChatMessage{
-			{
-				{Role: "user", Content: "What is the weather in Paris?"},
-				{Role: "assistant", Content: "Let me check that for you."},
-			},
+		Conversations: []preprocessing.ChatMessage{
+			{Role: "user", Content: "What is the weather in Paris?"},
+			{Role: "assistant", Content: "Let me check that for you."},
 		},
 		Documents: []interface{}{
 			map[string]interface{}{
