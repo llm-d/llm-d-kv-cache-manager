@@ -46,12 +46,12 @@ type Message struct {
 	ModelName string
 }
 
-// Pool is a sharded worker pool that processes events from a ZMQ subscriber.
+// Pool is a sharded worker pool that processes events from a Channel.
 // It ensures that events for the same PodIdentifier are processed in order.
 type Pool struct {
 	queues      []workqueue.TypedRateLimitingInterface[*Message]
 	concurrency int // can replace use with len(queues)
-	subscriber  *zmqSubscriber
+	channel     Channel
 	index       kvblock.Index
 	wg          sync.WaitGroup
 }
@@ -72,11 +72,32 @@ func NewPool(cfg *Config, index kvblock.Index) *Pool {
 		p.queues[i] = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[*Message]())
 	}
 
-	p.subscriber = newZMQSubscriber(p, cfg.ZMQEndpoint, cfg.TopicFilter)
+	// Create ZMQ channel by default for backward compatibility
+	p.channel = newZMQSubscriber(p, cfg.ZMQEndpoint, cfg.TopicFilter)
 	return p
 }
 
-// Start begins the worker pool and the ZMQ subscriber.
+// NewPoolWithChannel creates a Pool with a custom Channel implementation.
+func NewPoolWithChannel(cfg *Config, index kvblock.Index, channel Channel) *Pool {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	p := &Pool{
+		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
+		concurrency: cfg.Concurrency,
+		index:       index,
+		channel:     channel,
+	}
+
+	for i := 0; i < p.concurrency; i++ {
+		p.queues[i] = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[*Message]())
+	}
+
+	return p
+}
+
+// Start begins the worker pool and the channel.
 // It is non-blocking.
 func (p *Pool) Start(ctx context.Context) {
 	logger := klog.FromContext(ctx)
@@ -88,13 +109,18 @@ func (p *Pool) Start(ctx context.Context) {
 		go p.worker(ctx, i)
 	}
 
-	go p.subscriber.Start(ctx)
+	go p.channel.Start(ctx)
 }
 
-// Shutdown gracefully stops the pool and its subscriber.
+// Shutdown gracefully stops the pool and its channel.
 func (p *Pool) Shutdown(ctx context.Context) {
 	logger := klog.FromContext(ctx)
 	logger.Info("Shutting down event processing pool...")
+
+	// Close the channel first
+	if err := p.channel.Close(); err != nil {
+		logger.Error(err, "Failed to close channel during shutdown")
+	}
 
 	for _, queue := range p.queues {
 		queue.ShutDown()
