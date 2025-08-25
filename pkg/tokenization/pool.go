@@ -48,14 +48,13 @@ func DefaultConfig() *Config {
 type TokenizationResponse struct {
 	Tokens  []uint32
 	Offsets []tokenizers.Offset
-	Error   error
 }
 
 // Task represents a unit of work for tokenizing a prompt.
 type Task struct {
 	Prompt    string
 	ModelName string
-	ResultCh     chan<- TokenizationResponse // nil => fire-and-forget
+	ResultCh  chan<- TokenizationResponse // nil => fire-and-forget
 }
 
 // Pool encapsulates the queue, worker pool, and token indexer.
@@ -99,16 +98,16 @@ func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 }
 
 // Tokenize queues a task and blocks until the final result is available.
-func (pool *Pool) Tokenize(prompt, modelName string) (TokenizationResponse, error) {
+func (pool *Pool) Tokenize(prompt, modelName string) TokenizationResponse {
 	resultCh := make(chan TokenizationResponse, 1)
 	pool.queue.Add(Task{
 		Prompt:    prompt,
 		ModelName: modelName,
-		ResultCh:     resultCh,
+		ResultCh:  resultCh,
 	})
 
 	res := <-resultCh
-	return res, res.Error
+	return res
 }
 
 // Run launches worker goroutines that process tasks until the context is
@@ -120,7 +119,7 @@ func (pool *Pool) Run(ctx context.Context) {
 	}
 
 	<-ctx.Done()
-	
+
 	pool.queue.ShutDown()
 	pool.wg.Wait()
 }
@@ -147,29 +146,26 @@ func (pool *Pool) workerLoop(_ int) {
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
-	var resp TokenizationResponse
-	defer func() {
-		if task.ResultCh != nil {
-			task.ResultCh <- resp
-			close(task.ResultCh)
-		}
-	}()
-
 	tokenIDs, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 	if err != nil {
 		klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
-		resp.Error = err
 		return err
 	}
 
 	if e := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokenIDs, offsets); e != nil {
 		err = fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, e)
-		resp.Error = err
 		return err
 	}
 
-	// success
-	resp.Tokens = tokenIDs
-	resp.Offsets = offsets
+	// On success, send the response if a channel is provided and close the channel.
+	if task.ResultCh != nil {
+		resp := TokenizationResponse{
+			Tokens:  tokenIDs,
+			Offsets: offsets,
+		}
+		task.ResultCh <- resp
+		close(task.ResultCh)
+	}
+
 	return nil
 }
