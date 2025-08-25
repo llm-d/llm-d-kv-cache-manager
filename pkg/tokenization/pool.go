@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/daulet/tokenizers"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -43,10 +44,33 @@ func DefaultConfig() *Config {
 	}
 }
 
+// TokenizationResponse is the single (final) message sent back to a caller.
+type TokenizationResponse struct {
+	Tokens  []uint32
+	Offsets []tokenizers.Offset
+	Error   error
+}
+
 // Task represents a unit of work for tokenizing a prompt.
 type Task struct {
 	Prompt    string
 	ModelName string
+	ResultCh     chan<- TokenizationResponse // nil => fire-and-forget
+}
+
+// DeferRespond returns a closure that sends resp exactly once and closes the channel.
+// No-op if ResultCh is nil.
+func (t Task) DeferRespond(resp *TokenizationResponse) func() {
+	if t.ResultCh == nil {
+		return func() {}
+	}
+	ch := t.ResultCh
+	return func() {
+		// single send + close; guard just in case the receiver misbehaves
+		defer func() { _ = recover() }()
+		ch <- *resp
+		close(ch)
+	}
 }
 
 // Pool encapsulates the queue, worker pool, and token indexer.
@@ -79,14 +103,27 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 	}, nil
 }
 
-// AddTask enqueues a new tokenization task.
+// EnqueueTokenization enqueues a new tokenization task.
 // This method only enqueues the task and does not start processing it.
-func (pool *Pool) AddTask(prompt, modelName string) {
+func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 	task := Task{
 		Prompt:    prompt,
 		ModelName: modelName,
 	}
 	pool.queue.Add(task)
+}
+
+// Tokenize queues a task and blocks until the final result is available.
+func (pool *Pool) Tokenize(prompt, modelName string) (TokenizationResponse, error) {
+	resultCh := make(chan TokenizationResponse, 1)
+	pool.queue.Add(Task{
+		Prompt:    prompt,
+		ModelName: modelName,
+		ResultCh:     resultCh,
+	})
+
+	res := <-resultCh
+	return res, res.Error
 }
 
 // Run launches worker goroutines that process tasks until the context is
@@ -98,7 +135,7 @@ func (pool *Pool) Run(ctx context.Context) {
 	}
 
 	<-ctx.Done()
-
+	
 	pool.queue.ShutDown()
 	pool.wg.Wait()
 }
@@ -122,18 +159,27 @@ func (pool *Pool) workerLoop(_ int) {
 	}
 }
 
-// processTask tokenizes the prompt, extracts a prefix, and updates the
-// indexer.
+// processTask tokenizes the prompt and updates the indexer.
+// It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
-	tokenIds, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
+	var resp TokenizationResponse
+	defer task.DeferRespond(&resp)()
+
+	tokenIDs, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 	if err != nil {
-		klog.Error(err, " failed to encode token", " prompt ", task.Prompt, " modelName ", task.ModelName)
+		klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
+		resp.Error = err
 		return err
 	}
 
-	if err := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokenIds, offsets); err != nil {
-		return fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, err)
+	if e := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokenIDs, offsets); e != nil {
+		err = fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, e)
+		resp.Error = err
+		return err
 	}
 
+	// success
+	resp.Tokens = tokenIDs
+	resp.Offsets = offsets
 	return nil
 }
