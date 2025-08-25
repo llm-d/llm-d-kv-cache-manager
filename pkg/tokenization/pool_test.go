@@ -116,7 +116,7 @@ func TestPool_RunIntegration(t *testing.T) {
 	defer cancel()
 
 	for _, prompt := range prompts {
-		pool.AddTask(prompt, testModelName)
+		pool.EnqueueTokenization(prompt, testModelName)
 	}
 
 	// Run pool
