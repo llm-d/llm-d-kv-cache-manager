@@ -29,15 +29,12 @@ import (
 type BlockHasher struct {
 	digest       *xxhash.Digest
 	previousHash uint64
-	blockSize    int
 }
 
-// NewBlockHasher creates a new BlockHasher with the specified block size.
-func NewBlockHasher(blockSize int) *BlockHasher {
+func NewBlockHasher() *BlockHasher {
 	return &BlockHasher{
 		digest:       xxhash.New(),
 		previousHash: 0,
-		blockSize:    blockSize,
 	}
 }
 
@@ -70,9 +67,4 @@ func (h *BlockHasher) ComputeBlockHash(data []byte) (uint64, error) {
 // GetPreviousHash returns the current previous hash value.
 func (h *BlockHasher) GetPreviousHash() uint64 {
 	return h.previousHash
-}
-
-// GetBlockSize returns the configured block size.
-func (h *BlockHasher) GetBlockSize() int {
-	return h.blockSize
 }

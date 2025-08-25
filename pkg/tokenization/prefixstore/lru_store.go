@@ -107,7 +107,7 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 
 	promptBytes := []byte(prompt)
 	tokenIdxIterator := 0
-	hasher := NewBlockHasher(c.blockSize)
+	hasher := NewBlockHasher()
 
 	// Chunk the text into blocks and populate the cache
 	for start := 0; start < len(promptBytes); start += c.blockSize {
@@ -156,7 +156,7 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) []u
 	containedTokens := []uint32{}
 
 	promptBytes := []byte(prompt)
-	hasher := NewBlockHasher(c.blockSize)
+	hasher := NewBlockHasher()
 
 	// Chunk the text into blocks and populate the cache
 	for i := 0; i < len(promptBytes); i += c.blockSize {
