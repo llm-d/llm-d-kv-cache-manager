@@ -118,15 +118,10 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
-	// 0. add to tokenizers pool
-	k.tokenizersPool.EnqueueTokenization(prompt, modelName)
 
-	// 1. get available tokens of longest prefix
-	tokens := k.tokensIndexer.FindLongestContainedTokens(prompt, modelName)
-	if len(tokens) == 0 {
-		//nolint:nilnil // no need to return an error
-		return nil, nil
-	}
+	// 1. submit tokenization request
+	tokenizationResponse := k.tokenizersPool.Tokenize(prompt, modelName)
+	tokens := tokenizationResponse.Tokens
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
