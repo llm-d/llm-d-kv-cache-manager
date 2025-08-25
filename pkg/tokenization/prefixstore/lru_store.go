@@ -17,9 +17,11 @@ limitations under the License.
 package prefixstore
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/daulet/tokenizers"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
@@ -107,7 +109,8 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 
 	promptBytes := []byte(prompt)
 	tokenIdxIterator := 0
-	hasher := NewBlockHasher(c.blockSize)
+	previousHash := uint64(0)
+	digest := xxhash.New()
 
 	// Chunk the text into blocks and populate the cache
 	for start := 0; start < len(promptBytes); start += c.blockSize {
@@ -117,10 +120,16 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 		}
 
 		// Compute the hash for the current block
-		blockHash, err := hasher.ComputeBlockHash(promptBytes[start:end])
-		if err != nil {
-			return fmt.Errorf("failed to compute block hash: %w", err)
+		digest.Reset()
+		if err := binary.Write(digest, binary.LittleEndian, previousHash); err != nil {
+			return fmt.Errorf("failed to add token: %w", err)
 		}
+		if _, err := digest.Write(promptBytes[start:end]); err != nil {
+			return fmt.Errorf("failed to add token: %w", err)
+		}
+
+		blockHash := digest.Sum64()
+		previousHash = blockHash
 
 		// Only add tokens with [_, high] offset associated with the chunk range.
 		// If a token's [low, _] index is less than the start, it is OK as long as
@@ -156,7 +165,8 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) []u
 	containedTokens := []uint32{}
 
 	promptBytes := []byte(prompt)
-	hasher := NewBlockHasher(c.blockSize)
+	previousHash := uint64(0)
+	digest := xxhash.New()
 
 	// Chunk the text into blocks and populate the cache
 	for i := 0; i < len(promptBytes); i += c.blockSize {
@@ -166,10 +176,16 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) []u
 		}
 
 		// Compute the hash for the current block
-		blockHash, err := hasher.ComputeBlockHash(promptBytes[i:end])
-		if err != nil {
+		digest.Reset()
+		if err := binary.Write(digest, binary.LittleEndian, previousHash); err != nil {
 			break
 		}
+		if _, err := digest.Write(promptBytes[i:end]); err != nil {
+			break
+		}
+
+		blockHash := digest.Sum64()
+		previousHash = blockHash
 
 		block, ok := cache.Get(blockHash)
 		if !ok {
