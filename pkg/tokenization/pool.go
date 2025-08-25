@@ -58,21 +58,6 @@ type Task struct {
 	ResultCh     chan<- TokenizationResponse // nil => fire-and-forget
 }
 
-// DeferRespond returns a closure that sends resp exactly once and closes the channel.
-// No-op if ResultCh is nil.
-func (t Task) DeferRespond(resp *TokenizationResponse) func() {
-	if t.ResultCh == nil {
-		return func() {}
-	}
-	ch := t.ResultCh
-	return func() {
-		// single send + close; guard just in case the receiver misbehaves
-		defer func() { _ = recover() }()
-		ch <- *resp
-		close(ch)
-	}
-}
-
 // Pool encapsulates the queue, worker pool, and token indexer.
 type Pool struct {
 	workers int
@@ -163,7 +148,12 @@ func (pool *Pool) workerLoop(_ int) {
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
 	var resp TokenizationResponse
-	defer task.DeferRespond(&resp)()
+	defer func() {
+		if task.ResultCh != nil {
+			task.ResultCh <- resp
+			close(task.ResultCh)
+		}
+	}()
 
 	tokenIDs, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 	if err != nil {
