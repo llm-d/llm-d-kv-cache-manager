@@ -1,5 +1,7 @@
 # Inference-Perf Benchmark Report
 
+> DISCLAIMER: The results below are tainted by scheduling delays due to an inference-perf bug.
+
 ### Workload profile
 
 ```yaml
