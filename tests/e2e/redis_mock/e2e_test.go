@@ -267,17 +267,14 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
-	// Add entries to the index.
-	s.addEntriesToIndex(blockKeys, fakePodList)
-
 	// First lookup - should return no scores initially.
 	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
 
-	// Wait for the cache to be populated.
-	time.Sleep(5 * time.Second)
+	// Add entries to the index.
+	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Second lookup - should return scores.
 	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
@@ -344,17 +341,14 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
-	// Add entries to the index.
-	s.addEntriesToIndex(blockKeys, fakePodList)
-
 	// First lookup.
 	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
 
-	// Wait for cache population.
-	time.Sleep(5 * time.Second)
+	// Add entries to the index.
+	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Second lookup.
 	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
