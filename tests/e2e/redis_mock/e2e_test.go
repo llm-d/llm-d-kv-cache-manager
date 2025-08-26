@@ -120,7 +120,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	midPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 	shortPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit."
 
-	blockKeys := s.promptToKeys(fullPrompt, defaultModelName)
+	fullPromptBlockKeys := s.promptToKeys(fullPrompt, defaultModelName)
 	fakePodList := []string{s.Pod1IP}
 
 	// Test 1: Full prompt (no match expected)
@@ -129,15 +129,15 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
 
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	s.addEntriesToIndex(fullPromptBlockKeys, fakePodList)
 
 	// Test 2: mid-length prompt(should return a match)
 	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, defaultModelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	midPromptKeys := s.promptToKeys(midPrompt, defaultModelName)
-	s.Equal(pods[s.Pod1IP], len(midPromptKeys), "all mid-prompt keys should have been indexed")
+	midPromptBlockKeys := s.promptToKeys(midPrompt, defaultModelName)
+	s.Equal(pods[s.Pod1IP], len(midPromptBlockKeys), "all mid-prompt block keys should have been indexed")
 
 	// Test 3: short prompt(should return a match)
 	pods, err = s.indexer.GetPodScores(s.ctx, shortPrompt, defaultModelName, []string{s.Pod1IP})
@@ -145,8 +145,8 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
 	s.T().Logf("Received pod scores: %+v", pods)
-	shortPromptKeys := s.promptToKeys(shortPrompt, defaultModelName)
-	s.Equal(pods[s.Pod1IP], len(shortPromptKeys), "all short-prompt keys should have been indexed")
+	shortPromptBlockKeys := s.promptToKeys(shortPrompt, defaultModelName)
+	s.Equal(pods[s.Pod1IP], len(shortPromptBlockKeys), "all short-prompt block keys should have been indexed")
 }
 
 // TestPrefixExpansion tests that prompts longer than the cached prefix still return partial match scores.
@@ -165,25 +165,25 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
 
-	shortPromptKeys := s.promptToKeys(shortPrompt, modelName)
-	s.addEntriesToIndex(shortPromptKeys, fakePodList)
+	shortPromptBlockKeys := s.promptToKeys(shortPrompt, modelName)
+	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
 
 	// Test 2: mid prompt
 	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], len(shortPromptKeys), "expected pod score to equal number of short prompt keys")
+	s.Equal(pods[s.Pod1IP], len(shortPromptBlockKeys), "expected pod score to equal number of short prompt block keys")
 
-	midPromptKeys := s.promptToKeys(midPrompt, modelName)
-	s.addEntriesToIndex(midPromptKeys, fakePodList)
+	midPromptBlockKeys := s.promptToKeys(midPrompt, modelName)
+	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
 
 	// Test 3: full prompt
 	pods, err = s.indexer.GetPodScores(s.ctx, fullPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], len(midPromptKeys), "expected pod score to equal number of mid prompt keys")
+	s.Equal(pods[s.Pod1IP], len(midPromptBlockKeys), "expected pod score to equal number of mid prompt block keys")
 }
 
 func (s *KVCacheSuite) TestLongPrefixExpansion() {
