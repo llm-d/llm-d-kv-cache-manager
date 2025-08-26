@@ -88,26 +88,28 @@ func (w *MockChatTemplateWrapper) RenderChatTemplate(req ChatTemplateRequest) (*
 
 // TestBasicE2E verifies that the indexer initially returns no scores for the first prompt and
 // correct scores for the second request.
-func (s *KVCacheSuite) TestBasicE2E() {
+func (s *KVCacheSuite) TestCacheHit() {
 	prompt := "What is the capital of France?"
-	blockKeys := s.promptToKeys(prompt, defaultModelName)
-
 	fakePodList := []string{s.Pod1IP}
 
+	blockKeys := s.promptToKeys(prompt, defaultModelName)
 	s.addEntriesToIndex(blockKeys, fakePodList)
-	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, []string{s.Pod1IP})
+
+	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, fakePodList)
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Empty(pods, "expected no pod scores")
+	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
+	s.Greater(pods[s.Pod1IP], 1, "expected pod score to equal 1")
+}
 
-	time.Sleep(5 * time.Second)
+func (s *KVCacheSuite) TestCacheMiss() {
+	prompt := "What is the capital of France?"
+	fakePodList := []string{s.Pod1IP}
 
-	pods, err = s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, fakePodList)
 	s.Require().NoError(err)
-	s.Len(pods, 1, "expected one pod score")
 	s.T().Logf("Received pod scores: %+v", pods)
-
-	s.Equal(1, pods[s.Pod1IP], "expected pod score to equal 1")
+	s.Empty(pods, "expected no pod scores since no keys were added to the index")
 }
 
 // TestPrefixReduction tests scoring behavior when querying progressively shorter prefixes of a fully cached prompt.
