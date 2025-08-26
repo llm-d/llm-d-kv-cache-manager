@@ -207,7 +207,6 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	shortPromptBlockKeys := s.promptToKeys(shortPrompt, modelName)
 	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
 
-
 	// Test 2: mid prompt (should return partial match if indexer picks it up)
 	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
