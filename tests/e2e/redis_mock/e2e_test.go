@@ -19,7 +19,6 @@ package e2e
 
 import (
 	"strings"
-	"time"
 )
 
 // ChatMessage represents a single message in a conversation.
@@ -196,26 +195,28 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	midPrompt := strings.Repeat(base, 100)  // ~900 tokens
 	longPrompt := strings.Repeat(base, 500) // ~4500 tokens
 
-	// Insert only short prompt into Redis
-	blockKeys := s.promptToKeys(shortPrompt, modelName)
 	fakePodList := []string{s.Pod1IP}
-	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Test 1: short prompt (should return no pod scores yet)
 	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Short prompt scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
-	time.Sleep(5 * time.Second)
+
+	// Add entries to the index for the short prompt
+	shortPromptBlockKeys := s.promptToKeys(shortPrompt, modelName)
+	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
+
 
 	// Test 2: mid prompt (should return partial match if indexer picks it up)
 	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Mid prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
-	blockKeys = s.promptToKeys(midPrompt, modelName)
-	s.addEntriesToIndex(blockKeys, fakePodList)
-	time.Sleep(5 * time.Second)
+
+	// Add entries to the index for the mid prompt
+	midPromptBlockKeys := s.promptToKeys(midPrompt, modelName)
+	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
 
 	// Test 3: long prompt (should return higher score)
 	pods, err = s.indexer.GetPodScores(s.ctx, longPrompt, modelName, []string{s.Pod1IP})
