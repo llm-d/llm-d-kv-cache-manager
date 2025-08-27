@@ -101,7 +101,19 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 
 // Run starts the indexer.
 func (k *Indexer) Run(ctx context.Context) {
+	// Create a span for indexer startup - this will always be generated
+	tracer := otel.GetTracerProvider().Tracer("llm-d-epp")
+	ctx, span := tracer.Start(ctx, "kv_cache_manager.indexer_startup")
+	defer span.End()
+	
+	span.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "indexer_run"),
+		attribute.String("service.name", "llm-d-kv-cache-manager"),
+	)
+	
 	k.tokenizersPool.Run(ctx)
+	span.SetAttributes(attribute.String("operation", "tokenizers_pool_started"))
 }
 
 // KVBlockIndex returns the kvblock.Index used by the Indexer.
@@ -128,6 +140,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 		attribute.String("operation", "get_pod_scores"),
 		attribute.String("gen_ai.request.model", modelName),
 		attribute.Int("llm_d.kv_cache.pod_count", len(podIdentifiers)),
+		attribute.Int("llm_d.kv_cache.prompt_length", len(prompt)),
 	)
 
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
@@ -135,31 +148,68 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	k.tokenizersPool.AddTask(prompt, modelName)
 
 	// 1. get available tokens of longest prefix
+	_, tokenSpan := tracer.Start(ctx, "kv_cache_manager.find_tokens")
+	tokenSpan.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "find_longest_contained_tokens"),
+	)
 	tokens := k.tokensIndexer.FindLongestContainedTokens(prompt, modelName)
 	if len(tokens) == 0 {
+		tokenSpan.SetAttributes(attribute.Int("tokens.found_count", 0))
+		tokenSpan.End()
 		//nolint:nilnil // no need to return an error
 		return nil, nil
 	}
+	tokenSpan.SetAttributes(attribute.Int("tokens.found_count", len(tokens)))
+	tokenSpan.End()
 
 	// 2. get block keys
+	_, blockSpan := tracer.Start(ctx, "kv_cache_manager.tokens_to_block_keys")
+	blockSpan.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "tokens_to_kv_block_keys"),
+		attribute.Int("tokens.input_count", len(tokens)),
+	)
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	blockSpan.SetAttributes(attribute.Int("block_keys.generated_count", len(blockKeys)))
+	blockSpan.End()
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
+	_, lookupSpan := tracer.Start(ctx, "kv_cache_manager.lookup_pods")
+	lookupSpan.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "kvblock_index_lookup"),
+		attribute.Int("block_keys.count", len(blockKeys)),
+	)
 	keyToPods, err := k.kvBlockIndex.Lookup(ctx, blockKeys, sets.New(podIdentifiers...))
 	if err != nil {
+		lookupSpan.SetAttributes(attribute.String("error", "lookup_failed"))
+		lookupSpan.End()
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to query kvblock indexer: %w", err)
 	}
+	lookupSpan.SetAttributes(attribute.Int("lookup.result_keys_count", len(keyToPods)))
+	lookupSpan.End()
 	traceLogger.Info("found block keys", "block-keys", blockKeys,
 		"pods", podsPerKeyPrintHelper(keyToPods))
 
 	// 4. score pods
+	_, scoreSpan := tracer.Start(ctx, "kv_cache_manager.score_pods")
+	scoreSpan.SetAttributes(
+		attribute.String("component", "llm-d-kv-cache-manager"),
+		attribute.String("operation", "kvblock_scorer_score"),
+		attribute.Int("block_keys.count", len(blockKeys)),
+	)
 	podScores, err := k.kvBlockScorer.Score(blockKeys, keyToPods)
 	if err != nil {
+		scoreSpan.SetAttributes(attribute.String("error", "scoring_failed"))
+		scoreSpan.End()
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to query kvblock scorer: %w", err)
 	}
+	scoreSpan.SetAttributes(attribute.Int("scoring.pod_scores_count", len(podScores)))
+	scoreSpan.End()
 	traceLogger.Info("found pod scores", "pod-scores", podScores)
 
 	// Calculate hit ratio for observability
@@ -176,6 +226,8 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 
 	span.SetAttributes(
 		attribute.Float64("llm_d.kv_cache.hit_ratio", hitRatio),
+		attribute.String("operation.outcome", "success"),
+		attribute.Int("llm_d.kv_cache.scoring_results_count", len(podScores)),
 	)
 
 	return podScores, nil
