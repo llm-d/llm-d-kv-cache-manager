@@ -164,8 +164,10 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 }
 
 func setupStressTest(t *testing.T) ([noOfStressTestPrompts]string, *Pool) {
+	t.Helper()
+
 	var prompts [noOfStressTestPrompts]string
-	rng := rand.New(rand.NewSource(randomSeed))
+	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
 	for i := range noOfStressTestPrompts {
 		prompts[i] = generateRandomSentence(wordLength, maxWordsInPrompt, rng)
 	}
