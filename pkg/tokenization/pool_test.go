@@ -32,9 +32,9 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
-const noOfStressTestPrompts = 5
-const maxWordsInPrompt = 20
-const wordLength = 5
+const noOfStressTestPrompts = 1_000_000
+const maxWordsInPrompt = 1_000
+const wordLength = 2
 const randomSeed = 42
 const defaultWorkersForStressTest = 10
 
