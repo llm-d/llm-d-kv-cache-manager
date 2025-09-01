@@ -32,12 +32,14 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
-const noOfStressTestPrompts = 100_000
-const maxWordsInPrompt = 1_000
-const wordLength = 2
-const randomSeed = 42
-const defaultWorkersForStressTest = 10
-const timeoutForStressTest = 5
+const (
+	noOfStressTestPrompts       = 100_000
+	maxWordsInPrompt            = 1_000
+	wordLength                  = 2
+	randomSeed                  = 42
+	defaultWorkersForStressTest = 10
+	timeoutForStressTest        = 5
+)
 
 var stressTestModelNames = []string{"google-bert/bert-base-uncased", "openai-community/gpt2"}
 
@@ -182,12 +184,12 @@ func TestPool_TokenizationStress(t *testing.T) {
 	tokenizer := pool.GetTokenizer()
 	for _, modelName := range stressTestModelNames {
 		// Pre-load tokenizers to avoid measuring loading time during the stress test
-		_, _, err := (*tokenizer).Encode("", modelName)
+		_, _, err := tokenizer.Encode("", modelName)
 		require.NoError(t, err)
 	}
 
 	// Enqueue a large number of random prompts
-	rng := rand.New(rand.NewSource(randomSeed))
+	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
 	for range noOfStressTestPrompts {
 		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
 		modelName := stressTestModelNames[rng.Intn(len(stressTestModelNames))]
@@ -206,5 +208,6 @@ func TestPool_TokenizationStress(t *testing.T) {
 	remainingTasks := pool.queue.Len()
 
 	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutForStressTest)
-	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)", noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
+	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
+		noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
 }

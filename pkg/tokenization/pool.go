@@ -87,8 +87,8 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 	}, nil
 }
 
-func (p *Pool) GetTokenizer() *Tokenizer {
-	return &p.tokenizer
+func (pool *Pool) GetTokenizer() Tokenizer {
+	return pool.tokenizer
 }
 
 // EnqueueTokenization enqueues a new tokenization task.
