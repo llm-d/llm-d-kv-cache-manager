@@ -44,8 +44,8 @@ func DefaultConfig() *Config {
 	}
 }
 
-// TokenizationResponse is the single (final) message sent back to a caller.
-type TokenizationResponse struct {
+// tokenizationResponse is the single (final) message sent back to a caller.
+type tokenizationResponse struct {
 	Tokens  []uint32
 	Offsets []tokenizers.Offset
 }
@@ -54,7 +54,7 @@ type TokenizationResponse struct {
 type Task struct {
 	Prompt    string
 	ModelName string
-	ResultCh  chan<- TokenizationResponse // nil => fire-and-forget
+	ResultCh  chan<- tokenizationResponse // nil => fire-and-forget
 }
 
 // Pool encapsulates the queue, worker pool, and token indexer.
@@ -102,8 +102,8 @@ func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 }
 
 // Tokenize queues a task and blocks until the final result is available.
-func (pool *Pool) Tokenize(prompt, modelName string) TokenizationResponse {
-	resultCh := make(chan TokenizationResponse, 1)
+func (pool *Pool) Tokenize(prompt, modelName string) []uint32 {
+	resultCh := make(chan tokenizationResponse, 1)
 	pool.queue.Add(Task{
 		Prompt:    prompt,
 		ModelName: modelName,
@@ -111,7 +111,8 @@ func (pool *Pool) Tokenize(prompt, modelName string) TokenizationResponse {
 	})
 
 	res := <-resultCh
-	return res
+	tokens := res.Tokens
+	return tokens
 }
 
 // Run launches worker goroutines that process tasks until the context is
@@ -163,7 +164,7 @@ func (pool *Pool) processTask(task Task) error {
 
 	// On success, send the response if a channel is provided and close the channel.
 	if task.ResultCh != nil {
-		resp := TokenizationResponse{
+		resp := tokenizationResponse{
 			Tokens:  tokenIDs,
 			Offsets: offsets,
 		}
