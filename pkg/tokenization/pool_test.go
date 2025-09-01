@@ -19,6 +19,8 @@ package tokenization
 
 import (
 	"context"
+	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +28,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
+
+const noOfStressTestPrompts = 5
+const maxWordsInPrompt = 20
+const wordLength = 5
+const randomSeed = 42
+const defaultWorkersForStressTest = 10
+
+var stressTestModelNames = []string{"google-bert/bert-base-uncased", "google-bert/bert-base-uncased"}
 
 // MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
@@ -102,7 +114,7 @@ func TestPool_RunIntegration(t *testing.T) {
 	}
 
 	config := &Config{
-		WorkersCount: 2,
+		WorkersCount: 5,
 		HFTokenizerConfig: &HFTokenizerConfig{
 			TokenizersCacheDir: t.TempDir(),
 		},
@@ -131,4 +143,61 @@ func TestPool_RunIntegration(t *testing.T) {
 	<-done
 
 	mockIndexer.AssertExpectations(t)
+}
+
+func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
+	numWords := rng.Intn(maxWords) + 1
+	words := make([]string, numWords)
+
+	for i := 0; i < numWords; i++ {
+		word := make([]byte, wordLength)
+		for j := 0; j < wordLength; j++ {
+			word[j] = byte('a' + rng.Intn(26))
+		}
+		words[i] = string(word)
+	}
+
+	return strings.Join(words, " ")
+}
+
+func TestPool_TokenizationStress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping tokenizer integration test in short mode")
+	}
+
+	inMemoryIndexer, err := prefixstore.NewLRUTokenStore(nil)
+	require.NoError(t, err)
+
+	config := &Config{
+		WorkersCount: defaultWorkersForStressTest,
+		HFTokenizerConfig: &HFTokenizerConfig{
+			TokenizersCacheDir: t.TempDir(),
+		},
+	}
+
+	pool, err := NewTokenizationPool(config, inMemoryIndexer)
+	require.NoError(t, err)
+
+	// Enqueue a large number of random prompts
+	rng := rand.New(rand.NewSource(randomSeed))
+	for range noOfStressTestPrompts {
+		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
+		modelName := stressTestModelNames[rng.Intn(len(stressTestModelNames))]
+		pool.EnqueueTokenization(prompt, modelName)
+	}
+
+	// Create context for the pool
+	timeoutSeconds := 5
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	// Run pool
+	go pool.Run(ctx)
+	<-ctx.Done()
+
+	// get queue size of unprocessed tasks
+	remainingTasks := pool.queue.Len()
+
+	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutSeconds)
+	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)", noOfStressTestPrompts-remainingTasks, timeoutSeconds, frequency)
 }
