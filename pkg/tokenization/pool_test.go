@@ -37,7 +37,7 @@ const (
 	maxWordsInPrompt            = 1_000
 	wordLength                  = 2
 	randomSeed                  = 42
-	defaultWorkersForStressTest = 10
+	defaultWorkersForStressTest = 5
 	timeoutForStressTest        = 5
 )
 
@@ -163,13 +163,12 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 	return strings.Join(words, " ")
 }
 
-func TestPool_TokenizationStress(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping tokenizer integration test in short mode")
+func setupStressTest(t *testing.T) ([noOfStressTestPrompts]string, *Pool) {
+	var prompts [noOfStressTestPrompts]string
+	rng := rand.New(rand.NewSource(randomSeed))
+	for i := range noOfStressTestPrompts {
+		prompts[i] = generateRandomSentence(wordLength, maxWordsInPrompt, rng)
 	}
-
-	inMemoryIndexer, err := prefixstore.NewLRUTokenStore(nil)
-	require.NoError(t, err)
 
 	config := &Config{
 		WorkersCount: defaultWorkersForStressTest,
@@ -178,21 +177,30 @@ func TestPool_TokenizationStress(t *testing.T) {
 		},
 	}
 
+	inMemoryIndexer, err := prefixstore.NewLRUTokenStore(nil)
+	require.NoError(t, err)
+
 	pool, err := NewTokenizationPool(config, inMemoryIndexer)
 	require.NoError(t, err)
 
 	tokenizer := pool.GetTokenizer()
 	for _, modelName := range stressTestModelNames {
-		// Pre-load tokenizers to avoid measuring loading time during the stress test
 		_, _, err := tokenizer.Encode("", modelName)
 		require.NoError(t, err)
 	}
 
-	// Enqueue a large number of random prompts
-	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
-	for range noOfStressTestPrompts {
-		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
-		modelName := stressTestModelNames[rng.Intn(len(stressTestModelNames))]
+	return prompts, pool
+}
+
+func TestPool_AsyncTokenizationStress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping tokenizer integration test in short mode")
+	}
+
+	prompts, pool := setupStressTest(t)
+
+	for i, prompt := range prompts {
+		modelName := stressTestModelNames[i%len(stressTestModelNames)]
 		pool.EnqueueTokenization(prompt, modelName)
 	}
 
@@ -210,4 +218,40 @@ func TestPool_TokenizationStress(t *testing.T) {
 	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutForStressTest)
 	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
 		noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
+}
+
+func TestPool_SyncTokenizationStress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping tokenizer integration test in short mode")
+	}
+
+	prompts, pool := setupStressTest(t)
+
+	// Create context for the pool
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
+	defer cancel()
+
+	// Run pool
+	go pool.Run(ctx)
+
+	// Submit tokenization requests in a loop until context times out
+	processed := 0
+	for {
+		select {
+		case <-ctx.Done():
+			// Time's up!
+			goto done
+		default:
+			// Pick a random prompt and model
+			prompt := prompts[processed]
+			modelName := stressTestModelNames[processed%len(stressTestModelNames)]
+			pool.Tokenize(prompt, modelName)
+			processed++
+		}
+	}
+
+done:
+	frequency := float32(processed) / float32(timeoutForStressTest)
+	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
+		processed, timeoutForStressTest, frequency)
 }
