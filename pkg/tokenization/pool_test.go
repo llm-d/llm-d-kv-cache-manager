@@ -32,13 +32,14 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
-const noOfStressTestPrompts = 1_000_000
+const noOfStressTestPrompts = 100_000
 const maxWordsInPrompt = 1_000
 const wordLength = 2
 const randomSeed = 42
 const defaultWorkersForStressTest = 10
+const timeoutForStressTest = 5
 
-var stressTestModelNames = []string{"google-bert/bert-base-uncased", "google-bert/bert-base-uncased"}
+var stressTestModelNames = []string{"google-bert/bert-base-uncased", "openai-community/gpt2"}
 
 // MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
@@ -149,7 +150,7 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 	numWords := rng.Intn(maxWords) + 1
 	words := make([]string, numWords)
 
-	for i := 0; i < numWords; i++ {
+	for i := range numWords {
 		word := make([]byte, wordLength)
 		for j := 0; j < wordLength; j++ {
 			word[j] = byte('a' + rng.Intn(26))
@@ -178,6 +179,13 @@ func TestPool_TokenizationStress(t *testing.T) {
 	pool, err := NewTokenizationPool(config, inMemoryIndexer)
 	require.NoError(t, err)
 
+	tokenizer := pool.GetTokenizer()
+	for _, modelName := range stressTestModelNames {
+		// Pre-load tokenizers to avoid measuring loading time during the stress test
+		_, _, err := (*tokenizer).Encode("", modelName)
+		require.NoError(t, err)
+	}
+
 	// Enqueue a large number of random prompts
 	rng := rand.New(rand.NewSource(randomSeed))
 	for range noOfStressTestPrompts {
@@ -187,8 +195,7 @@ func TestPool_TokenizationStress(t *testing.T) {
 	}
 
 	// Create context for the pool
-	timeoutSeconds := 5
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
 	defer cancel()
 
 	// Run pool
@@ -198,6 +205,6 @@ func TestPool_TokenizationStress(t *testing.T) {
 	// get queue size of unprocessed tasks
 	remainingTasks := pool.queue.Len()
 
-	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutSeconds)
-	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)", noOfStressTestPrompts-remainingTasks, timeoutSeconds, frequency)
+	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutForStressTest)
+	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)", noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
 }

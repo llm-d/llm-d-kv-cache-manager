@@ -83,7 +83,7 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 	}, nil
 }
 
-func (t *CachedHFTokenizer) GetTokenizer(modelName string) (*tokenizers.Tokenizer, error) {
+func (t *CachedHFTokenizer) getTokenizer(modelName string) (*tokenizers.Tokenizer, error) {
 	tokenizer, ok := t.cache.Get(modelName)
 	if !ok {
 		result, err, shared := t.group.Do(modelName, func() (any, error) {
@@ -108,7 +108,7 @@ func (t *CachedHFTokenizer) GetTokenizer(modelName string) (*tokenizers.Tokenize
 
 // Encode converts a string into token IDs.
 func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
-	tokenizer, err := t.GetTokenizer(modelName)
+	tokenizer, err := t.getTokenizer(modelName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get tokenizer for model %q: %w", modelName, err)
 	}
