@@ -23,6 +23,7 @@ import (
 
 	"github.com/daulet/tokenizers"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/singleflight"
 )
 
 // tokenizersCacheSize is the size of the LRU cache for tokenizers.
@@ -57,6 +58,7 @@ func DefaultHFTokenizerConfig() *HFTokenizerConfig {
 type CachedHFTokenizer struct {
 	cfg   tokenizers.TokenizerConfigOption
 	cache *lru.Cache[string, *tokenizers.Tokenizer]
+	group singleflight.Group
 }
 
 // NewCachedHFTokenizer creates a new instance of HFTokenizer with the provided configuration.
@@ -81,17 +83,34 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 	}, nil
 }
 
-// Encode converts a string into token IDs.
-func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
-	tk, ok := t.cache.Get(modelName)
+func (t *CachedHFTokenizer) GetTokenizer(modelName string) (*tokenizers.Tokenizer, error) {
+	tokenizer, ok := t.cache.Get(modelName)
 	if !ok {
-		tokenizer, err := tokenizers.FromPretrained(modelName, t.cfg)
+		result, err, shared := t.group.Do(modelName, func() (any, error) {
+			return tokenizers.FromPretrained(modelName, t.cfg)
+		})
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		t.cache.Add(modelName, tokenizer)
-		tk = tokenizer
+		tokenizer, ok = result.(*tokenizers.Tokenizer)
+		if !ok {
+			return nil, fmt.Errorf("unexpected tokenizer type from singleflight result")
+		}
+
+		if !shared {
+			// Only add to cache if this goroutine actually loaded the tokenizer
+			t.cache.Add(modelName, tokenizer)
+		}
+	}
+	return tokenizer, nil
+}
+
+// Encode converts a string into token IDs.
+func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
+	tokenizer, err := t.GetTokenizer(modelName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get tokenizer for model %q: %w", modelName, err)
 	}
 
 	encodeOptions := []tokenizers.EncodeOption{
@@ -99,7 +118,7 @@ func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokeniz
 		tokenizers.WithReturnOffsets(),
 	}
 
-	resp := tk.EncodeWithOptions(input, true, encodeOptions...)
+	resp := tokenizer.EncodeWithOptions(input, true, encodeOptions...)
 	return resp.IDs, resp.Offsets, nil
 }
 
