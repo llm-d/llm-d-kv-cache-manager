@@ -163,14 +163,8 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 	return strings.Join(words, " ")
 }
 
-func setupStressTest(b *testing.B) ([noOfStressTestPrompts]string, *Pool) {
+func setupStressTest(b *testing.B) *Pool {
 	b.Helper()
-
-	var prompts [noOfStressTestPrompts]string
-	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
-	for i := range noOfStressTestPrompts {
-		prompts[i] = generateRandomSentence(wordLength, maxWordsInPrompt, rng)
-	}
 
 	config := &Config{
 		WorkersCount: defaultWorkersForStressTest,
@@ -190,8 +184,7 @@ func setupStressTest(b *testing.B) ([noOfStressTestPrompts]string, *Pool) {
 		_, _, err := tokenizer.Encode("", modelName)
 		require.NoError(b, err)
 	}
-
-	return prompts, pool
+	return pool
 }
 
 func BenchmarkAsyncTokenizationStress(b *testing.B) {
@@ -199,9 +192,14 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	prompts, pool := setupStressTest(b)
+	pool := setupStressTest(b)
 
-	for i, prompt := range &prompts {
+	// Return RNG for on-demand prompt generation
+	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
+
+	// Generate and enqueue prompts on-the-fly to avoid memory bloat
+	for i := range noOfStressTestPrompts {
+		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
 		modelName := stressTestModelNames[i%len(stressTestModelNames)]
 		pool.EnqueueTokenization(prompt, modelName)
 	}
@@ -227,7 +225,10 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	prompts, pool := setupStressTest(b)
+	pool := setupStressTest(b)
+
+	// Return RNG for on-demand prompt generation
+	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
 
 	// Create context for the pool
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
@@ -244,8 +245,8 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 			// Time's up!
 			goto done
 		default:
-			// Pick a random prompt and model (wrap around array)
-			prompt := prompts[processed%len(prompts)]
+			// Generate random prompt and model
+			prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
 			modelName := stressTestModelNames[processed%len(stressTestModelNames)]
 			pool.Tokenize(prompt, modelName)
 			processed++
