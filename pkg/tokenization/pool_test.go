@@ -154,7 +154,7 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 
 	for i := range numWords {
 		word := make([]byte, wordLength)
-		for j := 0; j < wordLength; j++ {
+		for j := range wordLength {
 			word[j] = byte('a' + rng.Intn(26))
 		}
 		words[i] = string(word)
@@ -244,8 +244,8 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 			// Time's up!
 			goto done
 		default:
-			// Pick a random prompt and model
-			prompt := prompts[processed]
+			// Pick a random prompt and model (wrap around array)
+			prompt := prompts[processed%len(prompts)]
 			modelName := stressTestModelNames[processed%len(stressTestModelNames)]
 			pool.Tokenize(prompt, modelName)
 			processed++
