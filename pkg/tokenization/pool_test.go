@@ -33,15 +33,19 @@ import (
 )
 
 const (
-	noOfStressTestPrompts       = 100_000
-	maxWordsInPrompt            = 1_000
-	wordLength                  = 2
-	randomSeed                  = 42
-	defaultWorkersForStressTest = 5
-	timeoutForStressTest        = 5
+	benchmarkPromptCount = 100_000
+	benchmarkMaxWords    = 1_000
+	benchmarkWordLength  = 2
+	benchmarkSeed        = 42
+
+	benchmarkWorkerCount = 5
+	benchmarkTimeoutSec  = 5
 )
 
-var stressTestModelNames = []string{"google-bert/bert-base-uncased", "openai-community/gpt2"}
+var benchmarkModels = []string{
+	"google-bert/bert-base-uncased",
+	"openai-community/gpt2",
+}
 
 // MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
@@ -167,7 +171,7 @@ func setupStressTest(b *testing.B) *Pool {
 	b.Helper()
 
 	config := &Config{
-		WorkersCount: defaultWorkersForStressTest,
+		WorkersCount: benchmarkWorkerCount,
 		HFTokenizerConfig: &HFTokenizerConfig{
 			TokenizersCacheDir: b.TempDir(),
 		},
@@ -180,7 +184,7 @@ func setupStressTest(b *testing.B) *Pool {
 	require.NoError(b, err)
 
 	tokenizer := pool.GetTokenizer()
-	for _, modelName := range stressTestModelNames {
+	for _, modelName := range benchmarkModels {
 		_, _, err := tokenizer.Encode("", modelName)
 		require.NoError(b, err)
 	}
@@ -195,17 +199,17 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 	pool := setupStressTest(b)
 
 	// Return RNG for on-demand prompt generation
-	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
+	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
 	// Generate and enqueue prompts on-the-fly to avoid memory bloat
-	for i := range noOfStressTestPrompts {
-		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
-		modelName := stressTestModelNames[i%len(stressTestModelNames)]
+	for i := range benchmarkPromptCount {
+		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
+		modelName := benchmarkModels[i%len(benchmarkModels)]
 		pool.EnqueueTokenization(prompt, modelName)
 	}
 
 	// Create context for the pool
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), benchmarkTimeoutSec*time.Second)
 	defer cancel()
 
 	// Run pool
@@ -215,9 +219,9 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 	// get queue size of unprocessed tasks
 	remainingTasks := pool.queue.Len()
 
-	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutForStressTest)
+	frequency := float32(benchmarkPromptCount-remainingTasks) / float32(benchmarkTimeoutSec)
 	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
-		noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
+		benchmarkPromptCount-remainingTasks, benchmarkTimeoutSec, frequency)
 }
 
 func BenchmarkSyncTokenizationStress(b *testing.B) {
@@ -228,10 +232,10 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	pool := setupStressTest(b)
 
 	// Return RNG for on-demand prompt generation
-	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
+	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
 	// Create context for the pool
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), benchmarkTimeoutSec*time.Second)
 	defer cancel()
 
 	// Run pool
@@ -241,13 +245,13 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	processed := 0
 	for ctx.Err() == nil {
 		// Generate random prompt and model
-		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
-		modelName := stressTestModelNames[processed%len(stressTestModelNames)]
+		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
+		modelName := benchmarkModels[processed%len(benchmarkModels)]
 		pool.Tokenize(prompt, modelName)
 		processed++
 	}
 
-	frequency := float32(processed) / float32(timeoutForStressTest)
+	frequency := float32(processed) / float32(benchmarkTimeoutSec)
 	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
-		processed, timeoutForStressTest, frequency)
+		processed, benchmarkTimeoutSec, frequency)
 }
