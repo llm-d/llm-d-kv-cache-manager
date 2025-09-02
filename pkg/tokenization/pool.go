@@ -62,8 +62,11 @@ type Pool struct {
 	workers int
 	queue   workqueue.TypedRateLimitingInterface[Task]
 	wg      sync.WaitGroup
+	indexer prefixstore.Indexer
 
-	indexer   prefixstore.Indexer
+	// Tokenizer caches multiple HuggingFace tokenizers in memory.
+	// The cache is shared between all pool workers. Since each tokenizer
+	// is immutable, Encode calls are safe for concurrent use without locks.
 	tokenizer Tokenizer
 }
 
