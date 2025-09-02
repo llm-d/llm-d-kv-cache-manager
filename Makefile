@@ -170,6 +170,8 @@ e2e-test: download-tokenizer install-python-deps download-zmq ## Run end-to-end 
 bench: download-tokenizer install-python-deps download-zmq ## Run benchmarks
 	@printf "\033[33;1m==== Running chat template benchmarks ====\033[0m\n"
 	@go test -bench=. -benchmem ./pkg/preprocessing/chat_completions/
+	@printf "\033[33;1m==== Running tokenization benchmarks ====\033[0m\n"
+	@go test -bench=. -benchmem ./pkg/tokenization/
 
 .PHONY: run
 run: build ## Run the application locally

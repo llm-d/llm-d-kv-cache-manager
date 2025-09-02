@@ -163,8 +163,8 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 	return strings.Join(words, " ")
 }
 
-func setupStressTest(t *testing.T) ([noOfStressTestPrompts]string, *Pool) {
-	t.Helper()
+func setupStressTest(b *testing.B) ([noOfStressTestPrompts]string, *Pool) {
+	b.Helper()
 
 	var prompts [noOfStressTestPrompts]string
 	rng := rand.New(rand.NewSource(randomSeed)) //nolint:gosec // Test code - weak random is acceptable
@@ -175,31 +175,31 @@ func setupStressTest(t *testing.T) ([noOfStressTestPrompts]string, *Pool) {
 	config := &Config{
 		WorkersCount: defaultWorkersForStressTest,
 		HFTokenizerConfig: &HFTokenizerConfig{
-			TokenizersCacheDir: t.TempDir(),
+			TokenizersCacheDir: b.TempDir(),
 		},
 	}
 
 	inMemoryIndexer, err := prefixstore.NewLRUTokenStore(nil)
-	require.NoError(t, err)
+	require.NoError(b, err)
 
 	pool, err := NewTokenizationPool(config, inMemoryIndexer)
-	require.NoError(t, err)
+	require.NoError(b, err)
 
 	tokenizer := pool.GetTokenizer()
 	for _, modelName := range stressTestModelNames {
 		_, _, err := tokenizer.Encode("", modelName)
-		require.NoError(t, err)
+		require.NoError(b, err)
 	}
 
 	return prompts, pool
 }
 
-func TestPool_AsyncTokenizationStress(t *testing.T) {
+func BenchmarkAsyncTokenizationStress(b *testing.B) {
 	if testing.Short() {
-		t.Skip("Skipping tokenizer integration test in short mode")
+		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	prompts, pool := setupStressTest(t)
+	prompts, pool := setupStressTest(b)
 
 	for i, prompt := range prompts {
 		modelName := stressTestModelNames[i%len(stressTestModelNames)]
@@ -218,16 +218,16 @@ func TestPool_AsyncTokenizationStress(t *testing.T) {
 	remainingTasks := pool.queue.Len()
 
 	frequency := float32(noOfStressTestPrompts-remainingTasks) / float32(timeoutForStressTest)
-	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
+	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
 		noOfStressTestPrompts-remainingTasks, timeoutForStressTest, frequency)
 }
 
-func TestPool_SyncTokenizationStress(t *testing.T) {
+func BenchmarkSyncTokenizationStress(b *testing.B) {
 	if testing.Short() {
-		t.Skip("Skipping tokenizer integration test in short mode")
+		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	prompts, pool := setupStressTest(t)
+	prompts, pool := setupStressTest(b)
 
 	// Create context for the pool
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutForStressTest*time.Second)
@@ -254,6 +254,6 @@ func TestPool_SyncTokenizationStress(t *testing.T) {
 
 done:
 	frequency := float32(processed) / float32(timeoutForStressTest)
-	t.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
+	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
 		processed, timeoutForStressTest, frequency)
 }
