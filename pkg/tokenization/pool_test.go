@@ -201,7 +201,7 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 
 	prompts, pool := setupStressTest(b)
 
-	for i, prompt := range prompts {
+	for i, prompt := range &prompts {
 		modelName := stressTestModelNames[i%len(stressTestModelNames)]
 		pool.EnqueueTokenization(prompt, modelName)
 	}
