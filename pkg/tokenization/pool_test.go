@@ -33,13 +33,10 @@ import (
 )
 
 const (
-	benchmarkPromptCount = 100_000
 	benchmarkMaxWords    = 1_000
 	benchmarkWordLength  = 2
 	benchmarkSeed        = 42
-
 	benchmarkWorkerCount = 5
-	benchmarkTimeoutSec  = 5
 )
 
 var benchmarkModels = []string{
@@ -202,26 +199,31 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
 	// Generate and enqueue prompts on-the-fly to avoid memory bloat
-	for i := range benchmarkPromptCount {
+	for i := range b.N {
 		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
 		modelName := benchmarkModels[i%len(benchmarkModels)]
 		pool.EnqueueTokenization(prompt, modelName)
 	}
 
 	// Create context for the pool
-	ctx, cancel := context.WithTimeout(context.Background(), benchmarkTimeoutSec*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Run pool
 	go pool.Run(ctx)
-	<-ctx.Done()
 
-	// get queue size of unprocessed tasks
-	remainingTasks := pool.queue.Len()
+	b.ResetTimer()
 
-	frequency := float32(benchmarkPromptCount-remainingTasks) / float32(benchmarkTimeoutSec)
-	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
-		benchmarkPromptCount-remainingTasks, benchmarkTimeoutSec, frequency)
+	// when poo gets empty pool.queue.Len() == 0 call cancel to the context:
+	for pool.queue.Len() > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	b.StopTimer()
+	cancel()
+
+	frequency := float64(b.N) / b.Elapsed().Seconds()
+	b.Logf("Processed %d tasks in %v (%.2f tasks/sec)",
+		b.N, b.Elapsed(), frequency)
 }
 
 func BenchmarkSyncTokenizationStress(b *testing.B) {
@@ -235,23 +237,25 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
 	// Create context for the pool
-	ctx, cancel := context.WithTimeout(context.Background(), benchmarkTimeoutSec*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Run pool
 	go pool.Run(ctx)
 
-	// Submit tokenization requests in a loop until context times out
-	processed := 0
-	for ctx.Err() == nil {
-		// Generate random prompt and model
+	// Now that workers are running, reset benchmark timer
+	b.ResetTimer()
+
+	// Submit tokenization requests in a loop until limit
+	for i := 0; b.Loop(); i++ {
 		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
-		modelName := benchmarkModels[processed%len(benchmarkModels)]
-		pool.Tokenize(prompt, modelName)
-		processed++
+		model := benchmarkModels[i%len(benchmarkModels)]
+		pool.Tokenize(prompt, model)
 	}
 
-	frequency := float32(processed) / float32(benchmarkTimeoutSec)
-	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
-		processed, benchmarkTimeoutSec, frequency)
+	b.StopTimer()
+	cancel()
+
+	frequency := float64(b.N) / b.Elapsed().Seconds()
+	b.Logf("Processed %d tasks in %v (%.2f tasks/sec)",
+		b.N, b.Elapsed(), frequency)
 }
