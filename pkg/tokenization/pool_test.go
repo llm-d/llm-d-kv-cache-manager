@@ -239,21 +239,14 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 
 	// Submit tokenization requests in a loop until context times out
 	processed := 0
-	for {
-		select {
-		case <-ctx.Done():
-			// Time's up!
-			goto done
-		default:
-			// Generate random prompt and model
-			prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
-			modelName := stressTestModelNames[processed%len(stressTestModelNames)]
-			pool.Tokenize(prompt, modelName)
-			processed++
-		}
+	for ctx.Err() == nil {
+		// Generate random prompt and model
+		prompt := generateRandomSentence(wordLength, maxWordsInPrompt, rng)
+		modelName := stressTestModelNames[processed%len(stressTestModelNames)]
+		pool.Tokenize(prompt, modelName)
+		processed++
 	}
 
-done:
 	frequency := float32(processed) / float32(timeoutForStressTest)
 	b.Logf("Processed %d tasks in %v seconds (%.2f tasks/sec)",
 		processed, timeoutForStressTest, frequency)
