@@ -175,18 +175,6 @@ Configures the tokenization worker pool and cache utilization strategy.
 | `huggingFaceToken` | `string` | HuggingFace authentication token | `""` |
 | `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
 
-#### MinPrefixOverlapRatio
-
-Minimum ratio of prompt that must be covered by cached prefix tokens to skip full tokenization.
-
-- **Range**: `0.0` to `1.0` 
-- **Default**: `0.8`
-- **How it works**:
-  1. Cache lookup finds the longest matching prefix tokens for the prompt
-  2. Coverage ratio is calculated: `covered_characters / total_prompt_length`
-  3. If ratio ≥ threshold: return cached prefix tokens (fast path)
-  4. If ratio < threshold: perform full tokenization and cache the result (slow path)
-  5. KVCache lookup for the given tokens.
 
 ### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
 

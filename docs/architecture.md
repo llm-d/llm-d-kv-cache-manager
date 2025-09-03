@@ -128,6 +128,26 @@ The `kvblock.Index` is an interface with swappable backends.
 * **In-Memory (Default)**: A very fast, thread-safe, two-level LRU cache using `hashicorp/golang-lru`. The first level maps a block key to a second-level cache of pods that have the block. It prioritizes speed over persistence, which is usually the right trade-off for ephemeral cache data.
 * **Redis (Optional)**: A distributed backend that can be shared by multiple indexer replicas. It can offer scalability and persistence, but this may be overkill given the short lifetime of most KV-cache blocks.
 
+#### Tokenization Caching Process
+
+The tokenization pool implements a cache-aware strategy to optimize prompt processing:
+
+**How Tokenization Caching Works:**
+
+1. **Prefix Cache Lookup**: For each tokenization request, the pool first queries the prefix store to find cached tokens
+2. **Coverage Calculation**: The overlap ratio is calculated as `covered_characters / total_prompt_length`
+3. **Threshold Decision**: 
+   - If `ratio >= minPrefixOverlapRatio`: Return cached prefix tokens (fast path)
+   - If `ratio < minPrefixOverlapRatio`: Perform full tokenization and cache the result (slow path)
+4. **Prefix Cache Update**: Full tokenizations are stored in the prefix store for future reuse
+5. **KV Cache Lookup**: The resulting tokens are converted to KV-block keys for scoring
+
+**Configuration Impact:**
+
+The `minPrefixOverlapRatio` parameter controls the trade-off:
+- **Lower values**: Accept shorter cached prefixes, reduce full tokenization overhead, potentially less accurate
+- **Higher values**: Require better prefix coverage, more accurate results, less prefix cache utilization
+
 #### Tokenization Subsystem
 
 Efficiently handling tokenization is critical for performance. The system is designed to tokenize prompts quickly without blocking scoring requests. It relies on a `PrefixStore` to cache tokenization results and an asynchronous `Pool` to process new, unseen prompts.
