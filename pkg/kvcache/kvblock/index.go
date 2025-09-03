@@ -33,6 +33,9 @@ type IndexConfig struct {
 	InMemoryConfig *InMemoryIndexConfig `json:"inMemoryConfig"`
 	// RedisConfig holds the configuration for the Redis index.
 	RedisConfig *RedisIndexConfig `json:"redisConfig"`
+	// CostAwareMemoryConfig holds the configuration for the cost-aware memory index.
+	CostAwareMemoryConfig *CostAwareMemoryIndexConfig `json:"costAwareMemoryConfig"`
+
 	// EnableMetrics toggles whether admissions/evictions/hits/misses are
 	// recorded.
 	EnableMetrics bool `json:"enableMetrics"`
@@ -64,6 +67,11 @@ func NewIndex(ctx context.Context, cfg *IndexConfig) (Index, error) {
 		idx, err = NewInMemoryIndex(cfg.InMemoryConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create in-memory index: %w", err)
+		}
+	case cfg.CostAwareMemoryConfig != nil:
+		idx, err = NewCostAwareMemoryIndex(cfg.CostAwareMemoryConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cost-aware memory index: %w", err)
 		}
 	case cfg.RedisConfig != nil:
 		//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter

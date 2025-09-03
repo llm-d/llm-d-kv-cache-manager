@@ -125,6 +125,7 @@ To guarantee compatibility, the indexer perfectly matches vLLM's content-address
 The `kvblock.Index` is an interface with swappable backends.
 
 * **In-Memory (Default)**: A very fast, thread-safe, two-level LRU cache using `hashicorp/golang-lru`. The first level maps a block key to a second-level cache of pods that have the block. It prioritizes speed over persistence, which is usually the right trade-off for ephemeral cache data.
+* **Cost-Aware Memory (Optional)**: A memory-efficient implementation using the `hypermodeinc/ristretto` cache library that provides cost-aware eviction based on actual memory usage. Unlike the basic in-memory backend, this implementation calculates the memory footprint of each cache entry and uses this information for intelligent eviction decisions. This is particularly useful when memory usage patterns vary significantly across different keys.
 * **Redis (Optional)**: A distributed backend that can be shared by multiple indexer replicas. It can offer scalability and persistence, but this may be overkill given the short lifetime of most KV-cache blocks.
 
 #### Tokenization Caching Process

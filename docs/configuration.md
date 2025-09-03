@@ -75,6 +75,7 @@ Configures the KV-block index backend. Multiple backends can be configured, but 
 ```json
 {
   "inMemoryConfig": { ... },
+  "costAwareMemoryConfig": { ... },
   "redisConfig": { ... },
   "enableMetrics": false
 }
@@ -83,6 +84,7 @@ Configures the KV-block index backend. Multiple backends can be configured, but 
 | Field | Type                                                  | Description | Default |
 |-------|-------------------------------------------------------|-------------|---------|
 | `inMemoryConfig` | [InMemoryIndexConfig](#in-memory-index-configuration) | In-memory index configuration | See defaults |
+| `costAwareMemoryConfig` | [CostAwareMemoryIndexConfig](#cost-aware-memory-index-configuration) | Cost-aware memory index configuration | `null` |
 | `redisConfig` | [RedisIndexConfig](#redis-index-configuration)        | Redis index configuration | `null` |
 | `enableMetrics` | `boolean`                                             | Enable admissions/evictions/hits/misses recording | `false` |
 | `metricsLoggingInterval` | `string` (duration) | Interval at which metrics are logged (e.g., `"1m0s"`). If zero or omitted, metrics logging is disabled. Requires `enableMetrics` to be `true`. | `"0s"` |
@@ -102,6 +104,20 @@ Configures the in-memory KV block index implementation.
 |-------|------|-------------|---------|
 | `size` | `integer` | Maximum number of keys that can be stored | `100000000` |
 | `podCacheSize` | `integer` | Maximum number of pod entries per key | `10` |
+
+### Cost-Aware Memory Index Configuration (`CostAwareMemoryIndexConfig`)
+
+Configures the cost-aware memory-based KV block index implementation using Ristretto cache.
+
+```json
+{
+  "size": "2GiB"
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `size` | `string` | Maximum memory size for the cache. Supports human-readable formats like "2GiB", "500MiB", "1GB", etc. | `"2GiB"` |
 
 ### Redis Index Configuration (`RedisIndexConfig`)
 
@@ -229,7 +245,9 @@ For the ZMQ event processing pool:
 
 1. **Hash Seed Alignment**: The `hashSeed` in `TokenProcessorConfig` should be aligned with vLLM's `PYTHONHASHSEED` environment variable to ensure consistent hashing across the system.
 
-2. **Memory Considerations**: The `size` parameter in `InMemoryIndexConfig` directly affects memory usage. Each key-value pair consumes memory proportional to the number of associated pods.
+2. **Memory Considerations**: 
+   - The `size` parameter in `InMemoryIndexConfig` directly affects memory usage. Each key-value pair consumes memory proportional to the number of associated pods.
+   - The `size` parameter in `CostAwareMemoryIndexConfig` controls the maximum memory footprint and supports human-readable formats (e.g., "2GiB", "500MiB", "1GB").
 
 3. **Performance Tuning**: 
    - Increase `workersCount` in tokenization config for higher tokenization throughput

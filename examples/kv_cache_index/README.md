@@ -4,7 +4,7 @@ This example demonstrates how to configure and use the `kvcache.Indexer` module 
 
 ## What it does
 
-- Initializes a `kvcache.Indexer` with optional Redis or in-memory backend.
+- Initializes a `kvcache.Indexer` with optional Redis, in-memory backend, or cost-aware memory.
 - Optionally uses a HuggingFace token for tokenizer pool configuration.
 - Demonstrates adding and querying KV cache index entries for a model prompt.
 - Shows how to retrieve pod scores for a given prompt.

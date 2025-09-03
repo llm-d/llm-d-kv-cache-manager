@@ -56,7 +56,6 @@ func testCommonIndexBehavior(t *testing.T, indexFactory func(t *testing.T) Index
 	})
 
 	t.Run("ConcurrentOperations", func(t *testing.T) {
-		t.Skip("TODO: Re-enable this test after fixing https://github.com/llm-d/llm-d-kv-cache-manager/issues/104")
 		index := indexFactory(t)
 		testConcurrentOperations(t, ctx, index)
 	})
