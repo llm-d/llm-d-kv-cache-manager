@@ -27,8 +27,10 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
-const defaultWorkers = 5
-const defaultMinPrefixOverlapRatio = 0.8
+const (
+	defaultWorkers                = 5
+	defaultMinPrefixOverlapRatio = 0.8
+)
 
 // Config holds the configuration for the TokenizationPool.
 type Config struct {
