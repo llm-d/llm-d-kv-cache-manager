@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	defaultWorkers                = 5
+	defaultWorkers               = 5
 	defaultMinPrefixOverlapRatio = 0.8
 )
 
