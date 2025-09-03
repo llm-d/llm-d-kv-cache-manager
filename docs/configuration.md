@@ -59,6 +59,7 @@ Here's a complete configuration example with all options:
   },
   "tokenizersPoolConfig": {
     "workersCount": 8,
+    "minPrefixOverlapRatio": 0.85,
     "huggingFaceToken": "your_hf_token_here",
     "tokenizersCacheDir": "/tmp/tokenizers"
   }
@@ -156,11 +157,12 @@ Configures the LRU-based prefix token store.
 
 ### Tokenization Pool Configuration (`Config`)
 
-Configures the tokenization worker pool.
+Configures the tokenization worker pool and cache utilization strategy.
 
 ```json
 {
   "workersCount": 5,
+  "minPrefixOverlapRatio": 0.8,
   "huggingFaceToken": "",
   "tokenizersCacheDir": ""
 }
@@ -168,9 +170,23 @@ Configures the tokenization worker pool.
 
 | Field | Type | Description | Default |
 |-------|------|-------------|--------|
-| `workersCount` | `integer` | Number of tokenization workers | `5` |
+| `workersCount` | `integer` | Number of tokenization worker goroutines | `5` |
+| `minPrefixOverlapRatio` | `float64` | Minimum overlap ratio to use cached prefix tokens (0.0-1.0) | `0.8` |
 | `huggingFaceToken` | `string` | HuggingFace authentication token | `""` |
 | `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
+
+#### MinPrefixOverlapRatio
+
+Minimum ratio of prompt that must be covered by cached prefix tokens to skip full tokenization.
+
+- **Range**: `0.0` to `1.0` 
+- **Default**: `0.8`
+- **How it works**:
+  1. Cache lookup finds the longest matching prefix tokens for the prompt
+  2. Coverage ratio is calculated: `covered_characters / total_prompt_length`
+  3. If ratio ≥ threshold: return cached prefix tokens (fast path)
+  4. If ratio < threshold: perform full tokenization and cache the result (slow path)
+  5. KVCache lookup for the given tokens.
 
 ### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
 
@@ -229,6 +245,7 @@ For the ZMQ event processing pool:
 
 3. **Performance Tuning**: 
    - Increase `workersCount` in tokenization config for higher tokenization throughput
+   - Adjust `minPrefixOverlapRatio`: lower values accept shorter cached prefixes, reducing full tokenization overhead
    - Adjust `concurrency` in event processing for better event handling performance
    - Tune cache sizes based on available memory and expected workload
 
