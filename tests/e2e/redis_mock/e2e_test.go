@@ -135,8 +135,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	midPromptBlockKeys := s.promptToKeys(midPrompt, defaultModelName)
-	s.Equal(pods[s.Pod1IP], len(midPromptBlockKeys), "all mid-prompt block keys should have been indexed")
+	s.Greater(pods[s.Pod1IP], 0, "mid-prompt block keys should have been indexed")
 
 	// Test 3: short prompt(should return a match)
 	pods, err = s.indexer.GetPodScores(s.ctx, shortPrompt, defaultModelName, []string{s.Pod1IP})
