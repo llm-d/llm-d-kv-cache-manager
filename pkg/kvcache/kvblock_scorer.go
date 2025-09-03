@@ -29,20 +29,20 @@ type KVScoringStrategy string
 
 const (
 	// LongestPrefixMatch Score by longest consecutive match from start.
-	LongestPrefixMatch KVScoringStrategy = "LongestPrefix"
-	DefaultMinOverlapRatio = 0.8
+	LongestPrefixMatch     KVScoringStrategy = "LongestPrefix"
+	DefaultMinOverlapRatio                   = 0.8
 )
 
 // KVBlockScorerConfig holds the configuration for the KVBlockScorer.
 type KVBlockScorerConfig struct {
-	ScoringStrategy KVScoringStrategy
+	ScoringStrategy       KVScoringStrategy
 	MinPrefixOverlapRatio float64
 }
 
 // DefaultKVBlockScorerConfig returns the default configuration for the KVBlockScorer.
 func DefaultKVBlockScorerConfig() *KVBlockScorerConfig {
 	return &KVBlockScorerConfig{
-		ScoringStrategy: LongestPrefixMatch,
+		ScoringStrategy:       LongestPrefixMatch,
 		MinPrefixOverlapRatio: DefaultMinOverlapRatio,
 	}
 }

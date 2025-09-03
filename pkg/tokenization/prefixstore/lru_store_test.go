@@ -84,6 +84,6 @@ func TestLRUTokenStore_LRUEviction(t *testing.T) {
 
 	// Third text block should still be in cache
 	prompt = "pqrstuvwxyz,./';lp"
-	result, _= store.FindLongestContainedTokens(prompt, modelName)
+	result, _ = store.FindLongestContainedTokens(prompt, modelName)
 	assert.Equal(t, []uint32{7, 8, 9}, result)
 }

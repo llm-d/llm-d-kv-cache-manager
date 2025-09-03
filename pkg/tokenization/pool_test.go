@@ -64,9 +64,11 @@ func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32,
 	return args.Error(0)
 }
 
+//nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
 func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
 	args := m.Called(prompt, modelName)
-	return args.Get(0).([]uint32), 0.0 //nolint:errcheck // unused mock
+	tokens := args.Get(0).([]uint32) //nolint:errcheck // unused mock
+	return tokens, 0.0
 }
 
 func TestPool_ProcessTask(t *testing.T) {

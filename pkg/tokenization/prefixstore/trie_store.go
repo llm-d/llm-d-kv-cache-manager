@@ -67,6 +67,8 @@ func (s *ContainedTokenStore) AddTokenization(modelName string, prompt string, t
 // longest matching prefix.
 // The function returns the matched tokens and the ratio of the prompt
 // that was covered by the matched tokens.
+//
+//nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
 func (s *ContainedTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
 	s.mu.RLock()
 	trie, ok := s.tries[modelName]
@@ -186,6 +188,8 @@ func (t *containedTokenTrie) addFullTokenization(prompt string, tokens []uint32,
 
 // FindLongestContainedTokens traverses the Trie for the prompt and collects
 // the sequence of last contained tokens encountered.
+//
+//nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
 func (t *containedTokenTrie) FindLongestContainedTokens(prompt string) ([]uint32, float64) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
