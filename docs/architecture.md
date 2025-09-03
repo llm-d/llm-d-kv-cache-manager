@@ -42,7 +42,7 @@ sequenceDiagram
 
     Router->>Indexer: GetPodScores(prompt, model, pods[])
     
-    Note over Indexer: Asynchronously tokenizes prompt if not in cache
+    Note over Indexer: Synchronously tokenizes prompt using pool if not in prefix cache
     Indexer->>PrefixStore: FindLongestContainedTokens(prompt, model)
     PrefixStore-->>Indexer: cachedTokens[]
     
@@ -60,14 +60,13 @@ sequenceDiagram
 
 **Key Steps:**
 
-1.  **Token Retrieval**: The `Indexer` first checks the `PrefixStore` for the longest token sequence it has for the prompt's prefix. If the prompt isn't known, it's queued for background tokenization.
+1.  **Token Retrieval**: The `Indexer` first checks the `PrefixStore` for the longest token sequence it has for the prompt's prefix. If the prompt isn't cached or coverage is insufficient, it performs synchronous tokenization using the worker pool.
 2.  **Key Generation**: The retrieved tokens are sent to the `TokenProcessor`, which chunks and hashes them into a sequence of deterministic KV-block keys that match vLLM's logic.
 3.  **Index Lookup**: With the keys, the `Indexer` queries the `kvblock.Index` to see which pods have them. The lookup is optimized to find the longest *consecutive* chain of hits from the start.
 4.  **Scoring**: The `Scorer` takes the hit data and scores each pod based on its number of consecutive matching blocks.
 5.  **Response**: A final map of pod scores is sent back to the router.
 
-Note: step (1) means that the first time a prompt is scored, it may return an empty result while the tokenization happens in the background.
-It is assumed that this cache will be populated with common prompts, so the first scoring request is an edge case.
+Note: The tokenization pool now supports both asynchronous (fire-and-forget) and synchronous modes, ensuring scoring requests can always return complete results.
 
 ### Write Path: Processing Cache Events
 
@@ -150,9 +149,9 @@ The `minPrefixOverlapRatio` parameter controls the trade-off:
 
 #### Tokenization Subsystem
 
-Efficiently handling tokenization is critical for performance. The system is designed to tokenize prompts quickly without blocking scoring requests. It relies on a `PrefixStore` to cache tokenization results and an asynchronous `Pool` to process new, unseen prompts.
+Efficiently handling tokenization is critical for performance. The system is designed to tokenize prompts quickly using a worker pool that supports both asynchronous and synchronous operations. It relies on a `PrefixStore` to cache tokenization results and avoid redundant work.
 
-* **Async Tokenization Pool**: When a scoring request arrives with a prompt that isn't in the `PrefixStore`, the system doesn't wait. Instead, it immediately returns an empty result for that prompt and adds a tokenization task to a background worker pool (`tokenization.Pool`). This ensures that the scoring endpoint remains fast and responsive. The pool uses a configurable number of workers to process the queue.
+* **Tokenization Pool**: The `tokenization.Pool` provides both asynchronous (fire-and-forget) and synchronous tokenization modes. For scoring requests, synchronous tokenization ensures complete results are always returned. The pool uses a configurable number of workers to process requests efficiently.
 * **Tokenizer Caching**: The actual tokenization is handled by a `CachedHFTokenizer`, which wraps Hugging Face's high-performance Rust tokenizers. To avoid the overhead of repeatedly loading tokenizer models from disk, it maintains an LRU cache of active tokenizer instances.
 * **PrefixStore Backends**: The token cache (`PrefixStore`) is an interface with two available implementations:
     * **`LRUTokenStore` (Default)**: This implementation chunks incoming text, hashes it, and stores blocks of tokens in an LRU cache. It's fast and memory-bounded, making it a reliable default. It's designed to find the longest chain of *blocks* that match a prompt's prefix.
