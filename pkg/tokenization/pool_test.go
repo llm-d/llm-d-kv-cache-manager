@@ -76,9 +76,10 @@ func TestPool_ProcessTask(t *testing.T) {
 	mockTokenizer := &MockTokenizer{}
 
 	pool := &Pool{
-		workers:   1,
-		indexer:   mockIndexer,
-		tokenizer: mockTokenizer,
+		workers:               1,
+		indexer:               mockIndexer,
+		tokenizer:             mockTokenizer,
+		minPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
 	}
 
 	task := Task{
@@ -124,6 +125,7 @@ func TestPool_RunIntegration(t *testing.T) {
 		HFTokenizerConfig: &HFTokenizerConfig{
 			TokenizersCacheDir: t.TempDir(),
 		},
+		MinPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
 	}
 
 	pool, err := NewTokenizationPool(config, mockIndexer)

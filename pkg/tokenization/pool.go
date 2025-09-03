@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/daulet/tokenizers"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -29,25 +28,27 @@ import (
 )
 
 const defaultWorkers = 5
+const defaultMinPrefixOverlapRatio = 0.8
 
 // Config holds the configuration for the TokenizationPool.
 type Config struct {
-	WorkersCount int `json:"workersCount"`
+	WorkersCount          int     `json:"workersCount"`
+	MinPrefixOverlapRatio float64 `json:"minPrefixOverlapRatio"`
 	*HFTokenizerConfig
 }
 
 // DefaultConfig returns a default configuration for the TokenizationPool.
 func DefaultConfig() *Config {
 	return &Config{
-		WorkersCount:      defaultWorkers,
-		HFTokenizerConfig: DefaultHFTokenizerConfig(),
+		WorkersCount:          defaultWorkers,
+		MinPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
+		HFTokenizerConfig:     DefaultHFTokenizerConfig(),
 	}
 }
 
 // tokenizationResponse holds the result of a tokenization operation.
 type tokenizationResponse struct {
-	Tokens  []uint32
-	Offsets []tokenizers.Offset
+	Tokens []uint32
 }
 
 // Task represents a unit of work for tokenizing a prompt.
@@ -68,6 +69,9 @@ type Pool struct {
 	// The cache is shared between all pool workers. Since each tokenizer
 	// is immutable, Encode calls are safe for concurrent use without locks.
 	tokenizer Tokenizer
+
+	// Minimum overlap ratio to skip full tokenization and use cached prefix tokens.
+	minPrefixOverlapRatio float64
 }
 
 // NewTokenizationPool initializes a TokenizationPool with the specified number
@@ -83,10 +87,11 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 	}
 
 	return &Pool{
-		workers:   config.WorkersCount,
-		queue:     workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Task]()),
-		indexer:   store,
-		tokenizer: cachingTokenizer,
+		workers:               config.WorkersCount,
+		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Task]()),
+		indexer:               store,
+		tokenizer:             cachingTokenizer,
+		minPrefixOverlapRatio: config.MinPrefixOverlapRatio,
 	}, nil
 }
 
@@ -150,22 +155,29 @@ func (pool *Pool) workerLoop(_ int) {
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
-	tokenIDs, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
-	if err != nil {
-		klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
-		return err
-	}
+	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
 
-	if e := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokenIDs, offsets); e != nil {
-		err = fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, e)
-		return err
+	// if the overlap ratio is low, get the full tokenization
+	if overlapRatio < pool.minPrefixOverlapRatio {
+		tokens, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
+		if err != nil {
+			klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
+			return err
+		}
+
+		// update the indexer with the new tokenization
+		if e := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokens, offsets); e != nil {
+			err = fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, e)
+			return err
+		}
+
+		tokenIDs = tokens
 	}
 
 	// On success, send the response if a channel is provided and close the channel.
 	if task.ResultCh != nil {
 		resp := tokenizationResponse{
-			Tokens:  tokenIDs,
-			Offsets: offsets,
+			Tokens: tokenIDs,
 		}
 		task.ResultCh <- resp
 		close(task.ResultCh)
