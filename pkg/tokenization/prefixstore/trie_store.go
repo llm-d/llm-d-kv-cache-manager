@@ -65,7 +65,7 @@ func (s *ContainedTokenStore) AddTokenization(modelName string, prompt string, t
 
 // FindLongestContainedTokens finds the sequence of contained tokens for the
 // longest matching prefix.
-// The function returns the matched tokens and the percentage of the prompt
+// The function returns the matched tokens and the ratio of the prompt
 // that was covered by the matched tokens.
 func (s *ContainedTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
 	s.mu.RLock()
@@ -200,7 +200,7 @@ func (t *containedTokenTrie) FindLongestContainedTokens(prompt string) ([]uint32
 		lastTokenIdxSeen = node.lastContainedTokenIndex
 	}
 
-	overlapPercent := 0.0
+	overlapRatio := 0.0
 	for i, char := range prompt {
 		child, ok := node.children[char]
 		if !ok {
@@ -214,8 +214,8 @@ func (t *containedTokenTrie) FindLongestContainedTokens(prompt string) ([]uint32
 			lastTokenIdxSeen = node.lastContainedTokenIndex
 		}
 
-		overlapPercent = float64(i+1) / float64(len(prompt))
+		overlapRatio = float64(i+1) / float64(len(prompt))
 	}
 
-	return containedTokens, overlapPercent
+	return containedTokens, overlapRatio
 }

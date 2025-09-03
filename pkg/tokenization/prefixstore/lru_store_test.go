@@ -42,9 +42,9 @@ func TestLRUTokenStore_AddAndRetrieve(t *testing.T) {
 
 	// Retrieve tokens for a matching prefix
 	prompt := "The capital of F"
-	result, overlapPercent := store.FindLongestContainedTokens(prompt, modelName)
+	result, overlapRatio := store.FindLongestContainedTokens(prompt, modelName)
 	assert.Equal(t, []uint32{1, 2, 3}, result)
-	assert.Equal(t, overlapPercent, 1.0)
+	assert.Equal(t, overlapRatio, 1.0)
 }
 
 func TestLRUTokenStore_LRUEviction(t *testing.T) {

@@ -119,8 +119,14 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 ) (map[string]int, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
-	// 1. submit tokenization request
-	tokens := k.tokenizersPool.Tokenize(prompt, modelName)
+	// 0. get available tokens of longest prefix from the prefix store
+	tokens, overlapRatio := k.tokensIndexer.FindLongestContainedTokens(prompt, modelName)
+
+	// 1. if the overlap ratio is low, get the full tokenization
+	minPrefixOverlapRatio := k.config.KVBLockScorerConfig.MinPrefixOverlapRatio
+	if overlapRatio < minPrefixOverlapRatio {
+		tokens = k.tokenizersPool.Tokenize(prompt, modelName)
+	}
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)

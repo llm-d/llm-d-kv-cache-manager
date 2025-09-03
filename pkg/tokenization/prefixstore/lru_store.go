@@ -153,7 +153,7 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 
 // FindLongestContainedTokens finds the sequence of contained tokens for
 // the longest matching prefix.
-// The function returns the matched tokens and the percentage of the prompt
+// The function returns the matched tokens and the ratio of the prompt
 // that was covered by the matched tokens.
 func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
 	c.mu.RLock()
@@ -171,7 +171,7 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]
 	digest := xxhash.New()
 
 	// Chunk the text into blocks and populate the cache
-	overlapPercent := 0.0
+	overlapRatio := 0.0
 	for i := 0; i < len(promptBytes); i += c.blockSize {
 		end := i + c.blockSize
 		if end > len(promptBytes) {
@@ -196,8 +196,8 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]
 		}
 
 		containedTokens = append(containedTokens, block.Tokens...)
-		overlapPercent = float64(end) / float64(len(promptBytes))
+		overlapRatio = float64(end) / float64(len(promptBytes))
 	}
 
-	return containedTokens, overlapPercent
+	return containedTokens, overlapRatio
 }
