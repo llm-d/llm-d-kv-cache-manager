@@ -36,7 +36,7 @@ type Config struct {
 	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
 	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
 	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
-	KVBLockScorerConfig  *KVBlockScorerConfig          // not exported
+	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
 	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
 }
 
@@ -46,7 +46,7 @@ func NewDefaultConfig() *Config {
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
-		KVBLockScorerConfig:  DefaultKVBlockScorerConfig(),
+		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
 	}
 }
@@ -77,7 +77,7 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
 
-	scorer, err := NewKVBlockScorer(config.KVBLockScorerConfig)
+	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KVBlockScorer: %w", err)
 	}
