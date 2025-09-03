@@ -44,7 +44,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// tokenizationResponse is the single (final) message sent back to a caller.
+// tokenizationResponse holds the result of a tokenization operation.
 type tokenizationResponse struct {
 	Tokens  []uint32
 	Offsets []tokenizers.Offset
