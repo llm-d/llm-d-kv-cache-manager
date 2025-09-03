@@ -42,8 +42,9 @@ func TestLRUTokenStore_AddAndRetrieve(t *testing.T) {
 
 	// Retrieve tokens for a matching prefix
 	prompt := "The capital of F"
-	result := store.FindLongestContainedTokens(prompt, modelName)
+	result, overlapPercent := store.FindLongestContainedTokens(prompt, modelName)
 	assert.Equal(t, []uint32{1, 2, 3}, result)
+	assert.Equal(t, overlapPercent, 1.0)
 }
 
 func TestLRUTokenStore_LRUEviction(t *testing.T) {
@@ -78,11 +79,11 @@ func TestLRUTokenStore_LRUEviction(t *testing.T) {
 
 	// First text block should be evicted
 	prompt := "abcdefghjiklmno"
-	result := store.FindLongestContainedTokens(prompt, modelName)
+	result, _ := store.FindLongestContainedTokens(prompt, modelName)
 	assert.Empty(t, result, "First text block should be evicted")
 
 	// Third text block should still be in cache
 	prompt = "pqrstuvwxyz,./';lp"
-	result = store.FindLongestContainedTokens(prompt, modelName)
+	result, _= store.FindLongestContainedTokens(prompt, modelName)
 	assert.Equal(t, []uint32{7, 8, 9}, result)
 }

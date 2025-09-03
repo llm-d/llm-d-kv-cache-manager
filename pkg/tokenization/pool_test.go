@@ -64,9 +64,9 @@ func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32,
 	return args.Error(0)
 }
 
-func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) []uint32 {
+func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
 	args := m.Called(prompt, modelName)
-	return args.Get(0).([]uint32) //nolint:errcheck // unused mock
+	return args.Get(0).([]uint32), 0.0 //nolint:errcheck // unused mock
 }
 
 func TestPool_ProcessTask(t *testing.T) {

@@ -43,6 +43,6 @@ type Indexer interface {
 	// The function assumes that tokens will not be mutated after the call.
 	AddTokenization(modelName string, prompt string, tokens []uint32, offsets []tokenizers.Offset) error
 	// FindLongestContainedTokens finds the sequence of contained tokens for
-	// the longest matching prefix.
-	FindLongestContainedTokens(prompt, modelName string) []uint32
+	// the longest matching prefix, along with the coverage percentage of the prompt.
+	FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64)
 }
