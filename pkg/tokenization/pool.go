@@ -34,7 +34,9 @@ const (
 
 // Config holds the configuration for the TokenizationPool.
 type Config struct {
-	WorkersCount          int     `json:"workersCount"`
+	// Number of worker goroutines for processing tokenization tasks.
+	WorkersCount int `json:"workersCount"`
+	// Minimum overlap ratio to skip full tokenization and use cached prefix tokens.
 	MinPrefixOverlapRatio float64 `json:"minPrefixOverlapRatio"`
 	*HFTokenizerConfig
 }
