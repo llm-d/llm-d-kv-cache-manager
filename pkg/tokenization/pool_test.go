@@ -180,9 +180,8 @@ func setupStressTest(b *testing.B) *Pool {
 	pool, err := NewTokenizationPool(config, inMemoryIndexer)
 	require.NoError(b, err)
 
-	tokenizer := pool.GetTokenizer()
 	for _, modelName := range benchmarkModels {
-		_, _, err := tokenizer.Encode("", modelName)
+		_, _, err := pool.tokenizer.Encode("", modelName)
 		require.NoError(b, err)
 	}
 	return pool

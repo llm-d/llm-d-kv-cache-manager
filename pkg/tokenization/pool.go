@@ -90,10 +90,6 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 	}, nil
 }
 
-func (pool *Pool) GetTokenizer() Tokenizer {
-	return pool.tokenizer
-}
-
 // EnqueueTokenization enqueues a new tokenization task.
 // This method only enqueues the task and does not start processing it.
 func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
