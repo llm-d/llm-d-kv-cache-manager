@@ -172,7 +172,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 			contains, _ := m.data.ContainsOrAdd(key, newPodCache)
 			if contains {
 				podCache, found = m.data.Get(key)
-				if !found {
+				if !found { // Extremely irregular workload pattern - key evicted
 					m.data.Add(key, newPodCache)
 					podCache = newPodCache
 				}
