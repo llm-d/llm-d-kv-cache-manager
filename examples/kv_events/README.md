@@ -8,17 +8,17 @@ The offline example demonstrates how the KV-Cache Manager handles KV-Events thro
 
 Set the following environment variables:
 ```
-    export HF_TOKEN="your-huggingface-token"
+export HF_TOKEN="your-huggingface-token"
 ```
 
 Download tokenizer bindings:
 ```bash
-    make download-tokenizer
+make download-tokenizer
 ```
 
 ### Running the Example
 ```
-    go run -ldflags="-extldflags '-L$(pwd)/lib'" examples/kv_events/offline/main.go examples/kv_events/offline/publisher.go
+go run -ldflags="-extldflags '-L$(pwd)/lib'" examples/kv_events/offline/main.go examples/kv_events/offline/publisher.go
 ```
 
 The example will start the KV-Cache Manager (indexer) and a dummy publisher that simulates KV-Events. 
