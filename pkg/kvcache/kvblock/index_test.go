@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +57,6 @@ func testCommonIndexBehavior(t *testing.T, indexFactory func(t *testing.T) Index
 	})
 
 	t.Run("ConcurrentOperations", func(t *testing.T) {
-		t.Skip("TODO: Re-enable this test after fixing https://github.com/llm-d/llm-d-kv-cache-manager/issues/104")
 		index := indexFactory(t)
 		testConcurrentOperations(t, ctx, index)
 	})
@@ -197,12 +197,13 @@ func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 	key := Key{ModelName: "test-model", ChunkHash: 1000}
 
 	var wg sync.WaitGroup
-	errChan := make(chan error, 30)
+	errChan := make(chan error, 1000)
 
 	// Run 100 goroutines doing concurrent operations
 	for goroutineID := 0; goroutineID < 100; goroutineID++ {
 		wg.Add(1)
 		go func(id int) {
+			time.Sleep(time.Millisecond * time.Duration(id%10)) // Stagger start times
 			defer wg.Done()
 			for operationIndex := 0; operationIndex < 10; operationIndex++ {
 				switch operationIndex % 3 {

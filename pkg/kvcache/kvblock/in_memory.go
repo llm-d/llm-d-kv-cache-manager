@@ -19,6 +19,7 @@ package kvblock
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -81,6 +82,8 @@ type PodCache struct {
 	// cache is an LRU cache that maps PodEntry to their last access time.
 	// thread-safe.
 	cache *lru.Cache[PodEntry, struct{}]
+	// mu protects the cache from concurrent access during check-and-set operations.
+	mu sync.Mutex
 }
 
 // Lookup receives a list of keys and a set of pod identifiers,
@@ -146,23 +149,44 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
 
 	for _, key := range keys {
-		podCache, found := m.data.Get(key) // bumps LRU timestamp if found
+		var podCache *PodCache
+		var found bool
+
+		// Try to get existing cache first
+		podCache, found = m.data.Get(key)
+		//nolint:nestif // double-checked locking pattern
 		if !found {
+			// Create new cache
 			cache, err := lru.New[PodEntry, struct{}](m.podCacheSize)
 			if err != nil {
 				return fmt.Errorf("failed to create pod cache for key %s: %w", key.String(), err)
 			}
 
-			podCache = &PodCache{
+			newPodCache := &PodCache{
 				cache: cache,
 			}
 
-			m.data.ContainsOrAdd(key, podCache)
+			// Try to add, but use existing if another thread added it first
+			// This is a bounded retry (1) - not perfectly safe but for practical use-cases and scenarios
+			// this should be sufficient
+			contains, _ := m.data.ContainsOrAdd(key, newPodCache)
+			if contains {
+				podCache, found = m.data.Get(key)
+				if !found {
+					m.data.Add(key, newPodCache)
+					podCache = newPodCache
+				}
+			} else {
+				// We successfully added our cache
+				podCache = newPodCache
+			}
 		}
 
+		podCache.mu.Lock()
 		for _, entry := range entries {
-			podCache.cache.Add(entry, struct{}{}) // TODO: can this be batched to avoid multiple locks?
+			podCache.cache.Add(entry, struct{}{})
 		}
+		podCache.mu.Unlock()
 
 		traceLogger.Info("added pods to key", "key", key, "pods", entries)
 	}
@@ -184,15 +208,30 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		return nil
 	}
 
+	podCache.mu.Lock()
 	for _, entry := range entries {
-		podCache.cache.Remove(entry) // TODO: can this be batched to avoid multiple locks?
+		podCache.cache.Remove(entry)
 	}
+
+	isEmpty := podCache.cache.Len() == 0
+	podCache.mu.Unlock()
 
 	traceLogger.Info("evicted pods from key", "key", key, "pods", entries)
 
-	if podCache.cache.Len() == 0 {
-		m.data.Remove(key)
-		traceLogger.Info("evicted key from index as no pods remain", "key", key)
+	// Remove key from main cache if empty
+	if isEmpty {
+		// Double-check after getting the cache again to MINIMIZE race window
+		// Worst case, we leave an empty cache behind which would be cleaned up by LRU if needed
+		if currentCache, stillExists := m.data.Get(key); stillExists && currentCache != nil {
+			currentCache.mu.Lock()
+			stillEmpty := currentCache.cache.Len() == 0
+			currentCache.mu.Unlock()
+
+			if stillEmpty {
+				m.data.Remove(key)
+				traceLogger.Info("evicted key from index as no pods remain", "key", key)
+			}
+		}
 	}
 
 	return nil
