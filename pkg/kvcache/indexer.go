@@ -65,6 +65,11 @@ type Indexer struct {
 
 // NewKVCacheIndexer creates a KVCacheIndex given a Config.
 func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
+	logger := klog.FromContext(ctx)
+	if config != nil && config.TokenProcessorConfig != nil {
+		logger.Info("NewKVCacheIndexer config", "blockSize", config.TokenProcessorConfig.BlockSize)
+	}
+
 	tokensIndexer, err := prefixstore.NewLRUTokenStore(config.PrefixStoreConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prefixstore.Indexer: %w", err)

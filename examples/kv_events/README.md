@@ -18,7 +18,7 @@ make download-tokenizer
 
 ### Running the Example
 ```
-go run -ldflags="-extldflags '-L$(pwd)/lib'" examples/kv_events/offline/main.go examples/kv_events/offline/publisher.go
+go run -ldflags="-extldflags '-L$(pwd)/lib'" examples/kv_events/offline/main.go
 ```
 
 The example will start the KV-Cache Manager (indexer) and a dummy publisher that simulates KV-Events. 
