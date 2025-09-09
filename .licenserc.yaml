@@ -51,6 +51,7 @@ header:
     - "**/*.svg"
     - "**/*.lock"
     - "website/layouts/**"
+    - ".dockerignore"
 
   comment: on-failure
 
