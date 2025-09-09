@@ -91,3 +91,42 @@ The templating process (steps 1.1-1.4) handles the conversion from structured re
     └── prompt := resp.RenderedChats[0]
     └── Continue with existing pipeline: Tokenize → KV Block Keys → Pod Scoring
 ```
+### Optimized Preprocessing Architecture
+
+#### **Performance Optimizations**
+
+##### **Single Python Interpreter**
+- **Process-Level Initialization**: Single Python interpreter per process, initilization at EPP startup. Scalable, low overhead and reduces memory footprint
+- **Thread-Safe Initialization**: Global locks prevent multiple initializations
+
+##### **Function Caching**
+- **Cached Python Functions**: `render_jinja_template` and `get_model_chat_template` cached globally
+- **Module-Level Caching**: Python modules imported once and reused
+- **Thread Safety**: GIL management for concurrent access
+
+##### **Template Caching**
+- **Model-Specific Templates**: Templates cached per model to avoid repeated fetching
+- **Hugging Face Integration**: Efficient template retrieval using AutoTokenizer, matching vLLM's
+
+
+
+## Experiment Overview & Results
+
+### Benchmark Configuration:
+
+- **Dataset**: ShareGPT conversations with variable length
+- **Model**: 2 pods of Qwen/Qwen2.5-0.5B-Instruct
+- **Load Pattern**: Progressive QPS from 3→4→5→6→8→10→12→15→20 QPS
+- **Duration**: ~18 minutes total with progressive load increases
+- **Input Distribution**: 600-800 tokens per request
+- **Output Distribution**: 1-100 tokens per request
+- **API Comparison**: Chat Completions vs Completions (head-to-head)
+- **Success Rate**: 100% for both APIs across all load levels
+
+### Performance Analysis
+
+![Performance Analysis](TTFT_TPOT_THROUGHPUT_TRIPANEL.png)
+
+#### **Overhead Analysis**
+- **TTFT (Time to First Token)**: +10% increase (0.122s vs 0.111s) - **Negligible**
+- **ITL (Inter-Token Latency)**: +14% increase (0.0032s vs 0.0028s) - **Negligible**
