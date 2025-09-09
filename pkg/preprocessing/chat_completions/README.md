@@ -1,4 +1,4 @@
-# Chat ChatTemplate Integration for OpenAI-API v1/chat_completions Compatibility
+# Chat ChatTemplate Integration for OpenAI-API v1/chat/completions Compatibility
 
 > Note: this does not support multi-modality at this point.
 
