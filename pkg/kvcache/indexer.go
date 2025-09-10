@@ -126,6 +126,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
 	if len(blockKeys) == 0 {
 		traceLogger.Info("no block keys found, returning empty scores")
+		//nolint:nilnil // no need to return an error
 		return nil, nil
 	}
 
