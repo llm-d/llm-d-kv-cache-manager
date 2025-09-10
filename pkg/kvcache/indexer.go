@@ -124,6 +124,11 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	if len(blockKeys) == 0 {
+		traceLogger.Info("no block keys found, returning empty scores")
+		return nil, nil
+	}
+
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods
