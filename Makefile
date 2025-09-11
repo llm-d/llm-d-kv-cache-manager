@@ -36,7 +36,11 @@ $(TOKENIZER_LIB):
 	## Download the HuggingFace tokenizer bindings.
 	@echo "Downloading HuggingFace tokenizer bindings for version $(TOKENIZER_VERSION)..."
 	mkdir -p lib
-	curl -L https://github.com/daulet/tokenizers/releases/download/$(TOKENIZER_VERSION)/libtokenizers.$(TARGETOS)-$(TARGETARCH).tar.gz | tar -xz -C lib
+	if [ "$(TARGETOS)" = "darwin" ] && [ "$(TARGETARCH)" = "amd64" ]; then \
+		curl -L https://github.com/daulet/tokenizers/releases/download/$(TOKENIZER_VERSION)/libtokenizers.$(TARGETOS)-x86_64.tar.gz | tar -xz -C lib; \
+	else \
+		curl -L https://github.com/daulet/tokenizers/releases/download/$(TOKENIZER_VERSION)/libtokenizers.$(TARGETOS)-$(TARGETARCH).tar.gz | tar -xz -C lib; \
+	fi
 	ranlib lib/*.a
 
 ##@ Python Configuration
