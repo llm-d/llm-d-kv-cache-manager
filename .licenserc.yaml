@@ -41,6 +41,7 @@ header:
     - "NOTICE"
     - "CODEOWNERS"
     - "OWNERS"
+    - "OWNERS_ALIASES"
     - "**/Dockerfile"
     - "**/dockerfile"
     - "**/Containerfile.*"
