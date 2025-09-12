@@ -1,13 +1,8 @@
+# approvers can lgtm and approve PRs.
 approvers:
-- vMaroon
-- dannyharnik 
-- elevran 
-- kfirtoledo
+- llm-d-kv-cache-manager-maintainers
 
+# reviewers can lgtm PRs.
 reviewers:
-- SharonGil
-- orozery 
-- liran 
-- nilig 
-- michalmalka
-- yankay
+- llm-d-kv-cache-manager-maintainers
+- llm-d-kv-cache-manager-reviewers

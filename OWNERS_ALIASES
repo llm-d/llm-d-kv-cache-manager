@@ -1,0 +1,15 @@
+aliases:
+  # Project maintainers
+  llm-d-kv-cache-manager-maintainers:
+  - vMaroon
+  - dannyharnik
+  - elevran
+  - kfirtoledo
+
+  # Project reviewers
+  llm-d-kv-cache-manager-reviewers:
+  - yankay
+  - nilig
+  - orozery
+  - liran
+  - michalmalka

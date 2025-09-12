@@ -1,8 +1,11 @@
-# Global reviewers
-* @SharonGil @orozery @liran @nilig @michalmalka
+# Project maintainers are not listed here.
+# For APPROVERS and REVIEWERS, see the OWNERS file.
 
-# Global owners for the entire repo
-* @vMaroon @dannyharnik @elevran @kfirtoledo
+# This file is utilized in order to automatically request granular reviews on PRs.
+# This is temporary until team-management is easier in llm-d
 
-# Package specific codeowners, including global owners
+# Global pings
+* @vMaroon @dannyharnik @elevran @kfirtoledo @yankay
+
+# Package specific
 /preprocessing @guygir
