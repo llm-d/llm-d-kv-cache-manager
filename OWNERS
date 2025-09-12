@@ -1,8 +1,18 @@
-# approvers can lgtm and approve PRs.
+# Project maintainers
 approvers:
-- llm-d-kv-cache-manager-maintainers
+- vMaroon
+- dannyharnik
+- elevran
+- kfirtoledo
 
-# reviewers can lgtm PRs.
+# Project reviewers
 reviewers:
-- llm-d-kv-cache-manager-maintainers
-- llm-d-kv-cache-manager-reviewers
+- yankay
+- nilig
+- orozery
+- liran
+- michalmalka
+- vMaroon
+- dannyharnik
+- elevran
+- kfirtoledo
