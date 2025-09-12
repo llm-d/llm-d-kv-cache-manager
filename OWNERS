@@ -7,12 +7,18 @@ approvers:
 
 # Project reviewers
 reviewers:
-- yankay
-- nilig
-- orozery
-- liran
-- michalmalka
 - vMaroon
 - dannyharnik
 - elevran
 - kfirtoledo
+- orozery
+- liran
+- nilig
+- michalmalka
+- yankay
+
+# Auto-assign configuration for global assignment
+# Works in addition to GitHub's built-in CODEOWNERS functionality
+# Implemented via a custom GitHub Action
+auto-assign:
+  - yankay
