@@ -92,15 +92,3 @@ func (s *IndexerService) GetPodScores(ctx context.Context,
 		Scores: scores,
 	}, nil
 }
-
-// TODO: Implement LookupBlocks when needed
-// func (s *IndexerService) LookupBlocks(ctx context.Context,
-//     req *api.LookupBlocksRequest) (*api.LookupBlocksResponse, error) {
-//     // Implementation here
-// }
-
-// TODO: Implement GetIndexInfo when needed
-// func (s *IndexerService) GetIndexInfo(ctx context.Context,
-//     req *api.GetIndexInfoRequest) (*api.GetIndexInfoResponse, error) {
-//     // Implementation here
-// }
