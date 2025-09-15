@@ -30,3 +30,23 @@ func SliceMap[Domain, Range any](slice []Domain, fn func(Domain) Range) []Range 
 
 	return ans
 }
+
+// SliceMapE applies a function to each element of a slice and returns a new
+// slice with the results. If an error occurs during the loop, it will be
+// interrupted and the error will be returned.
+func SliceMapE[Domain, Range any](slice []Domain, fn func(Domain) (Range, error)) ([]Range, error) {
+	if slice == nil {
+		return nil, nil
+	}
+
+	ans := make([]Range, 0, len(slice))
+	for i := range slice {
+		res, err := fn(slice[i])
+		if err != nil {
+			return nil, err
+		}
+		ans = append(ans, res)
+	}
+
+	return ans, nil
+}
