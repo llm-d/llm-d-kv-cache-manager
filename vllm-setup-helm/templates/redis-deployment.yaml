@@ -18,6 +18,7 @@ spec:
       labels:
         {{- include "chart.redisSelectorLabels" . | nindent 8 }}
     spec:
+      {{- include "chart.imagePullSecrets" (dict "componentSecrets" .Values.lmcache.redis.imagePullSecrets "globalSecrets" .Values.imagePullSecrets) | nindent 6 }}
       containers:
         - name: lookup-server
           image: {{ include "chart.redisImage" . }}

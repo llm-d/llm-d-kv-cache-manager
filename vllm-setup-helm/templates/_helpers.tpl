@@ -106,3 +106,14 @@ Generate PVC name
 {{- define "chart.pvcName" -}}
 {{- printf "%s-%s-storage-claim" (include "chart.fullname" .) .Values.vllm.model.label | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/*
+Renders imagePullSecrets block
+*/}}
+{{- define "chart.imagePullSecrets" -}}
+{{- $secrets := .componentSecrets | default .globalSecrets -}}
+{{- if $secrets -}}
+imagePullSecrets:
+{{- toYaml $secrets | nindent 2 }}
+{{- end -}}
+{{- end -}}

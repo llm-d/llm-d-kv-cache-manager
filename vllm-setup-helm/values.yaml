@@ -5,10 +5,15 @@ namespace: kvcache-manager
 # This is only used when kvCacheManager.enabled is true.
 pythonHashSeed: "0"
 
+# -- Global image pull secrets
+imagePullSecrets: []
+
 # -- VLLM Deployment Configuration
 vllm:
   # -- Number of VLLM replicas
   replicaCount: 1
+  # -- VLLM image pull secrets
+  imagePullSecrets: []
   # -- Inference pool label key
   poolLabelKey: app
   # -- Inference pool label value
@@ -92,6 +97,8 @@ kvCacheManager:
   enabled: true
   # -- Number of kv-cache-manager replicas
   replicaCount: 1
+  # -- KV Cache Manager image pull secrets
+  imagePullSecrets: []
   image:
     # -- kv-cache-manager image repository
     repository: quay.io/vmaroon/llm-d-kv-cache-manager/kvevents
@@ -142,6 +149,8 @@ lmcache:
     nameSuffix: lookup-server
     # -- Number of Redis replicas
     replicaCount: 1
+    # -- Redis image pull secrets
+    imagePullSecrets: []
     image:
       # -- Redis image repository
       repository: redis
