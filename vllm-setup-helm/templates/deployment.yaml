@@ -40,9 +40,9 @@ spec:
           persistentVolumeClaim:
             claimName: {{ .Values.dshm.pvcName }}
         {{- end }}
+      {{- include "chart.imagePullSecrets" (dict "componentSecrets" .Values.vllm.imagePullSecrets "globalSecrets" .Values.imagePullSecrets) | nindent 6 }}
       affinity:
         {{- toYaml .Values.vllm.affinity | nindent 8 }}
-      {{- include "chart.imagePullSecrets" (dict "componentSecrets" .Values.vllm.imagePullSecrets "globalSecrets" .Values.imagePullSecrets) | nindent 6 }}
       containers:
         - name: vllm
           image: {{ include "chart.vllmImage" . }}
