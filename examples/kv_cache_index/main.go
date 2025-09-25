@@ -132,7 +132,7 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 			ModelName: modelName,
 			ChunkHash: h,
 		}
-	}), []kvblock.PodEntry{{"pod1", "gpu"}})
+	}), []kvblock.PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}})
 
 	// Sleep 3 secs
 	time.Sleep(3 * time.Second)
