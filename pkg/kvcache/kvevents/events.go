@@ -119,7 +119,7 @@ type LegacyBlockStored struct {
 	LoraID          *int `msgpack:",omitempty"`
 }
 
-// ToTaggedUnion converts the BlockStored event to a tagged union format.
+// ToTaggedUnion converts the LegacyBlockStored event to a tagged union format.
 func (bs LegacyBlockStored) ToTaggedUnion() []any {
 	result := []any{
 		BlockStoredEventTag,
