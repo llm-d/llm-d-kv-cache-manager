@@ -104,7 +104,7 @@ func (ac AllBlocksCleared) ToTaggedUnion() []any {
 func (AllBlocksCleared) isEvent() {}
 
 /*
- The following legacy event definitions for KV-cache events.
+ The following are legacy event definitions for KV-cache events.
  These definitions are kept and used for backward compatibility.
  This is due to the use of msgpack which relies on the exact structure of the data.
 */
