@@ -16,9 +16,11 @@ reviewers:
 - nilig
 - michalmalka
 - yankay
+- liu-cong
 
 # Auto-assign configuration for global assignment
 # Works in addition to GitHub's built-in CODEOWNERS functionality
 # Implemented via a custom GitHub Action
 auto-assign:
   - yankay
+  - liu-cong
