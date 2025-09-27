@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package helper
 
 import (
 	"bytes"
@@ -88,4 +88,19 @@ func (p *Publisher) Close() error {
 		return p.socket.Close()
 	}
 	return nil
+}
+
+func SetupPublisher(ctx context.Context) (*Publisher, error) {
+	logger := klog.FromContext(ctx)
+
+	endpoint := "tcp://localhost:5557"
+	logger.Info("Creating ZMQ publisher (simulating vLLM engines)", "endpoint", endpoint)
+
+	publisher, err := NewPublisher(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ZMQ publisher: %w", err)
+	}
+
+	logger.Info("ZMQ publisher created successfully")
+	return publisher, nil
 }
