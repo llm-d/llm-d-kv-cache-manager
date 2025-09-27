@@ -47,13 +47,13 @@ graph TD
         G[...]
     end
 
-    A--"(1) Score(prompt, pods)"-->B
-    B--"(2) Query Index"-->C
-    B--"(3) Return Scores"-->A
+    A--(1) Score(prompt, pods)-->B
+    B--(2) Query Index-->C
+    B--(3) Return Scores-->A
     
-    E--"(A) Emit KVEvents"-->D
-    F--"(A) Emit KVEvents"-->D
-    D--"(B) Update Index"-->C
+    E--(A) Emit KVEvents-->D
+    F--(A) Emit KVEvents-->D
+    D--(B) Update Index-->C
 ```
 **Read Path:**
 - (1)  **Scoring Request**: A scheduler asks the **KVCache Indexer** to score a set of pods for a given prompt
