@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/unit"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 
@@ -43,7 +43,7 @@ func main() {
 	}
 
 	// Setup ZMQ publisher to simulate vLLM engines
-	publisher, err := unit.SetupPublisher(ctx)
+	publisher, err := helper.SetupPublisher(ctx)
 	if err != nil {
 		logger.Error(err, "failed to setup ZMQ publisher")
 		return
@@ -63,7 +63,7 @@ func main() {
 	logger.Info("@@@ Initial pod scores (should be empty)", "pods", pods)
 
 	// Simulate vLLM engine publishing some kvcache to storage
-	err = unit.SimulateProduceEvent(ctx, publisher)
+	err = helper.SimulateProduceEvent(ctx, publisher)
 	if err != nil {
 		logger.Error(err, "failed to simulate produce event")
 	}
@@ -78,13 +78,13 @@ func main() {
 
 func setupIndexerService(ctx context.Context) (*IndexerService, error) {
 	logger := klog.FromContext(ctx)
-	indexer, err := unit.SetupKVCacheIndexer(ctx)
+	indexer, err := helper.SetupKVCacheIndexer(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create indexer: %w", err)
 	}
 
 	// Setup events pool with ZMQ subscriber
-	eventsPool := unit.SetupEventsPool(ctx, indexer.KVBlockIndex())
+	eventsPool := helper.SetupEventsPool(ctx, indexer.KVBlockIndex())
 	indexerSvc := NewIndexerService(eventsPool, indexer)
 
 	// Start the indexer

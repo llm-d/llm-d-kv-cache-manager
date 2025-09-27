@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/unit"
+	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
@@ -62,14 +62,14 @@ func main() {
 	}
 
 	// Setup events pool with ZMQ subscriber
-	eventsPool := unit.SetupEventsPool(ctx, kvCacheIndexer.KVBlockIndex())
+	eventsPool := helper.SetupEventsPool(ctx, kvCacheIndexer.KVBlockIndex())
 
 	// Start events pool
 	eventsPool.Start(ctx)
 	logger.Info("Events pool started and listening for ZMQ messages")
 
 	// Setup ZMQ publisher to simulate vLLM engines
-	publisher, err := unit.SetupPublisher(ctx)
+	publisher, err := helper.SetupPublisher(ctx)
 	if err != nil {
 		logger.Error(err, "failed to setup ZMQ publisher")
 		return
@@ -118,7 +118,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	return kvCacheIndexer, nil
 }
 
-func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publisher *unit.Publisher) error {
+func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publisher *helper.Publisher) error {
 	logger := klog.FromContext(ctx)
 
 	logger.Info("@@@ Starting KV Events Demo", "model", testdata.ModelName)
@@ -131,7 +131,7 @@ func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Initial pod scores (should be empty)", "pods", pods)
 
 	// Simulate vLLM engine publishing BlockStored events
-	err = unit.SimulateProduceEvent(ctx, publisher)
+	err = helper.SimulateProduceEvent(ctx, publisher)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Pod scores after BlockStored events", "pods", pods)
 
 	// Simulate removing some blocks
-	err = unit.SimulateRemoveEvent(ctx, publisher)
+	err = helper.SimulateRemoveEvent(ctx, publisher)
 	if err != nil {
 		return err
 	}
