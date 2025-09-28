@@ -1,0 +1,152 @@
+/*
+Copyright 2025 The llm-d Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tokenization
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"time"
+
+	"github.com/daulet/tokenizers"
+	"golang.org/x/net/http2"
+)
+
+// UdsTokenizerConfig represents the configuration for the UDS-based tokenizer,
+// including the socket file path.
+type UdsTokenizerConfig struct {
+	SocketFile string `json:"socketFile"`
+}
+
+// UdsTokenizer communicates with a Unix Domain Socket server for tokenization
+type UdsTokenizer struct {
+	httpClient *http.Client
+	baseURL    string
+}
+
+// TokenizedInput represents the response from the tokenize endpoint
+type TokenizedInput struct {
+	InputIDs      []uint32            `json:"input_ids"`
+	OffsetMapping []tokenizers.Offset `json:"offset_mapping"`
+}
+
+const (
+	defaultSocketFile = "/tmp/tokenizer/tokenizer-uds.socket"
+	baseURL           = "http://tokenizer"
+)
+
+// NewUdsTokenizer creates a new UDS-based tokenizer client with connection pooling
+func NewUdsTokenizer(config *UdsTokenizerConfig) (Tokenizer, error) {
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	socketFile := config.SocketFile
+	if len(socketFile) == 0 {
+		socketFile = defaultSocketFile
+	}
+
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "unix", socketFile)
+		},
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	if err := http2.ConfigureTransport(transport); err != nil {
+		return nil, fmt.Errorf("failed to configure HTTP/2 transport: %w", err)
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   60 * time.Second,
+	}
+
+	return &UdsTokenizer{
+		httpClient: client,
+		baseURL:    baseURL,
+	}, nil
+}
+
+// Encode tokenizes the input string and returns the token IDs and offsets
+func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
+	req, err := http.NewRequest("POST", u.baseURL+"/tokenize", bytes.NewBuffer([]byte(input)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := u.httpClient.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenized TokenizedInput
+	if err := json.Unmarshal(body, &tokenized); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return tokenized.InputIDs, tokenized.OffsetMapping, nil
+}
+
+// RenderChatTemplate renders a chat template using the UDS tokenizer service
+func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) {
+	messagesBytes, err := json.Marshal(messages)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal messages: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", u.baseURL+"/chat-template", bytes.NewBuffer(messagesBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := u.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return string(body), nil
+}

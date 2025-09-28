@@ -45,6 +45,11 @@ spec:
         app.kubernetes.io/component: kv-cache-manager
     spec:
       {{- include "chart.imagePullSecrets" (dict "componentSecrets" .Values.kvCacheManager.imagePullSecrets "globalSecrets" .Values.imagePullSecrets) | nindent 6 }}
+      {{- if .Values.kvCacheManager.externalTokenizer.enabled }}
+      volumes:
+        - name: tokenizer-uds
+          emptyDir: {}
+      {{- end }}
       containers:
         - name: manager
           image: "{{ .Values.kvCacheManager.image.repository }}:{{ .Values.kvCacheManager.image.tag }}"
@@ -77,6 +82,26 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secret.name }}
                   key: {{ include "chart.secretKeyName" . }}
+            - name: EXTERNAL_TOKENIZATION
+              value: "{{ .Values.kvCacheManager.externalTokenizer.enabled }}"
           resources:
             {{- toYaml .Values.kvCacheManager.resources | nindent 12 }}
+          {{- if .Values.kvCacheManager.externalTokenizer.enabled }}
+          volumeMounts:
+            - name: tokenizer-uds
+              mountPath: /tmp/tokenizer
+          {{- end }}
+        {{- if .Values.kvCacheManager.externalTokenizer.enabled }}
+        - name: tokenizer-uds
+          image: "{{ .Values.kvCacheManager.externalTokenizer.image.repository }}:{{ .Values.kvCacheManager.externalTokenizer.image.tag }}"
+          imagePullPolicy: {{ .Values.kvCacheManager.externalTokenizer.image.pullPolicy }}
+          env:
+            - name: MODEL
+              value: {{ .Values.vllm.model.name | quote }}
+          resources:
+            {{- toYaml .Values.kvCacheManager.externalTokenizer.resources | nindent 12 }}
+          volumeMounts:
+            - name: tokenizer-uds
+              mountPath: /tmp/tokenizer
+        {{- end }}
 {{- end }}
