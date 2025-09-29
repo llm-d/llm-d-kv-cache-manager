@@ -36,13 +36,13 @@ type UdsTokenizerConfig struct {
 	SocketFile string `json:"socketFile"`
 }
 
-// UdsTokenizer communicates with a Unix Domain Socket server for tokenization
+// UdsTokenizer communicates with a Unix Domain Socket server for tokenization.
 type UdsTokenizer struct {
 	httpClient *http.Client
 	baseURL    string
 }
 
-// TokenizedInput represents the response from the tokenize endpoint
+// TokenizedInput represents the response from the tokenize endpoint.
 type TokenizedInput struct {
 	InputIDs      []uint32            `json:"input_ids"`
 	OffsetMapping []tokenizers.Offset `json:"offset_mapping"`
@@ -53,7 +53,7 @@ const (
 	baseURL           = "http://tokenizer"
 )
 
-// NewUdsTokenizer creates a new UDS-based tokenizer client with connection pooling
+// NewUdsTokenizer creates a new UDS-based tokenizer client with connection pooling.
 func NewUdsTokenizer(config *UdsTokenizerConfig) (Tokenizer, error) {
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
@@ -61,7 +61,7 @@ func NewUdsTokenizer(config *UdsTokenizerConfig) (Tokenizer, error) {
 	}
 
 	socketFile := config.SocketFile
-	if len(socketFile) == 0 {
+	if socketFile == "" {
 		socketFile = defaultSocketFile
 	}
 
@@ -90,9 +90,14 @@ func NewUdsTokenizer(config *UdsTokenizerConfig) (Tokenizer, error) {
 	}, nil
 }
 
-// Encode tokenizes the input string and returns the token IDs and offsets
+// Encode tokenizes the input string and returns the token IDs and offsets.
 func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
-	req, err := http.NewRequest("POST", u.baseURL+"/tokenize", bytes.NewBuffer([]byte(input)))
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		u.baseURL+"/tokenize",
+		bytes.NewBuffer([]byte(input)),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -120,14 +125,19 @@ func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.O
 	return tokenized.InputIDs, tokenized.OffsetMapping, nil
 }
 
-// RenderChatTemplate renders a chat template using the UDS tokenizer service
+// RenderChatTemplate renders a chat template using the UDS tokenizer service.
 func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) {
 	messagesBytes, err := json.Marshal(messages)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal messages: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", u.baseURL+"/chat-template", bytes.NewBuffer(messagesBytes))
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		u.baseURL+"/chat-template",
+		bytes.NewBuffer(messagesBytes),
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
