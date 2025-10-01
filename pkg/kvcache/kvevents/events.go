@@ -43,10 +43,12 @@ type EventBatch struct {
 }
 
 // BlockStored event.
+// The BlockHashes and ParentBlockHash fields are `any` to handle
+// both the legacy uint64 format and the new []byte format from vLLM.
 type BlockStored struct {
 	_               struct{} `msgpack:",array"`
-	BlockHashes     []uint64
-	ParentBlockHash *uint64
+	BlockHashes     []any    // Changed from []uint64
+	ParentBlockHash any      // Changed from *uint64
 	TokenIds        []uint32
 	BlockSize       int
 	LoraID          *int    `msgpack:",omitempty"`
@@ -57,7 +59,7 @@ type BlockStored struct {
 //
 //nolint:gocritic // Keeping the receiver as a value
 func (bs BlockStored) ToTaggedUnion() []any {
-	result := []any{
+	return []any{
 		BlockStoredEventTag,
 		bs.BlockHashes,
 		bs.ParentBlockHash,
@@ -66,26 +68,24 @@ func (bs BlockStored) ToTaggedUnion() []any {
 		bs.LoraID,
 		bs.Medium,
 	}
-
-	return result
 }
 
 func (BlockStored) isEvent() {}
 
 // BlockRemoved event.
+// The BlockHashes field is `any` to handle both uint64 and []byte formats.
 type BlockRemoved struct {
 	_           struct{} `msgpack:",array"`
-	BlockHashes []uint64
+	BlockHashes []any
 	Medium      *string `msgpack:",omitempty"`
 }
 
 func (br BlockRemoved) ToTaggedUnion() []any {
-	result := []any{
+	return []any{
 		BlockRemovedEventTag,
 		br.BlockHashes,
 		br.Medium,
 	}
-	return result
 }
 
 func (BlockRemoved) isEvent() {}
@@ -102,52 +102,3 @@ func (ac AllBlocksCleared) ToTaggedUnion() []any {
 }
 
 func (AllBlocksCleared) isEvent() {}
-
-/*
- The following are legacy event definitions for KV-cache events.
- These definitions are kept and used for backward compatibility.
- This is due to the use of msgpack which relies on the exact structure of the data.
-*/
-
-// LegacyBlockStored event.
-type LegacyBlockStored struct {
-	_               struct{} `msgpack:",array"`
-	BlockHashes     []uint64
-	ParentBlockHash *uint64
-	TokenIds        []uint32
-	BlockSize       int
-	LoraID          *int `msgpack:",omitempty"`
-}
-
-// ToTaggedUnion converts the LegacyBlockStored event to a tagged union format.
-func (bs LegacyBlockStored) ToTaggedUnion() []any {
-	result := []any{
-		BlockStoredEventTag,
-		bs.BlockHashes,
-		bs.ParentBlockHash,
-		bs.TokenIds,
-		bs.BlockSize,
-		bs.LoraID,
-	}
-
-	return result
-}
-
-func (LegacyBlockStored) isEvent() {}
-
-// LegacyBlockRemoved event.
-type LegacyBlockRemoved struct {
-	_           struct{} `msgpack:",array"`
-	BlockHashes []uint64
-}
-
-func (br LegacyBlockRemoved) ToTaggedUnion() []any {
-	result := []any{
-		BlockRemovedEventTag,
-		br.BlockHashes,
-	}
-
-	return result
-}
-
-func (LegacyBlockRemoved) isEvent() {}

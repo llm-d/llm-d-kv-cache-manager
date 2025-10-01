@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/klog/v2"
 
@@ -166,7 +167,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Simulating vLLM engine publishing BlockStored events...")
 
 	blockStoredEvent := kvevents.BlockStored{
-		BlockHashes:     testdata.PromptHashes,
+		BlockHashes:     utils.SliceMap(testdata.PromptHashes, func(h uint64) any { return h }),
 		ParentBlockHash: nil,
 		TokenIds:        []uint32{1, 2, 3},
 		BlockSize:       256,
@@ -203,7 +204,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Simulating vLLM engine removing some blocks...")
 
 	blockRemovedEvent := kvevents.BlockRemoved{
-		BlockHashes: testdata.PromptHashes[2:], // Remove last blocks
+		BlockHashes: []any{testdata.PromptHashes[0], testdata.PromptHashes[1]},
 	}
 
 	//nolint // won't fail

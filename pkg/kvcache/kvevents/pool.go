@@ -16,7 +16,8 @@ package kvevents
 
 import (
 	"context"
-	"errors"
+	"encoding/binary"
+	"fmt"
 	"hash/fnv"
 	"sync"
 
@@ -25,7 +26,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
@@ -192,26 +192,15 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 			debugLogger.Error(nil, "Malformed tagged union, no tag element", "parts", len(taggedUnion))
 			continue
 		}
-
-		var tag string
-		if err := msgpack.Unmarshal(taggedUnion[0], &tag); err != nil {
-			debugLogger.Error(err, "Failed to unmarshal tag from tagged union, skipping event")
-			continue
-		}
-
 		payloadBytes, err := msgpack.Marshal(taggedUnion[1:])
 		if err != nil {
 			debugLogger.Error(err, "Failed to re-marshal payload parts, skipping event")
 			continue
 		}
 
-		if isLegacyEvent(tag, len(taggedUnion)-1) {
-			legacyEvent, err := unmarshalLegacyEvent(payloadBytes, tag)
-			if err != nil {
-				debugLogger.Error(err, "Failed to unmarshal legacy event", "tag", tag)
-				continue
-			}
-			events = append(events, legacyEvent)
+		var tag string
+		if err := msgpack.Unmarshal(taggedUnion[0], &tag); err != nil {
+			debugLogger.Error(err, "Failed to unmarshal tag from tagged union, skipping event")
 			continue
 		}
 
@@ -258,38 +247,36 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
-			keys := utils.SliceMap(ev.BlockHashes, func(hash uint64) kvblock.Key {
-				return kvblock.Key{ModelName: modelName, ChunkHash: hash}
-			})
+			// Create a slice to hold the processed keys.
+			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
-			if err := p.index.Add(ctx, keys, podEntries); err != nil {
-				debugLogger.Error(err, "Failed to add event to index",
-					"podIdentifier", podIdentifier, "event", ev)
-
-				continue // Continue processing other events even if one fails
+			// Iterate over the hashes, convert each one to uint64, and create a key.
+			for _, rawHash := range ev.BlockHashes {
+				hash, err := getHashAsUint64(rawHash)
+				if err != nil {
+					debugLogger.Error(err, "Failed to convert block hash for BlockStored event", "rawHash", rawHash)
+					continue
+				}
+				keys = append(keys, kvblock.Key{ModelName: modelName, ChunkHash: hash})
 			}
-		case BlockRemoved:
-			for _, hash := range ev.BlockHashes {
-				key := kvblock.Key{ModelName: modelName, ChunkHash: hash}
-				if err := p.index.Evict(ctx, key, podEntries); err != nil {
-					debugLogger.Error(err, "Failed to remove event from index",
+
+			// Only proceed if we have valid keys to add.
+			if len(keys) > 0 {
+				if err := p.index.Add(ctx, keys, podEntries); err != nil {
+					debugLogger.Error(err, "Failed to add event to index",
 						"podIdentifier", podIdentifier, "event", ev)
 					continue // Continue processing other events even if one fails
 				}
 			}
-		case LegacyBlockStored:
-			keys := utils.SliceMap(ev.BlockHashes, func(hash uint64) kvblock.Key {
-				return kvblock.Key{ModelName: modelName, ChunkHash: hash}
-			})
 
-			if err := p.index.Add(ctx, keys, podEntries); err != nil {
-				debugLogger.Error(err, "Failed to add event to index",
-					"podIdentifier", podIdentifier, "event", ev)
-
-				continue // Continue processing other events even if one fails
-			}
-		case LegacyBlockRemoved:
-			for _, hash := range ev.BlockHashes {
+		case BlockRemoved:
+			// Iterate over the hashes, convert each one to uint64, and evict the key.
+			for _, rawHash := range ev.BlockHashes {
+				hash, err := getHashAsUint64(rawHash)
+				if err != nil {
+					debugLogger.Error(err, "Failed to convert block hash for BlockRemoved event", "rawHash", rawHash)
+					continue
+				}
 				key := kvblock.Key{ModelName: modelName, ChunkHash: hash}
 				if err := p.index.Evict(ctx, key, podEntries); err != nil {
 					debugLogger.Error(err, "Failed to remove event from index",
@@ -305,32 +292,31 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	}
 }
 
-func isLegacyEvent(tag string, length int) bool {
-	switch tag {
-	case "BlockStored":
-		return length == 5
-	case "BlockRemoved":
-		return length == 2
-	default:
-		return false
-	}
-}
-
-func unmarshalLegacyEvent(data []byte, tag string) (event, error) {
-	switch tag {
-	case "BlockStored":
-		var bs LegacyBlockStored
-		if err := msgpack.Unmarshal(data, &bs); err != nil {
-			return nil, err
+// getHashAsUint64 converts a block hash from an `any` type to a uint64.
+// It handles legacy uint64 hashes and new []byte hashes by taking the last 8 bytes
+// and interpreting them as a big-endian integer, matching vLLM's compatibility logic.
+func getHashAsUint64(hash any) (uint64, error) {
+	switch val := hash.(type) {
+	case uint64:
+		// Hash is already in the target format.
+		return val, nil
+	case int64:
+		// msgpack can decode small integers as int64.
+		//nolint:gosec // int64 to uint64 conversion is safe here
+		return uint64(val), nil
+	case []byte:
+		if len(val) == 0 {
+			return 0, fmt.Errorf("hash byte slice is empty")
 		}
-		return bs, nil
-	case "BlockRemoved":
-		var br LegacyBlockRemoved
-		if err := msgpack.Unmarshal(data, &br); err != nil {
-			return nil, err
+		// If the slice is 8 bytes or longer, use the last 8 bytes.
+		if len(val) >= 8 {
+			return binary.BigEndian.Uint64(val[len(val)-8:]), nil
 		}
-		return br, nil
+		// If the slice is shorter than 8 bytes, pad it with leading zeros.
+		padded := make([]byte, 8)
+		copy(padded[8-len(val):], val)
+		return binary.BigEndian.Uint64(padded), nil
 	default:
-		return nil, errors.New("unknown legacy event tag")
+		return 0, fmt.Errorf("unsupported hash type: %T", val)
 	}
 }

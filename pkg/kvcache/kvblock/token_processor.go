@@ -38,8 +38,8 @@ type TokenProcessorConfig struct {
 	// This should be aligned with vLLM's `PYTHONHASHSEED` environment variable.
 	// The system's deployer is responsible for aligning the vLLM deployments
 	// with the same seed value.
-	HashSeed string  `json:"hashSeed"`
-	initHash *uint64 // cache once
+	HashSeed string `json:"hashSeed"`
+	initHash []byte // cache once
 }
 
 // DefaultTokenProcessorConfig returns the default configuration for the token processor.
@@ -76,8 +76,8 @@ func NewChunkedTokenDatabase(config *TokenProcessorConfig) TokenProcessor {
 	}
 }
 
-// getInitHash returns the root parent hash.
-func (db *ChunkedTokenDatabase) getInitHash() *uint64 {
+// getInitHash returns the root parent hash as a full byte slice.
+func (db *ChunkedTokenDatabase) getInitHash() []byte {
 	if db.initHash != nil {
 		return db.initHash
 	}
@@ -95,36 +95,35 @@ func (db *ChunkedTokenDatabase) getInitHash() *uint64 {
 	}
 
 	sum := sha256.Sum256(b)
-	hashVal := binary.BigEndian.Uint64(sum[24:])
-	db.initHash = &hashVal
+	db.initHash = sum[:] // Return the full 32-byte hash
 	return db.initHash
 }
 
-// hash computes a uint64 hash (lower 64 bits of SHA256).
-// The format, serialization and hashing is aligned with that of vLLM.
-func (db *ChunkedTokenDatabase) hash(parent uint64, tokens []uint32, extra interface{}) uint64 {
+// hash computes the full 32-byte SHA256 hash.
+// The parent hash is now a byte slice.
+func (db *ChunkedTokenDatabase) hash(parent []byte, tokens []uint32, extra interface{}) []byte {
 	payload := []interface{}{parent, tokens, extra}
 
 	encMode, err := cbor.CanonicalEncOptions().EncMode() // deterministic
 	if err != nil {
 		klog.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
-		return 0
+		return nil
 	}
 
 	b, err := encMode.Marshal(payload)
 	if err != nil {
 		klog.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
-		return 0
+		return nil
 	}
 
 	sum := sha256.Sum256(b)
-	return binary.BigEndian.Uint64(sum[24:])
+	return sum[:] // Return the full 32-byte hash
 }
 
-// prefixHashes returns a slice of uint64 hashes.
-func (db *ChunkedTokenDatabase) prefixHashes(parentHash uint64, tokenChunks [][]uint32) []uint64 {
+// prefixHashes returns a slice of full 32-byte hashes.
+func (db *ChunkedTokenDatabase) prefixHashes(parentHash []byte, tokenChunks [][]uint32) [][]byte {
 	prefix := parentHash
-	hashes := make([]uint64, len(tokenChunks))
+	hashes := make([][]byte, len(tokenChunks))
 	for i, chunk := range tokenChunks {
 		prefix = db.hash(prefix, chunk, nil)
 		hashes[i] = prefix
@@ -149,14 +148,19 @@ func (db *ChunkedTokenDatabase) chunkTokens(tokens []uint32) [][]uint32 {
 
 // TokensToKVBlockKeys converts tokens into kv_block.Keys.
 func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName string) []Key {
-	parentPtr := db.getInitHash()
-	if parentPtr == nil {
+	parentBytes := db.getInitHash()
+	if parentBytes == nil {
 		return nil
 	}
 
 	chunks := db.chunkTokens(tokens)
-	ph := db.prefixHashes(*parentPtr, chunks)
-	return utils.SliceMap(ph, func(hashVal uint64) Key {
+	// ph is now a slice of 32-byte hashes
+	ph := db.prefixHashes(parentBytes, chunks)
+
+	// Convert the final byte hashes to uint64 for the Key struct
+	return utils.SliceMap(ph, func(hashBytes []byte) Key {
+		// Truncate to 64 bits at the very end by taking the last 8 bytes
+		hashVal := binary.BigEndian.Uint64(hashBytes[24:])
 		return Key{
 			ModelName: modelName,
 			ChunkHash: hashVal,
