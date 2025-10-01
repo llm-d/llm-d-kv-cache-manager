@@ -99,8 +99,8 @@ func (db *ChunkedTokenDatabase) getInitHash() []byte {
 	return db.initHash
 }
 
-// hash computes the full 32-byte SHA256 hash.
-// The parent hash is now a byte slice.
+// hash computes the full 32-byte SHA256 hash of the given parent, tokens,
+// and extra keys, mimicking the vLLM implementation.
 func (db *ChunkedTokenDatabase) hash(parent []byte, tokens []uint32, extra interface{}) []byte {
 	payload := []interface{}{parent, tokens, extra}
 
@@ -154,7 +154,6 @@ func (db *ChunkedTokenDatabase) TokensToKVBlockKeys(tokens []uint32, modelName s
 	}
 
 	chunks := db.chunkTokens(tokens)
-	// ph is now a slice of 32-byte hashes
 	ph := db.prefixHashes(parentBytes, chunks)
 
 	// Convert the final byte hashes to uint64 for the Key struct
