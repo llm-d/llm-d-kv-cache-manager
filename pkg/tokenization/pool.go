@@ -39,6 +39,7 @@ type Config struct {
 	// Minimum overlap ratio to skip full tokenization and use cached prefix tokens.
 	MinPrefixOverlapRatio float64 `json:"minPrefixOverlapRatio"`
 	*HFTokenizerConfig
+	*UdsTokenizerConfig
 }
 
 // DefaultConfig returns a default configuration for the TokenizationPool.
@@ -85,16 +86,26 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 		config = DefaultConfig()
 	}
 
-	cachingTokenizer, err := NewCachedHFTokenizer(config.HFTokenizerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tokenizer: %w", err)
+	var tokenizer Tokenizer
+	var err error
+	switch {
+	case config.HFTokenizerConfig != nil:
+		tokenizer, err = NewCachedHFTokenizer(config.HFTokenizerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tokenizer: %w", err)
+		}
+	case config.UdsTokenizerConfig != nil:
+		tokenizer, err = NewUdsTokenizer(config.UdsTokenizerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tokenizer: %w", err)
+		}
 	}
 
 	return &Pool{
 		workers:               config.WorkersCount,
 		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Task]()),
 		indexer:               store,
-		tokenizer:             cachingTokenizer,
+		tokenizer:             tokenizer,
 		minPrefixOverlapRatio: config.MinPrefixOverlapRatio,
 	}, nil
 }
