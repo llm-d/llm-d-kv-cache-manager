@@ -132,6 +132,28 @@ Configures the Redis-backed KV block index implementation.
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `address` | `string` | Redis server address (can include auth: `redis://user:pass@host:port/db`) | `"redis://127.0.0.1:6379"` |
+| `backendType` | `string` | Backend type: "redis" or "valkey" (optional, mainly for documentation) | `"redis"` |
+| `enableRDMA` | `boolean` | Enable RDMA transport for Valkey (experimental, requires Valkey with RDMA support) | `false` |
+
+### Valkey Index Configuration (`RedisIndexConfig`) 
+
+Configures the Valkey-backed KV block index implementation. Valkey is a Redis-compatible, open-source alternative that supports RDMA for improved latency.
+
+```json
+{
+  "address": "valkey://127.0.0.1:6379",
+  "backendType": "valkey", 
+  "enableRDMA": false
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `address` | `string` | Valkey server address. Supports `valkey://`, `valkeys://` (SSL), `redis://`, or plain address | `"valkey://127.0.0.1:6379"` |
+| `backendType` | `string` | Should be "valkey" for Valkey instances | `"valkey"` |
+| `enableRDMA` | `boolean` | Enable RDMA transport (requires Valkey server with RDMA support) | `false` |
+
+**Note**: Both Redis and Valkey configurations use the same `RedisIndexConfig` structure since Valkey is API-compatible with Redis.
 
 ## Token Processing Configuration
 
