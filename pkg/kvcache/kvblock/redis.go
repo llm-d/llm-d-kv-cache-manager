@@ -29,47 +29,115 @@ import (
 )
 
 // RedisIndexConfig holds the configuration for the RedisIndex.
+// This configuration supports both Redis and Valkey backends since they are API-compatible.
 type RedisIndexConfig struct {
-	Address string `json:"address,omitempty"` // Redis server address
+	Address string `json:"address,omitempty"` // Redis/Valkey server address
+	// BackendType specifies whether to connect to "redis" or "valkey" (optional, defaults to "redis")
+	// This is mainly for documentation and future extensibility (e.g., RDMA support)
+	BackendType string `json:"backendType,omitempty"`
+	// EnableRDMA enables RDMA transport for Valkey when supported (experimental)
+	EnableRDMA bool `json:"enableRDMA,omitempty"`
 }
 
 func DefaultRedisIndexConfig() *RedisIndexConfig {
 	return &RedisIndexConfig{
-		Address: "redis://127.0.0.1:6379",
+		Address:     "redis://127.0.0.1:6379",
+		BackendType: "redis",
+		EnableRDMA:  false,
+	}
+}
+
+// DefaultValkeyIndexConfig returns a default configuration for Valkey.
+func DefaultValkeyIndexConfig() *RedisIndexConfig {
+	return &RedisIndexConfig{
+		Address:     "valkey://127.0.0.1:6379", 
+		BackendType: "valkey",
+		EnableRDMA:  false,
 	}
 }
 
 // NewRedisIndex creates a new RedisIndex instance.
+// This constructor supports both Redis and Valkey backends.
 func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 	if config == nil {
 		config = DefaultRedisIndexConfig()
 	}
 
-	if !strings.HasPrefix(config.Address, "redis://") &&
+	// Normalize the backend type
+	if config.BackendType == "" {
+		config.BackendType = "redis"
+	}
+
+	// Handle address prefixing for both Redis and Valkey
+	needsPrefix := !strings.HasPrefix(config.Address, "redis://") &&
 		!strings.HasPrefix(config.Address, "rediss://") &&
-		!strings.HasPrefix(config.Address, "unix://") {
-		config.Address = "redis://" + config.Address
+		!strings.HasPrefix(config.Address, "valkey://") &&
+		!strings.HasPrefix(config.Address, "valkeys://") &&
+		!strings.HasPrefix(config.Address, "unix://")
+
+	if needsPrefix {
+		// Default to redis:// prefix for backward compatibility
+		// Valkey is API-compatible with Redis protocol
+		if config.BackendType == "valkey" {
+			// For Valkey, we still use redis:// protocol as it's API-compatible
+			// The actual backend differentiation is handled via configuration
+			config.Address = "redis://" + config.Address
+		} else {
+			config.Address = "redis://" + config.Address
+		}
+	} else if strings.HasPrefix(config.Address, "valkey://") {
+		// Convert valkey:// to redis:// for protocol compatibility
+		config.Address = strings.Replace(config.Address, "valkey://", "redis://", 1)
+	} else if strings.HasPrefix(config.Address, "valkeys://") {
+		// Convert valkeys:// to rediss:// for SSL protocol compatibility  
+		config.Address = strings.Replace(config.Address, "valkeys://", "rediss://", 1)
 	}
 
 	redisOpt, err := redis.ParseURL(config.Address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse redisURL: %w", err)
+		return nil, fmt.Errorf("failed to parse %s URL: %w", config.BackendType, err)
+	}
+
+	// Future: Add RDMA configuration for Valkey when supported
+	if config.BackendType == "valkey" && config.EnableRDMA {
+		// TODO: Implement RDMA configuration when Valkey Go client supports it
+		// For now, log a warning that RDMA is not yet supported in the Go client
+		// but the connection will work with standard TCP
 	}
 
 	redisClient := redis.NewClient(redisOpt)
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		return nil, fmt.Errorf("failed to connect to %s: %w", config.BackendType, err)
 	}
 
 	return &RedisIndex{
-		RedisClient: redisClient,
+		RedisClient:  redisClient,
+		BackendType:  config.BackendType,
+		EnableRDMA:   config.EnableRDMA,
 	}, nil
 }
 
+// NewValkeyIndex creates a new RedisIndex instance configured for Valkey.
+// This is a convenience constructor that sets up Valkey-specific defaults.
+func NewValkeyIndex(config *RedisIndexConfig) (Index, error) {
+	if config == nil {
+		config = DefaultValkeyIndexConfig()
+	} else {
+		// Ensure BackendType is set to valkey
+		config.BackendType = "valkey"
+	}
+	
+	return NewRedisIndex(config)
+}
+
 // RedisIndex implements the Index interface
-// using Redis as the backend for KV block indexing.
+// using Redis or Valkey as the backend for KV block indexing.
 type RedisIndex struct {
 	RedisClient *redis.Client
+	// BackendType indicates whether this is connecting to "redis" or "valkey"
+	BackendType string
+	// EnableRDMA indicates if RDMA transport is enabled (for Valkey)
+	EnableRDMA bool
 }
 
 var _ Index = &RedisIndex{}
