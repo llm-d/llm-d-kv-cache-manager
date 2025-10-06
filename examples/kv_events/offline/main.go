@@ -204,7 +204,7 @@ func runEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	logger.Info("@@@ Simulating vLLM engine removing some blocks...")
 
 	blockRemovedEvent := kvevents.BlockRemoved{
-		BlockHashes: []any{testdata.PromptHashes[0], testdata.PromptHashes[1]},
+		BlockHashes: []any{testdata.PromptHashes[2], testdata.PromptHashes[3]},
 	}
 
 	//nolint // won't fail
