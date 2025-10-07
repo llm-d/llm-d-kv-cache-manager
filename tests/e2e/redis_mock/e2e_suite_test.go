@@ -58,7 +58,9 @@ func (s *KVCacheSuite) SetupTest() {
 	var err error
 	s.Require().NoError(err)
 
-	s.config = kvcache.NewDefaultConfig()
+	s.config, err = kvcache.NewDefaultConfig()
+	s.Require().NoError(err)
+
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.BlockSize = 4
 
