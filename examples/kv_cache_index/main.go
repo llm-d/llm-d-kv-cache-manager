@@ -41,7 +41,10 @@ const (
 )
 
 func getKVCacheIndexerConfig() (*kvcache.Config, error) {
-	config := kvcache.NewDefaultConfig()
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {

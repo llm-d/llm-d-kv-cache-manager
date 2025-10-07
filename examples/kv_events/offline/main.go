@@ -35,8 +35,11 @@ const (
 	envHFToken = "HF_TOKEN"
 )
 
-func getKVCacheIndexerConfig() *kvcache.Config {
-	config := kvcache.NewDefaultConfig()
+func getKVCacheIndexerConfig() (*kvcache.Config, error) {
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
@@ -45,7 +48,7 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 
 	config.TokenProcessorConfig.BlockSize = 256
 
-	return config
+	return config, nil
 }
 
 func main() {
@@ -105,7 +108,12 @@ func main() {
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 	logger := klog.FromContext(ctx)
 
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
+	cfg, err := getKVCacheIndexerConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

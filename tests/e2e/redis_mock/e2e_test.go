@@ -19,6 +19,8 @@ package e2e
 
 import (
 	"strings"
+
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
 // ChatMessage represents a single message in a conversation.
@@ -355,4 +357,97 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.True(pods[s.Pod1IP] > 0, "expected positive pod score")
 
 	s.T().Logf("Long chat completions E2E test completed successfully")
+}
+
+// TestCacheHitWithLocalTokenizer tests the full E2E flow using local tokenizer files.
+func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
+	// Create a local tokenizer using the testdata
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+		Mapping: map[string]string{
+			"test-model": "testdata/test-model/tokenizer.json",
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(localTokenizer)
+
+	prompt := "What is the capital of France?"
+	modelName := "test-model"
+	fakePodList := []string{s.Pod1IP}
+
+	// Tokenize using local tokenizer
+	tokens, offsets, err := localTokenizer.Encode(prompt, modelName)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens)
+	s.Require().Equal(len(tokens), len(offsets), "tokens and offsets should have same length")
+	s.T().Logf("Local tokenizer produced %d tokens for prompt", len(tokens))
+
+	// Convert tokens to KV block keys
+	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	s.Require().NotEmpty(blockKeys)
+	s.T().Logf("Generated %d KV block keys", len(blockKeys))
+
+	// Add entries to the index - this verifies the local tokenizer produces valid block keys
+	s.addEntriesToIndex(blockKeys, fakePodList)
+
+	// Verify that we can retrieve the entries we just added
+	// by tokenizing the same prompt again with the local tokenizer
+	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
+	s.Require().NoError(err)
+	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, modelName)
+	s.Require().Equal(blockKeys, blockKeys2, "same prompt should produce same block keys")
+
+	s.T().Logf("Local tokenizer E2E test completed successfully")
+}
+
+// TestCompositeTokenizerFallbackE2E tests that the composite tokenizer
+// falls back from local to HF tokenizer in the full E2E flow.
+func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
+	// Create local tokenizer with limited model mapping
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+		Mapping: map[string]string{
+			"test-model": "testdata/test-model/tokenizer.json",
+		},
+	})
+	s.Require().NoError(err)
+
+	// Create HF tokenizer as fallback
+	hfTokenizer, err := tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	s.Require().NoError(err)
+
+	// Create composite tokenizer
+	composite := &tokenization.CompositeTokenizer{
+		Tokenizers: []tokenization.Tokenizer{localTokenizer, hfTokenizer},
+	}
+
+	prompt := "What is the capital of France?"
+	fakePodList := []string{s.Pod1IP}
+
+	// Test 1: Use local tokenizer (should succeed)
+	tokens1, offsets1, err := composite.Encode(prompt, "test-model")
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens1)
+	s.Require().Equal(len(tokens1), len(offsets1), "tokens and offsets should have same length")
+	s.T().Logf("Local tokenizer produced %d tokens", len(tokens1))
+
+	blockKeys1 := s.tokensProcessor.TokensToKVBlockKeys(tokens1, "test-model")
+	s.addEntriesToIndex(blockKeys1, fakePodList)
+	s.T().Logf("Successfully added %d block keys from local tokenizer to index", len(blockKeys1))
+
+	// Test 2: Use HF tokenizer fallback (model not in local mapping)
+	tokens2, offsets2, err := composite.Encode(prompt, defaultModelName)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens2)
+	s.Require().Equal(len(tokens2), len(offsets2), "tokens and offsets should have same length")
+	s.T().Logf("HF tokenizer (fallback) produced %d tokens", len(tokens2))
+
+	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, defaultModelName)
+	s.addEntriesToIndex(blockKeys2, fakePodList)
+	s.T().Logf("Successfully added %d block keys from HF tokenizer to index", len(blockKeys2))
+
+	// Test 3: Verify error case when model doesn't exist in either tokenizer
+	_, _, err = composite.Encode(prompt, "non-existent-model")
+	s.Require().Error(err, "expected error for non-existent model")
+	s.T().Logf("Correctly got error for non-existent model: %v", err)
+
+	s.T().Logf("Composite tokenizer fallback E2E test completed successfully")
 }
