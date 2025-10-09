@@ -118,6 +118,11 @@ func logMetrics(ctx context.Context) {
 	latencyCount := latencyMetric.GetHistogram().GetSampleCount()
 	latencySum := latencyMetric.GetHistogram().GetSampleSum()
 
+	latencyAvg := 0.0
+	if latencyCount > 0 {
+		latencyAvg = latencySum / float64(latencyCount)
+	}
+
 	klog.FromContext(ctx).WithName("metrics").Info("metrics beat",
 		"admissions", admissions,
 		"evictions", evictions,
@@ -125,6 +130,6 @@ func logMetrics(ctx context.Context) {
 		"hits", hits,
 		"latency_count", latencyCount,
 		"latency_sum", latencySum,
-		"latency_avg", latencySum/float64(latencyCount),
+		"latency_avg", latencyAvg,
 	)
 }
