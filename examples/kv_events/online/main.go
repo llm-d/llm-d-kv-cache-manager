@@ -34,6 +34,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 
 	envHTTPPort     = "HTTP_PORT"
 	defaultHTTPPort = "8080"
+
+	envExternalTokenization = "EXTERNAL_TOKENIZATION"
 )
 
 // ChatCompletionsRequest holds the fields needed for chat-completions rendering.
@@ -175,6 +178,12 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	blockSize, err := strconv.Atoi(os.Getenv(blockSizeEnvVar))
 	if err == nil && blockSize >= 0 {
 		config.TokenProcessorConfig.BlockSize = blockSize
+	}
+
+	useExternalTokenization, err := strconv.ParseBool(os.Getenv(envExternalTokenization))
+	if err == nil && useExternalTokenization {
+		config.TokenizersPoolConfig.UdsTokenizerConfig = &tokenization.UdsTokenizerConfig{}
+		config.TokenizersPoolConfig.HFTokenizerConfig = nil
 	}
 
 	config.KVBlockIndexConfig.EnableMetrics = true
