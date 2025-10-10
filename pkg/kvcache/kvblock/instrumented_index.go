@@ -55,6 +55,7 @@ func (m *instrumentedIndex) Lookup(
 	metrics.LookupRequests.Inc()
 
 	pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
+	metrics.LookupHits.Add(float64(len(pods)))
 
 	return pods, err
 }
