@@ -59,16 +59,16 @@ func TestValkeyIndexConfiguration(t *testing.T) {
 	defer server.Close()
 
 	tests := []struct {
-		name           string
-		config         *RedisIndexConfig
+		name            string
+		config          *RedisIndexConfig
 		expectedBackend string
-		shouldSucceed  bool
+		shouldSucceed   bool
 	}{
 		{
-			name: "default valkey config",
-			config: nil,
+			name:            "default valkey config",
+			config:          nil,
 			expectedBackend: "valkey",
-			shouldSucceed: true,
+			shouldSucceed:   true,
 		},
 		{
 			name: "valkey with explicit config",
@@ -78,17 +78,17 @@ func TestValkeyIndexConfiguration(t *testing.T) {
 				EnableRDMA:  false,
 			},
 			expectedBackend: "valkey",
-			shouldSucceed: true,
+			shouldSucceed:   true,
 		},
 		{
-			name: "valkey with RDMA enabled", 
+			name: "valkey with RDMA enabled",
 			config: &RedisIndexConfig{
 				Address:     server.Addr(),
 				BackendType: "valkey",
 				EnableRDMA:  true,
 			},
 			expectedBackend: "valkey",
-			shouldSucceed: true,
+			shouldSucceed:   true,
 		},
 		{
 			name: "valkey:// URL scheme",
@@ -98,17 +98,17 @@ func TestValkeyIndexConfiguration(t *testing.T) {
 				EnableRDMA:  false,
 			},
 			expectedBackend: "valkey",
-			shouldSucceed: true,
+			shouldSucceed:   true,
 		},
 		{
 			name: "valkeys:// SSL URL scheme",
 			config: &RedisIndexConfig{
 				Address:     "valkeys://" + server.Addr(),
-				BackendType: "valkey", 
+				BackendType: "valkey",
 				EnableRDMA:  false,
 			},
 			expectedBackend: "valkey",
-			shouldSucceed: false, // miniredis doesn't support SSL
+			shouldSucceed:   false, // miniredis doesn't support SSL
 		},
 	}
 
@@ -174,7 +174,7 @@ func TestValkeyRedisCompatibility(t *testing.T) {
 	// Verify they have different backend types
 	redisImpl := redisIndex.(*RedisIndex)
 	valkeyImpl := valkeyIndex.(*RedisIndex)
-	
+
 	assert.Equal(t, "redis", redisImpl.BackendType)
 	assert.Equal(t, "valkey", valkeyImpl.BackendType)
 }
@@ -201,7 +201,7 @@ func TestValkeyURLSchemeHandling(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "valkey:// scheme", 
+			name:        "valkey:// scheme",
 			inputAddr:   "valkey://" + server.Addr(),
 			expectError: false,
 		},
@@ -225,7 +225,7 @@ func TestValkeyURLSchemeHandling(t *testing.T) {
 			}
 
 			index, err := NewValkeyIndex(config)
-			
+
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, index)

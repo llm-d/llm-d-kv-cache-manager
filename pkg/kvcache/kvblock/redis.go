@@ -50,7 +50,7 @@ func DefaultRedisIndexConfig() *RedisIndexConfig {
 // DefaultValkeyIndexConfig returns a default configuration for Valkey.
 func DefaultValkeyIndexConfig() *RedisIndexConfig {
 	return &RedisIndexConfig{
-		Address:     "valkey://127.0.0.1:6379", 
+		Address:     "valkey://127.0.0.1:6379",
 		BackendType: "valkey",
 		EnableRDMA:  false,
 	}
@@ -89,7 +89,7 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 		// Convert valkey:// to redis:// for protocol compatibility
 		config.Address = strings.Replace(config.Address, "valkey://", "redis://", 1)
 	} else if strings.HasPrefix(config.Address, "valkeys://") {
-		// Convert valkeys:// to rediss:// for SSL protocol compatibility  
+		// Convert valkeys:// to rediss:// for SSL protocol compatibility
 		config.Address = strings.Replace(config.Address, "valkeys://", "rediss://", 1)
 	}
 
@@ -101,8 +101,11 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 	// Future: Add RDMA configuration for Valkey when supported
 	if config.BackendType == "valkey" && config.EnableRDMA {
 		// TODO: Implement RDMA configuration when Valkey Go client supports it
-		// For now, log a warning that RDMA is not yet supported in the Go client
-		// but the connection will work with standard TCP
+		//
+		// Note: RDMA will work if configured directly in the Valkey server instance,
+		// but the Go client doesn't yet have configuration options to enable RDMA.
+		// This configuration flag is a placeholder for future Go client RDMA support.
+		// The connection will work with standard TCP for now.
 	}
 
 	redisClient := redis.NewClient(redisOpt)
@@ -111,9 +114,9 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 	}
 
 	return &RedisIndex{
-		RedisClient:  redisClient,
-		BackendType:  config.BackendType,
-		EnableRDMA:   config.EnableRDMA,
+		RedisClient: redisClient,
+		BackendType: config.BackendType,
+		EnableRDMA:  config.EnableRDMA,
 	}, nil
 }
 
@@ -126,7 +129,7 @@ func NewValkeyIndex(config *RedisIndexConfig) (Index, error) {
 		// Ensure BackendType is set to valkey
 		config.BackendType = "valkey"
 	}
-	
+
 	return NewRedisIndex(config)
 }
 

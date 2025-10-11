@@ -22,16 +22,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"k8s.io/klog/v2"
 )
 
 const (
-	envValkeyAddr      = "VALKEY_ADDR"
-	envValkeyEnableRDMA = "VALKEY_ENABLE_RDMA" 
-	envHFToken         = "HF_TOKEN"
-	defaultModelName   = "microsoft/DialoGPT-medium"
+	envValkeyAddr       = "VALKEY_ADDR"
+	envValkeyEnableRDMA = "VALKEY_ENABLE_RDMA"
+	envHFToken          = "HF_TOKEN"
 )
 
 func main() {
@@ -45,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("Initializing KV-Cache Manager with Valkey backend", 
+	logger.Info("Initializing KV-Cache Manager with Valkey backend",
 		"valkeyAddr", config.KVBlockIndexConfig.ValkeyConfig.Address,
 		"rdmaEnabled", config.KVBlockIndexConfig.ValkeyConfig.EnableRDMA)
 
@@ -82,15 +83,15 @@ func createValkeyConfig() (*kvcache.Config, error) {
 		enableRDMA = true
 	}
 
-	// Set up Valkey configuration 
+	// Set up Valkey configuration
 	config.KVBlockIndexConfig = &kvblock.IndexConfig{
 		ValkeyConfig: &kvblock.RedisIndexConfig{
 			Address:     valkeyAddr,
 			BackendType: "valkey",
 			EnableRDMA:  enableRDMA,
 		},
-		EnableMetrics:              true,
-		MetricsLoggingInterval:     30 * time.Second,
+		EnableMetrics:          true,
+		MetricsLoggingInterval: 30 * time.Second,
 	}
 
 	// Configure tokenizer
@@ -107,82 +108,84 @@ func createValkeyConfig() (*kvcache.Config, error) {
 func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) error {
 	logger := klog.FromContext(ctx).WithName("valkey-demo")
 
-	// Test prompts to demonstrate caching behavior
-	prompts := []string{
-		"Hello, how are you today?",
-		"What is the weather like?", 
-		"Hello, how are you today?", // Repeat to show cache hit
-		"Can you help me with programming?",
-		"What is machine learning?",
-		"Hello, how are you today?", // Another repeat
-	}
+	modelName := testdata.ModelName
+	prompt := testdata.Prompt
 
 	podEntries := []kvblock.PodEntry{
 		{PodIdentifier: "demo-pod-1", DeviceTier: "gpu"},
 		{PodIdentifier: "demo-pod-2", DeviceTier: "gpu"},
 	}
 
+	logger.Info("Processing testdata prompt", "model", modelName, "promptLength", len(prompt))
+
 	// First, let's demonstrate basic scoring without any cache entries
-	for i, prompt := range prompts {
-		logger.Info("Processing prompt", "iteration", i+1, "prompt", prompt)
-
-		// Query for cache scores on this prompt
-		scores, err := indexer.GetPodScores(ctx, prompt, defaultModelName, []string{"demo-pod-1", "demo-pod-2"})
-		if err != nil {
-			return fmt.Errorf("failed to get pod scores for prompt %d: %w", i+1, err)
-		}
-
-		logger.Info("Cache scores", "prompt", prompt, "scores", scores)
-
-		// Small delay to see timing
-		time.Sleep(100 * time.Millisecond)
+	scores, err := indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
+	if err != nil {
+		return fmt.Errorf("failed to get pod scores: %w", err)
 	}
 
-	// Now let's manually add some cache entries to demonstrate cache hits
+	logger.Info("Initial cache scores (should be empty)", "scores", scores)
+
+	// Now let's manually add some cache entries using the pre-calculated hashes from testdata
 	logger.Info("Adding cache entries manually to demonstrate Valkey backend")
-	
-	// Simulate cache entries for the first prompt
-	firstPromptKeys := []kvblock.Key{
-		{ModelName: defaultModelName, ChunkHash: 12345},
-		{ModelName: defaultModelName, ChunkHash: 67890},
-	}
-	
-	err := indexer.KVBlockIndex().Add(ctx, firstPromptKeys, podEntries)
+
+	// Use the pre-calculated hashes from testdata that match the prompt
+	promptKeys := utils.SliceMap(testdata.PromptHashes, func(h uint64) kvblock.Key {
+		return kvblock.Key{
+			ModelName: modelName,
+			ChunkHash: h,
+		}
+	})
+
+	err = indexer.KVBlockIndex().Add(ctx, promptKeys, podEntries)
 	if err != nil {
 		return fmt.Errorf("failed to add cache entries: %w", err)
 	}
 
+	logger.Info("Added cache entries", "keys", len(promptKeys), "pods", len(podEntries))
+
 	// Query for cache scores again
-	scores, err := indexer.GetPodScores(ctx, prompts[0], defaultModelName, []string{"demo-pod-1", "demo-pod-2"})
+	scores, err = indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
 	if err != nil {
 		return fmt.Errorf("failed to get pod scores after adding entries: %w", err)
 	}
 
-	logger.Info("Cache scores after adding entries", "prompt", prompts[0], "scores", scores)
+	logger.Info("Cache scores after adding entries", "scores", scores)
 
-	// Demonstrate lookup functionality 
+	// Demonstrate lookup functionality
 	logger.Info("Demonstrating cache lookup via Valkey backend")
-	lookupResults, err := indexer.KVBlockIndex().Lookup(ctx, firstPromptKeys, nil)
+	lookupResults, err := indexer.KVBlockIndex().Lookup(ctx, promptKeys, nil)
 	if err != nil {
 		return fmt.Errorf("failed to lookup cache entries: %w", err)
 	}
 
-	logger.Info("Cache lookup results", "keys", firstPromptKeys, "results", lookupResults)
+	logger.Info("Cache lookup results", "keysFound", len(lookupResults))
+	for key, pods := range lookupResults {
+		logger.Info("Key found", "key", key.String(), "pods", pods)
+	}
 
 	// Demonstrate eviction
 	logger.Info("Demonstrating cache eviction")
-	err = indexer.KVBlockIndex().Evict(ctx, firstPromptKeys[0], podEntries[:1])
+	err = indexer.KVBlockIndex().Evict(ctx, promptKeys[0], podEntries[:1])
 	if err != nil {
 		return fmt.Errorf("failed to evict cache entry: %w", err)
 	}
 
 	// Lookup again after eviction
-	lookupAfterEvict, err := indexer.KVBlockIndex().Lookup(ctx, firstPromptKeys, nil)
+	lookupAfterEvict, err := indexer.KVBlockIndex().Lookup(ctx, promptKeys, nil)
 	if err != nil {
 		return fmt.Errorf("failed to lookup after eviction: %w", err)
 	}
 
-	logger.Info("Cache lookup after eviction", "results", lookupAfterEvict)
+	logger.Info("Cache lookup after eviction", "keysFound", len(lookupAfterEvict))
+
+	// Final score check to see the difference
+	finalScores, err := indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
+	if err != nil {
+		return fmt.Errorf("failed to get final pod scores: %w", err)
+	}
+
+	logger.Info("Final cache scores", "scores", finalScores)
 
 	return nil
 }
