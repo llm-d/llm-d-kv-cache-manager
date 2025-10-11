@@ -33,6 +33,8 @@ type IndexConfig struct {
 	InMemoryConfig *InMemoryIndexConfig `json:"inMemoryConfig"`
 	// RedisConfig holds the configuration for the Redis index.
 	RedisConfig *RedisIndexConfig `json:"redisConfig"`
+	// ValkeyConfig holds the configuration for the Valkey index.
+	ValkeyConfig *RedisIndexConfig `json:"valkeyConfig"`
 	// CostAwareMemoryConfig holds the configuration for the cost-aware memory index.
 	CostAwareMemoryConfig *CostAwareMemoryIndexConfig `json:"costAwareMemoryConfig"`
 
@@ -73,8 +75,14 @@ func NewIndex(ctx context.Context, cfg *IndexConfig) (Index, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cost-aware memory index: %w", err)
 		}
+	case cfg.ValkeyConfig != nil:
+		//nolint:contextcheck // NewValkeyIndex does not accept context parameter
+		idx, err = NewValkeyIndex(cfg.ValkeyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Valkey index: %w", err)
+		}
 	case cfg.RedisConfig != nil:
-		//nolint:contextcheck // NewKVCacheIndexer does not accept context parameter
+		//nolint:contextcheck // NewRedisIndex does not accept context parameter
 		idx, err = NewRedisIndex(cfg.RedisConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Redis index: %w", err)

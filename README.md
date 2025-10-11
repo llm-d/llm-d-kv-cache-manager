@@ -76,3 +76,5 @@ graph TD
   A reference implementation of how to integrate the `kvcache.Indexer` into a scheduler like the `llm-d-inference-scheduler`
 * [**KV-Events**](examples/kv_events/README.md):
  Demonstrates how the KV-Cache Manager handles KV-Events through both an offline example with a dummy ZMQ publisher and an online example using a vLLM Helm chart.
+* [**Valkey Backend**](examples/valkey_example/README.md):
+ Shows how to configure and use Valkey as the backend for KV-block indexing, including RDMA support for high-performance scenarios.
