@@ -60,8 +60,13 @@ Here's a complete configuration example with all options:
   "tokenizersPoolConfig": {
     "workersCount": 8,
     "minPrefixOverlapRatio": 0.85,
+    "enabled": true,
     "huggingFaceToken": "your_hf_token_here",
-    "tokenizersCacheDir": "/tmp/tokenizers"
+    "tokenizersCacheDir": "/tmp/tokenizers",
+    "local": {
+      "autoDiscoveryDir": "/mnt/models",
+      "autoDiscoveryTokenizerFileName": "tokenizer.json"
+    }
   }
 }
 ```
@@ -214,21 +219,73 @@ Configures the tokenization worker pool and cache utilization strategy.
 | `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
 
 
-### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
+### Local Tokenizer Configuration (`LocalTokenizerConfig`)
 
-Configures the HuggingFace tokenizer backend.
+Configures loading tokenizers from local files. Useful for air-gapped environments or when models are pre-loaded.
 
 ```json
 {
-  "huggingFaceToken": "",
-  "tokenizersCacheDir": ""
+  "autoDiscoveryDir": "/mnt/models",
+  "autoDiscoveryTokenizerFileName": "tokenizer.json",
+  "modelTokenizerMap": {
+    "custom-model": "/path/to/custom-model/tokenizer.json"
+  }
 }
 ```
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `huggingFaceToken` | `string` | HuggingFace API token for accessing models | `""` |
+| `autoDiscoveryDir` | `string` | Directory to recursively scan for tokenizer files. Can be set via `LOCAL_TOKENIZER_DIR` environment variable. | `"/mnt/models"` |
+| `autoDiscoveryTokenizerFileName` | `string` | Filename to search for during auto-discovery. Can be set via `LOCAL_TOKENIZER_FILENAME` environment variable. | `"tokenizer.json"` |
+| `modelTokenizerMap` | `map[string]string` | Manual mapping from model name to tokenizer file path. Takes precedence over auto-discovery. | `{}` |
+
+**Auto-Discovery Behavior:**
+
+When `autoDiscoveryDir` is set, the system recursively scans the directory for files matching `autoDiscoveryTokenizerFileName`. It supports two directory structure patterns:
+
+1. **HuggingFace Cache Structure** (automatically detected):
+   ```
+   ~/.cache/huggingface/hub/
+     models--Qwen--Qwen3-0.6B/snapshots/{hash}/tokenizer.json
+       → Model name: "Qwen/Qwen3-0.6B"
+     models--meta-llama--Llama-2-7b-chat-hf/snapshots/{hash}/tokenizer.json
+       → Model name: "meta-llama/Llama-2-7b-chat-hf"
+   ```
+
+2. **Custom Directory Structure** (arbitrary nesting):
+   ```
+   /mnt/models/
+     llama-7b/tokenizer.json
+       → Model name: "llama-7b"
+     Qwen/Qwen3/tokenizer.json
+       → Model name: "Qwen/Qwen3"
+     org/team/model/tokenizer.json
+       → Model name: "org/team/model"
+   ```
+
+**Environment Variables:**
+- `LOCAL_TOKENIZER_DIR`: Overrides the default auto-discovery directory
+- `LOCAL_TOKENIZER_FILENAME`: Overrides the default tokenizer filename
+
+### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
+
+Configures the HuggingFace tokenizer backend for downloading tokenizers from HuggingFace Hub.
+
+```json
+{
+  "enabled": true,
+  "huggingFaceToken": "",
+  "tokenizersCacheDir": "./bin"
+}
+```
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `enabled` | `boolean` | Enable HuggingFace tokenizer backend | `true` |
+| `huggingFaceToken` | `string` | HuggingFace API token for accessing private models | `""` |
 | `tokenizersCacheDir` | `string` | Local directory for caching downloaded tokenizers | `"./bin"` |
+
+**Note**: The system uses a composite tokenizer by default that tries local tokenizers first, then falls back to HuggingFace tokenizers if enabled and the model is not found locally.
 
 ## KV-Event Processing Configuration
 
