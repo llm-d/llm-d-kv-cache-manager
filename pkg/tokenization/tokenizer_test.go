@@ -116,7 +116,7 @@ func TestCachedHFTokenizer_InvalidModel(t *testing.T) {
 
 func TestCachedLocalTokenizer_Encode(t *testing.T) {
 	config := LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	}
@@ -154,7 +154,7 @@ func TestCachedLocalTokenizer_Encode(t *testing.T) {
 
 func TestCachedLocalTokenizer_CacheTokenizer(t *testing.T) {
 	config := LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	}
@@ -180,7 +180,7 @@ func TestCachedLocalTokenizer_CacheTokenizer(t *testing.T) {
 
 func TestCachedLocalTokenizer_InvalidModel(t *testing.T) {
 	config := LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	}
@@ -197,7 +197,7 @@ func TestCachedLocalTokenizer_InvalidModel(t *testing.T) {
 
 func TestCachedLocalTokenizer_InvalidPath(t *testing.T) {
 	config := LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"invalid-model": "testdata/non-existent/tokenizer.json",
 		},
 	}
@@ -218,7 +218,7 @@ func TestCompositeTokenizer_FallbackBehavior(t *testing.T) {
 	}
 
 	localTokenizer, err := NewCachedLocalTokenizer(LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	})
@@ -272,6 +272,54 @@ func TestCompositeTokenizer_FallbackBehavior(t *testing.T) {
 				assert.GreaterOrEqual(t, len(tokenIds), 0)
 				assert.Equal(t, len(tokenIds), len(offsets))
 			}
+		})
+	}
+}
+
+func TestParseHFCacheModelName(t *testing.T) {
+	tests := []struct {
+		name        string
+		dirName     string
+		wantModel   string
+		wantSuccess bool
+	}{
+		{
+			name:        "HF cache with org and model",
+			dirName:     "models--Qwen--Qwen3-0.6B",
+			wantModel:   "Qwen/Qwen3-0.6B",
+			wantSuccess: true,
+		},
+		{
+			name:        "HF cache with multi-part org and model",
+			dirName:     "models--meta-llama--Llama-2-7b-chat-hf",
+			wantModel:   "meta-llama/Llama-2-7b-chat-hf",
+			wantSuccess: true,
+		},
+		{
+			name:        "HF cache without org",
+			dirName:     "models--gpt2",
+			wantModel:   "gpt2",
+			wantSuccess: true,
+		},
+		{
+			name:        "not HF cache directory",
+			dirName:     "test-model",
+			wantModel:   "",
+			wantSuccess: false,
+		},
+		{
+			name:        "snapshots directory",
+			dirName:     "snapshots",
+			wantModel:   "",
+			wantSuccess: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model, ok := parseHFCacheModelName(tt.dirName)
+			assert.Equal(t, tt.wantSuccess, ok)
+			assert.Equal(t, tt.wantModel, model)
 		})
 	}
 }
@@ -392,6 +440,38 @@ func TestDefaultLocalTokenizerConfig(t *testing.T) {
 			wantModels:     []string{"model1", "model2"},
 			wantErr:        false,
 		},
+		{
+			name:     "with HuggingFace cache structure",
+			envValue: "",
+			setupFunc: func(t *testing.T) string {
+				t.Helper()
+				dir := t.TempDir()
+				// Create HF cache structure
+				// models--Qwen--Qwen3-0.6B/snapshots/{hash}/tokenizer.json
+				qwenPath := filepath.Join(dir, "models--Qwen--Qwen3-0.6B", "snapshots", "abc123")
+				require.NoError(t, os.MkdirAll(qwenPath, 0o755))
+				qwenTokenizer := filepath.Join(qwenPath, "tokenizer.json")
+				require.NoError(t, os.WriteFile(qwenTokenizer, []byte("{}"), 0o600))
+
+				// models--meta-llama--Llama-2-7b-chat-hf/snapshots/{hash}/tokenizer.json
+				llamaPath := filepath.Join(dir, "models--meta-llama--Llama-2-7b-chat-hf", "snapshots", "def456")
+				require.NoError(t, os.MkdirAll(llamaPath, 0o755))
+				llamaTokenizer := filepath.Join(llamaPath, "tokenizer.json")
+				require.NoError(t, os.WriteFile(llamaTokenizer, []byte("{}"), 0o600))
+
+				// models--gpt2/snapshots/{hash}/tokenizer.json
+				gpt2Path := filepath.Join(dir, "models--gpt2", "snapshots", "ghi789")
+				require.NoError(t, os.MkdirAll(gpt2Path, 0o755))
+				gpt2Tokenizer := filepath.Join(gpt2Path, "tokenizer.json")
+				require.NoError(t, os.WriteFile(gpt2Tokenizer, []byte("{}"), 0o600))
+
+				return dir
+			},
+			wantEnabled:    true,
+			wantMappingLen: 3,
+			wantModels:     []string{"Qwen/Qwen3-0.6B", "meta-llama/Llama-2-7b-chat-hf", "gpt2"},
+			wantErr:        false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -407,11 +487,11 @@ func TestDefaultLocalTokenizerConfig(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, config)
 				assert.Equal(t, tt.wantEnabled, config.IsEnabled())
-				assert.Equal(t, tt.wantMappingLen, len(config.Mapping))
+				assert.Equal(t, tt.wantMappingLen, len(config.ModelTokenizerMap))
 
 				// Verify expected models are in the mapping
 				for _, modelName := range tt.wantModels {
-					_, ok := config.Mapping[modelName]
+					_, ok := config.ModelTokenizerMap[modelName]
 					assert.True(t, ok, "expected model %q to be in mapping", modelName)
 				}
 			}
