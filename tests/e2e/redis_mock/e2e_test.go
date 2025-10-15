@@ -18,7 +18,11 @@ limitations under the License.
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 )
@@ -363,7 +367,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
 	// Create a local tokenizer using the testdata
 	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	})
@@ -404,7 +408,7 @@ func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
 func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
 	// Create local tokenizer with limited model mapping
 	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-		Mapping: map[string]string{
+		ModelTokenizerMap: map[string]string{
 			"test-model": "testdata/test-model/tokenizer.json",
 		},
 	})
@@ -450,4 +454,118 @@ func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
 	s.T().Logf("Correctly got error for non-existent model: %v", err)
 
 	s.T().Logf("Composite tokenizer fallback E2E test completed successfully")
+}
+
+// TestHFCacheStructureDiscoveryE2E tests auto-discovery of tokenizers from HuggingFace cache structure.
+func (s *KVCacheSuite) TestHFCacheStructureDiscoveryE2E() {
+	// Create a temporary HF-style cache directory
+	tmpDir := s.T().TempDir()
+
+	// Create HF cache structure
+	// models--test-org--test-model/snapshots/{hash}/tokenizer.json
+	testModelPath := filepath.Join(tmpDir, "models--test-org--test-model", "snapshots", "abc123")
+	require.NoError(s.T(), os.MkdirAll(testModelPath, 0o755))
+
+	// Copy the test tokenizer file
+	srcTokenizer := "testdata/test-model/tokenizer.json"
+	dstTokenizer := filepath.Join(testModelPath, "tokenizer.json")
+	srcData, err := os.ReadFile(srcTokenizer)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), os.WriteFile(dstTokenizer, srcData, 0o600))
+
+	// Create tokenizer config with auto-discovery
+	config := tokenization.LocalTokenizerConfig{
+		AutoDiscoveryDir:               tmpDir,
+		AutoDiscoveryTokenizerFileName: "tokenizer.json",
+	}
+
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(config)
+	s.Require().NoError(err)
+	s.Require().NotNil(localTokenizer)
+
+	prompt := "What is the capital of France?"
+	// Use the HF-style model name
+	modelName := "test-org/test-model"
+	fakePodList := []string{s.Pod1IP}
+
+	// Tokenize using the auto-discovered HF cache tokenizer
+	tokens, offsets, err := localTokenizer.Encode(prompt, modelName)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens)
+	s.Require().Equal(len(tokens), len(offsets), "tokens and offsets should have same length")
+	s.T().Logf("HF cache auto-discovery produced %d tokens for model %q", len(tokens), modelName)
+
+	// Convert tokens to KV block keys
+	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
+	s.Require().NotEmpty(blockKeys)
+
+	// Add entries to the index
+	s.addEntriesToIndex(blockKeys, fakePodList)
+
+	// Verify retrieval
+	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
+	s.Require().NoError(err)
+	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, modelName)
+	s.Require().Equal(blockKeys, blockKeys2, "same prompt should produce same block keys")
+
+	s.T().Logf("HF cache structure discovery E2E test completed successfully")
+}
+
+// TestMixedDirectoryStructureE2E tests using both HF cache and custom directory structures.
+func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
+	// Create a temporary directory with mixed structure
+	tmpDir := s.T().TempDir()
+
+	// 1. HF cache structure: models--org--model
+	hfModelPath := filepath.Join(tmpDir, "models--custom-org--custom-model", "snapshots", "xyz789")
+	require.NoError(s.T(), os.MkdirAll(hfModelPath, 0o755))
+
+	// 2. Custom structure: simple/nested/model
+	customModelPath := filepath.Join(tmpDir, "simple", "nested", "model")
+	require.NoError(s.T(), os.MkdirAll(customModelPath, 0o755))
+
+	// Copy test tokenizer to both locations
+	srcTokenizer := "testdata/test-model/tokenizer.json"
+	srcData, err := os.ReadFile(srcTokenizer)
+	require.NoError(s.T(), err)
+
+	require.NoError(s.T(), os.WriteFile(filepath.Join(hfModelPath, "tokenizer.json"), srcData, 0o600))
+	require.NoError(s.T(), os.WriteFile(filepath.Join(customModelPath, "tokenizer.json"), srcData, 0o600))
+
+	// Create tokenizer with auto-discovery
+	config := tokenization.LocalTokenizerConfig{
+		AutoDiscoveryDir:               tmpDir,
+		AutoDiscoveryTokenizerFileName: "tokenizer.json",
+	}
+
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(config)
+	s.Require().NoError(err)
+
+	prompt := "What is the capital of France?"
+	fakePodList := []string{s.Pod1IP}
+
+	// Test 1: HF cache model should be accessible as "custom-org/custom-model"
+	hfModelName := "custom-org/custom-model"
+	tokens1, _, err := localTokenizer.Encode(prompt, hfModelName)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens1)
+	s.T().Logf("HF cache model %q produced %d tokens", hfModelName, len(tokens1))
+
+	blockKeys1 := s.tokensProcessor.TokensToKVBlockKeys(tokens1, hfModelName)
+	s.addEntriesToIndex(blockKeys1, fakePodList)
+
+	// Test 2: Custom structure model should be accessible as "simple/nested/model"
+	customModelName := "simple/nested/model"
+	tokens2, _, err := localTokenizer.Encode(prompt, customModelName)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(tokens2)
+	s.T().Logf("Custom structure model %q produced %d tokens", customModelName, len(tokens2))
+
+	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, customModelName)
+	s.addEntriesToIndex(blockKeys2, fakePodList)
+
+	// Both should work independently
+	s.Require().Equal(len(tokens1), len(tokens2), "same tokenizer should produce same number of tokens")
+
+	s.T().Logf("Mixed directory structure E2E test completed successfully")
 }
