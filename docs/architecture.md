@@ -154,10 +154,18 @@ The `minPrefixOverlapRatio` parameter controls the trade-off:
 Efficiently handling tokenization is critical for performance. The system is designed to tokenize prompts quickly using a worker pool that supports both asynchronous and synchronous operations. It relies on a `PrefixStore` to cache tokenization results and avoid redundant work.
 
 * **Tokenization Pool**: The `tokenization.Pool` provides both asynchronous (fire-and-forget) and synchronous tokenization modes. For scoring requests, synchronous tokenization ensures complete results are always returned. The pool uses a configurable number of workers to process requests efficiently.
-* **Tokenizer Caching**: The actual tokenization is handled by a `CachedHFTokenizer`, which wraps Hugging Face's high-performance Rust tokenizers. To avoid the overhead of repeatedly loading tokenizer models from disk, it maintains an LRU cache of active tokenizer instances.
+* **Tokenizer Backends**: The system supports multiple tokenizer backends with a composite fallback strategy:
+    * **`CachedLocalTokenizer`**: Loads tokenizers from local files on disk. This is particularly useful for air-gapped environments, custom tokenizers, or when models are pre-loaded. It supports:
+        * **Manual Configuration**: Direct mapping from model names to tokenizer file paths
+        * **Auto-Discovery**: Automatic scanning of directories to find tokenizer files
+        * **HuggingFace Cache Structure**: Automatically detects and parses HF cache directories (e.g., `models--Qwen--Qwen3-0.6B/snapshots/{hash}/tokenizer.json` → `Qwen/Qwen3-0.6B`)
+        * **Custom Directory Structures**: Supports arbitrary nesting (e.g., `/mnt/models/org/model/tokenizer.json` → `org/model`)
+    * **`CachedHFTokenizer`**: Downloads and caches tokenizers from HuggingFace. It wraps Hugging Face's high-performance Rust tokenizers and maintains an LRU cache of active tokenizer instances to avoid repeated loading from disk.
+    * **`CompositeTokenizer` (Default)**: Tries tokenizer backends in order, enabling graceful fallback. The default configuration attempts local tokenizers first, then falls back to HuggingFace if the model isn't found locally. This provides the best of both worlds: fast local access when available, with automatic fallback to remote fetching.
+* **Tokenizer Caching**: All tokenizer implementations maintain an LRU cache of loaded tokenizer instances to minimize the overhead of repeatedly loading models from disk.
 * **PrefixStore Backends**: The token cache (`PrefixStore`) is an interface with two available implementations:
     * **`LRUTokenStore` (Default)**: This implementation chunks incoming text, hashes it, and stores blocks of tokens in an LRU cache. It's fast and memory-bounded, making it a reliable default. It's designed to find the longest chain of *blocks* that match a prompt's prefix.
-    * **`TrieTokenStore`**: An alternative implementation that uses a character-based trie. Each node in the trie stores information about the last token that was fully contained within the prefix leading to that node. This approach can be more memory-efficient for prompts with highly repetitive or overlapping prefixes, but is generally slower than the LRU-based store. 
+    * **`TrieTokenStore`**: An alternative implementation that uses a character-based trie. Each node in the trie stores information about the last token that was fully contained within the prefix leading to that node. This approach can be more memory-efficient for prompts with highly repetitive or overlapping prefixes, but is generally slower than the LRU-based store.
     It is not the default due to its higher complexity and lower performance in most scenarios.
 
 -----
