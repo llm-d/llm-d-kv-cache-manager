@@ -75,20 +75,15 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 		!strings.HasPrefix(config.Address, "valkeys://") &&
 		!strings.HasPrefix(config.Address, "unix://")
 
-	if needsPrefix {
+	switch {
+	case needsPrefix:
 		// Default to redis:// prefix for backward compatibility
 		// Valkey is API-compatible with Redis protocol
-		if config.BackendType == "valkey" {
-			// For Valkey, we still use redis:// protocol as it's API-compatible
-			// The actual backend differentiation is handled via configuration
-			config.Address = "redis://" + config.Address
-		} else {
-			config.Address = "redis://" + config.Address
-		}
-	} else if strings.HasPrefix(config.Address, "valkey://") {
+		config.Address = "redis://" + config.Address
+	case strings.HasPrefix(config.Address, "valkey://"):
 		// Convert valkey:// to redis:// for protocol compatibility
 		config.Address = strings.Replace(config.Address, "valkey://", "redis://", 1)
-	} else if strings.HasPrefix(config.Address, "valkeys://") {
+	case strings.HasPrefix(config.Address, "valkeys://"):
 		// Convert valkeys:// to rediss:// for SSL protocol compatibility
 		config.Address = strings.Replace(config.Address, "valkeys://", "rediss://", 1)
 	}
@@ -106,6 +101,9 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 		// but the Go client doesn't yet have configuration options to enable RDMA.
 		// This configuration flag is a placeholder for future Go client RDMA support.
 		// The connection will work with standard TCP for now.
+		
+		// Log that RDMA is requested but not yet supported in Go client
+		fmt.Printf("RDMA requested for Valkey but not yet supported in Go client - using TCP\n")
 	}
 
 	redisClient := redis.NewClient(redisOpt)

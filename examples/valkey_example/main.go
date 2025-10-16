@@ -40,11 +40,7 @@ func main() {
 	logger := klog.FromContext(ctx)
 
 	// Create KV-Cache Manager configuration with Valkey backend
-	config, err := createValkeyConfig()
-	if err != nil {
-		logger.Error(err, "failed to create Valkey configuration")
-		os.Exit(1)
-	}
+	config := createValkeyConfig()
 
 	logger.Info("Initializing KV-Cache Manager with Valkey backend",
 		"valkeyAddr", config.KVBlockIndexConfig.ValkeyConfig.Address,
@@ -69,7 +65,7 @@ func main() {
 	logger.Info("Valkey example completed successfully")
 }
 
-func createValkeyConfig() (*kvcache.Config, error) {
+func createValkeyConfig() *kvcache.Config {
 	config := kvcache.NewDefaultConfig()
 
 	// Configure Valkey backend
@@ -102,7 +98,7 @@ func createValkeyConfig() (*kvcache.Config, error) {
 	// Set a reasonable block size for demonstration
 	config.TokenProcessorConfig.BlockSize = 128
 
-	return config, nil
+	return config
 }
 
 func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) error {

@@ -149,7 +149,9 @@ func TestValkeyIndexConfiguration(t *testing.T) {
 func TestValkeyRedisCompatibility(t *testing.T) {
 	server, err := miniredis.Run()
 	require.NoError(t, err)
-	defer server.Close()
+	defer func() {
+		server.Close()
+	}()
 
 	// Create both Redis and Valkey indices with the same server
 	redisConfig := &RedisIndexConfig{
@@ -183,7 +185,9 @@ func TestValkeyRedisCompatibility(t *testing.T) {
 func TestValkeyURLSchemeHandling(t *testing.T) {
 	server, err := miniredis.Run()
 	require.NoError(t, err)
-	defer server.Close()
+	defer func() {
+		server.Close()
+	}()
 
 	tests := []struct {
 		name        string
