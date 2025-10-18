@@ -45,6 +45,10 @@ spec:
       dnsPolicy: ClusterFirst
       securityContext: {}
       schedulerName: default-scheduler
+      {{- with .Values.lmcache.redis.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
