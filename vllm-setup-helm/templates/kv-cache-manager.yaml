@@ -79,4 +79,8 @@ spec:
                   key: {{ include "chart.secretKeyName" . }}
           resources:
             {{- toYaml .Values.kvCacheManager.resources | nindent 12 }}
+      {{ - with .Values.kvCacheManager.tolerations }}
+      tolerations:
+        {{ - toYaml . | nindent 8 }}
+      {{ - end }}
 {{- end }}
