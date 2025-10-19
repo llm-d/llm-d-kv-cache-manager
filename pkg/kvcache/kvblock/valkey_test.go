@@ -174,8 +174,10 @@ func TestValkeyRedisCompatibility(t *testing.T) {
 	assert.IsType(t, &RedisIndex{}, valkeyIndex)
 
 	// Verify they have different backend types
-	redisImpl := redisIndex.(*RedisIndex)
-	valkeyImpl := valkeyIndex.(*RedisIndex)
+	redisImpl, ok := redisIndex.(*RedisIndex)
+	require.True(t, ok, "redisIndex should be of type *RedisIndex")
+	valkeyImpl, ok := valkeyIndex.(*RedisIndex)
+	require.True(t, ok, "valkeyIndex should be of type *RedisIndex")
 
 	assert.Equal(t, "redis", redisImpl.BackendType)
 	assert.Equal(t, "valkey", valkeyImpl.BackendType)

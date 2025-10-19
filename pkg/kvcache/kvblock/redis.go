@@ -101,7 +101,7 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 		// but the Go client doesn't yet have configuration options to enable RDMA.
 		// This configuration flag is a placeholder for future Go client RDMA support.
 		// The connection will work with standard TCP for now.
-		
+
 		// Log that RDMA is requested but not yet supported in Go client
 		fmt.Printf("RDMA requested for Valkey but not yet supported in Go client - using TCP\n")
 	}
