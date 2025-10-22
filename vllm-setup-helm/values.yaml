@@ -95,6 +95,21 @@ vllm:
 kvCacheManager:
   # -- Enable deployment of the kv-cache-manager. It will listen for events from vLLM.
   enabled: true
+
+  # -- External Tokenizer Configuration. If enabled, the kv-cache-manager will use the external tokenizer
+  externalTokenizer:
+    enabled: true
+    image: 
+      repository: crpi-7xh7ufierxxef8i0.cn-hangzhou.personal.cr.aliyuncs.com/delavet/tokenizer
+      tag: v0.1
+      pullPolicy: Always
+    resources:
+      requests:
+        cpu: "1"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "5Gi"
   # -- Number of kv-cache-manager replicas
   replicaCount: 1
   # -- KV Cache Manager image pull secrets

@@ -45,9 +45,23 @@ The most important configuration parameters are listed below. For a full list of
 | `lmcache.enabled` | Enable LMCache for KV-cache offloading.                              | `false`                            |
 | `lmcache.redis.enabled` | Deploy a Redis instance for KV-cache indexing through LMCache.       | `false`                            |
 | `kvCacheManager.enabled` | Deploy the KV Cache Manager for event indexing DEMO.                 | `true`                             |
+| `kvCacheManager.externalTokenizer.enabled` | Enable external tokenizer as a sidecar for KV Cache Manager.         | `true`                             |
 | `persistence.enabled` | Enable persistent storage for model weights to speed up restarts.    | `true`                             |
 | `secret.create` | Set to `true` to automatically create the secret for `hfTokenValue`. | `true`                             |
 | `secret.hfTokenValue` | The Hugging Face token. Required if `secret.create` is `true`.       | `""`                               |
+
+### External Tokenizer on UDS
+
+The KV Cache Manager can optionally use an external tokenizer deployed as a sidecar container. This external tokenizer is implemented in Python using the same transformers library as vLLM for tokenization logic, which helps achieve better compatibility, especially for models like the DeepSeek series. See [the example UDS tokenizer service](../examples/uds_tokenizer/README.md) for more details.
+
+To enable the external tokenizer, set `kvCacheManager.externalTokenizer.enabled` to `true` in your `values.yaml`. The external tokenizer will be deployed as a sidecar container alongside the KV Cache Manager.
+
+You can customize the external tokenizer image and resources through the following parameters:
+
+- `kvCacheManager.externalTokenizer.image.repository`: The repository for the tokenizer image
+- `kvCacheManager.externalTokenizer.image.tag`: The tag for the tokenizer image
+- `kvCacheManager.externalTokenizer.image.pullPolicy`: The image pull policy
+- `kvCacheManager.externalTokenizer.resources`: Resource requests and limits for the tokenizer container
 
 ## Cleanup
 
