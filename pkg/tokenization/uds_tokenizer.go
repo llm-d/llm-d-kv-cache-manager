@@ -22,8 +22,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/daulet/tokenizers"
@@ -51,6 +53,13 @@ type TokenizedInput struct {
 const (
 	defaultSocketFile = "/tmp/tokenizer/tokenizer-uds.socket"
 	baseURL           = "http://tokenizer"
+
+	// Default timeout for requests
+	defaultTimeout    = 5 * time.Second
+	defaultMaxRetries = 2
+
+	// Initial delay for exponential backoff
+	initialRetryDelay = 100 * time.Millisecond
 )
 
 // NewUdsTokenizer creates a new UDS-based tokenizer client with connection pooling.
@@ -81,7 +90,6 @@ func NewUdsTokenizer(config *UdsTokenizerConfig) (Tokenizer, error) {
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   60 * time.Second,
 	}
 
 	return &UdsTokenizer{
@@ -96,13 +104,13 @@ func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.O
 		context.Background(),
 		http.MethodPost,
 		u.baseURL+"/tokenize",
-		bytes.NewBuffer([]byte(input)),
+		strings.NewReader(input),
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := u.httpClient.Do(req)
+	resp, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -143,7 +151,7 @@ func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := u.httpClient.Do(req)
+	resp, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -159,4 +167,56 @@ func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) 
 	}
 
 	return string(body), nil
+}
+
+// executeRequest executes an HTTP request with timeout and retry logic.
+func (u *UdsTokenizer) executeRequest(req *http.Request,
+	timeout time.Duration, maxRetries int) (*http.Response, error) {
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
+	if maxRetries < 0 {
+		maxRetries = defaultMaxRetries
+	}
+
+	// Try the request up to maxRetries+1 times
+	var lastErr error
+	delay := initialRetryDelay
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Create a context with timeout
+		ctx, cancel := context.WithTimeout(req.Context(), timeout)
+		req = req.WithContext(ctx)
+
+		// Execute the request
+		resp, err := u.httpClient.Do(req)
+		lastErr = err
+
+		cancel()
+
+		// If no error, check status code
+		if err == nil {
+			// For non-5xx status codes, don't retry
+			if resp.StatusCode < 500 {
+				return resp, nil
+			}
+			// Close the response body before retrying
+			resp.Body.Close()
+		}
+
+		// If this was the last attempt, break
+		if attempt == maxRetries {
+			break
+		}
+
+		// Wait before retrying with exponential backoff
+		time.Sleep(delay)
+		delay *= 2 // Exponential backoff
+
+		// Add some jitter to prevent thundering herd
+		jitter := time.Duration(rand.Int63n(int64(delay / 2)))
+		delay += jitter
+	}
+
+	return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
 }
