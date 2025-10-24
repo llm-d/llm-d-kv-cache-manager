@@ -37,6 +37,8 @@ type Config struct {
 	TopicFilter string `json:"topicFilter"`
 	// Concurrency is the number of parallel workers to run.
 	Concurrency int `json:"concurrency"`
+	// Backends is the backends supported by this pool.
+	Backends []string `json:"backends"`
 }
 
 // DefaultConfig returns a default configuration for the event processing pool.
@@ -45,6 +47,7 @@ func DefaultConfig() *Config {
 		ZMQEndpoint: "tcp://*:5557",
 		TopicFilter: "kv@",
 		Concurrency: 4,
+		Backends:    []string{"gpu", "cpu"},
 	}
 }
 
@@ -69,6 +72,7 @@ type Pool struct {
 	subscriber  *zmqSubscriber
 	index       kvblock.Index
 	wg          sync.WaitGroup
+	backends    []string
 }
 
 // NewPool creates a Pool with a sharded worker setup.
@@ -81,6 +85,7 @@ func NewPool(cfg *Config, index kvblock.Index) *Pool {
 		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
 		concurrency: cfg.Concurrency,
 		index:       index,
+		backends:    cfg.Backends,
 	}
 
 	for i := 0; i < p.concurrency; i++ {
@@ -233,12 +238,11 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
-	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
-	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
+	p.digestEvents(ctx, podIdentifier, modelName, events)
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []event, podEntries []kvblock.PodEntry,
+	events []event,
 ) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))
@@ -247,6 +251,23 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+
+			deviceTier := "gpu" // default device tier
+			if ev.Medium != nil && *ev.Medium != "" {
+				deviceTier = *ev.Medium
+			}
+
+			// Validate backend support
+			if !p.isBackendSupported(deviceTier) {
+				debugLogger.Info("Skipping event from unsupported backend",
+					"podIdentifier", podIdentifier,
+					"deviceTier", deviceTier)
+				continue
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Create a slice to hold the processed keys.
 			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
@@ -270,6 +291,23 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			}
 
 		case BlockRemoved:
+
+			deviceTier := "gpu" // default device tier
+			if ev.Medium != nil && *ev.Medium != "" {
+				deviceTier = *ev.Medium
+			}
+
+			// Validate backend support
+			if !p.isBackendSupported(deviceTier) {
+				debugLogger.Info("Skipping event from unsupported backend",
+					"podIdentifier", podIdentifier,
+					"deviceTier", deviceTier)
+				continue
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Iterate over the hashes, convert each one to uint64, and evict the key.
 			for _, rawHash := range ev.BlockHashes {
 				hash, err := getHashAsUint64(rawHash)
@@ -319,4 +357,14 @@ func getHashAsUint64(hash any) (uint64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported hash type: %T", val)
 	}
+}
+
+// isBackendSupported checks if the given device tier is in the list of supported backends.
+func (p *Pool) isBackendSupported(deviceTier string) bool {
+	for _, backend := range p.backends {
+		if backend == deviceTier {
+			return true
+		}
+	}
+	return false
 }
