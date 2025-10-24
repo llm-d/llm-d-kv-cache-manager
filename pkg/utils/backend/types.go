@@ -20,3 +20,10 @@ type BackendConfig struct {
 	// Weight represents the priority of this backend
 	Weight float32 `json:"weight`
 }
+
+func DefaultBackendConfig() map[string]*BackendConfig {
+	return map[string]*BackendConfig{
+		"gpu": {Weight: 1.0},
+		"cpu": {Weight: 0.5},
+	}
+}

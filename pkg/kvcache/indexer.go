@@ -50,10 +50,7 @@ func NewDefaultConfig() *Config {
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
-		BackendConfigs: map[string]*backend.BackendConfig{
-			"gpu": {Weight: 1.0},
-			"cpu": {Weight: 0.5},
-		},
+		BackendConfigs:       backend.DefaultBackendConfig(),
 	}
 }
 
@@ -86,11 +83,6 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	kvBlockIndex, err := kvblock.NewIndex(ctx, config.KVBlockIndexConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
-	}
-
-	// Pass BackendConfigs from main config to scorer config if provided
-	if config.BackendConfigs != nil && config.KVBlockScorerConfig != nil {
-		config.KVBlockScorerConfig.BackendConfigs = config.BackendConfigs
 	}
 
 	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)

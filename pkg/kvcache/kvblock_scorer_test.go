@@ -34,10 +34,7 @@ const (
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
 	scorer := &kvcache.LongestPrefixScorer{
-		BackendConfigs: map[string]*backend.BackendConfig{
-			"gpu": {Weight: 1.0},
-			"cpu": {Weight: 0.5},
-		},
+		BackendConfigs: backend.DefaultBackendConfig(),
 	}
 	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
 

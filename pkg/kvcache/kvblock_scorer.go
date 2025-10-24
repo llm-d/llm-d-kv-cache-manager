@@ -43,10 +43,7 @@ type KVBlockScorerConfig struct {
 func DefaultKVBlockScorerConfig() *KVBlockScorerConfig {
 	return &KVBlockScorerConfig{
 		ScoringStrategy: LongestPrefixMatch,
-		BackendConfigs: map[string]*backend.BackendConfig{
-			"gpu": {Weight: 1.0},
-			"cpu": {Weight: 0.5},
-		},
+		BackendConfigs:  backend.DefaultBackendConfig(),
 	}
 }
 
