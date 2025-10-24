@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/backend"
 )
 
 // KVScoringStrategy defines the strategy used to score pods for KV cache block reuse.
@@ -35,12 +36,17 @@ const (
 // KVBlockScorerConfig holds the configuration for the KVBlockScorer.
 type KVBlockScorerConfig struct {
 	ScoringStrategy KVScoringStrategy
+	BackendConfigs  map[string]*backend.BackendConfig `json:"backendConfigs"`
 }
 
 // DefaultKVBlockScorerConfig returns the default configuration for the KVBlockScorer.
 func DefaultKVBlockScorerConfig() *KVBlockScorerConfig {
 	return &KVBlockScorerConfig{
 		ScoringStrategy: LongestPrefixMatch,
+		BackendConfigs: map[string]*backend.BackendConfig{
+			"gpu": {Weight: 1.0},
+			"cpu": {Weight: 0.5},
+		},
 	}
 }
 
@@ -58,7 +64,9 @@ type KVBlockScorer interface {
 func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 	switch config.ScoringStrategy {
 	case LongestPrefixMatch:
-		return &LongestPrefixScorer{}, nil
+		return &LongestPrefixScorer{
+			BackendConfigs: config.BackendConfigs,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scoring strategy: %s", config.ScoringStrategy)
 	}
@@ -66,7 +74,9 @@ func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 
 // LongestPrefixScorer scores based on longest consecutive block matches count
 // starting from block 0.
-type LongestPrefixScorer struct{}
+type LongestPrefixScorer struct {
+	BackendConfigs map[string]*backend.BackendConfig
+}
 
 // Strategy returns the strategy type: LongestPrefixMatch.
 func (s *LongestPrefixScorer) Strategy() KVScoringStrategy {

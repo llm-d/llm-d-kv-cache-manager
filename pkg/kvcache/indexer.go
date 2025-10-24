@@ -26,6 +26,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/backend"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
@@ -33,11 +34,12 @@ import (
 // The configuration cover the different components found in the Indexer
 // module.
 type Config struct {
-	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
-	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
-	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
-	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
-	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
+	PrefixStoreConfig    *prefixstore.Config               `json:"prefixStoreConfig"`
+	TokenProcessorConfig *kvblock.TokenProcessorConfig     `json:"tokenProcessorConfig"`
+	KVBlockIndexConfig   *kvblock.IndexConfig              `json:"kvBlockIndexConfig"`
+	KVBlockScorerConfig  *KVBlockScorerConfig              // not exported
+	TokenizersPoolConfig *tokenization.Config              `json:"tokenizersPoolConfig"`
+	BackendConfigs       map[string]*backend.BackendConfig `json:"backendConfigs"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.
@@ -48,6 +50,10 @@ func NewDefaultConfig() *Config {
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
+		BackendConfigs: map[string]*backend.BackendConfig{
+			"gpu": {Weight: 1.0},
+			"cpu": {Weight: 0.5},
+		},
 	}
 }
 
@@ -80,6 +86,11 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	kvBlockIndex, err := kvblock.NewIndex(ctx, config.KVBlockIndexConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
+	}
+
+	// Pass BackendConfigs from main config to scorer config if provided
+	if config.BackendConfigs != nil && config.KVBlockScorerConfig != nil {
+		config.KVBlockScorerConfig.BackendConfigs = config.BackendConfigs
 	}
 
 	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)
