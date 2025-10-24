@@ -204,7 +204,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				// If no pod identifiers are provided, return all pods
 				pods.cache.Range(func(k, value interface{}) bool {
 					if pod, ok := k.(PodEntry); ok {
-						podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+						podsPerKey[key] = append(podsPerKey[key], pod.String())
 					}
 					return true
 				})
@@ -213,7 +213,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				pods.cache.Range(func(k, value interface{}) bool {
 					if pod, ok := k.(PodEntry); ok {
 						if podIdentifierSet.Has(pod.PodIdentifier) {
-							podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+							podsPerKey[key] = append(podsPerKey[key], pod.String())
 						}
 					}
 					return true

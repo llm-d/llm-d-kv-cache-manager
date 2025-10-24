@@ -26,6 +26,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/backend"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
@@ -33,11 +34,12 @@ import (
 // The configuration cover the different components found in the Indexer
 // module.
 type Config struct {
-	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
-	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
-	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
-	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
-	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
+	PrefixStoreConfig    *prefixstore.Config               `json:"prefixStoreConfig"`
+	TokenProcessorConfig *kvblock.TokenProcessorConfig     `json:"tokenProcessorConfig"`
+	KVBlockIndexConfig   *kvblock.IndexConfig              `json:"kvBlockIndexConfig"`
+	KVBlockScorerConfig  *KVBlockScorerConfig              // not exported
+	TokenizersPoolConfig *tokenization.Config              `json:"tokenizersPoolConfig"`
+	BackendConfigs       map[string]*backend.BackendConfig `json:"backendConfigs"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.
@@ -48,6 +50,7 @@ func NewDefaultConfig() *Config {
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenization.DefaultConfig(),
+		BackendConfigs:       backend.DefaultBackendConfig(),
 	}
 }
 
