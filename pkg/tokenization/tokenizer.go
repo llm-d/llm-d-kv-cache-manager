@@ -220,7 +220,10 @@ func processTokenizerFile(cfg *LocalTokenizerConfig, path string) {
 		modelName = modelRelPath
 	}
 
-	cfg.ModelTokenizerMap[modelName] = path
+	// Only set model mappings that have not been overridden explicitly.
+	if _, ok := cfg.ModelTokenizerMap[modelName]; !ok {
+		cfg.ModelTokenizerMap[modelName] = path
+	}
 }
 
 // parseHFCacheModelName extracts the model name from a HuggingFace cache directory path.
