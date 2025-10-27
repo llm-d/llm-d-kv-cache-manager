@@ -233,11 +233,11 @@ Configures loading tokenizers from local files. Useful for air-gapped environmen
 }
 ```
 
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `autoDiscoveryDir` | `string` | Directory to recursively scan for tokenizer files. Can be set via `LOCAL_TOKENIZER_DIR` environment variable. | `"/mnt/models"` |
-| `autoDiscoveryTokenizerFileName` | `string` | Filename to search for during auto-discovery. Can be set via `LOCAL_TOKENIZER_FILENAME` environment variable. | `"tokenizer.json"` |
-| `modelTokenizerMap` | `map[string]string` | Manual mapping from model name to tokenizer file path. Takes precedence over auto-discovery. | `{}` |
+| Field                            | Type                | Description                                                                                                   | Default            |
+|----------------------------------|---------------------|---------------------------------------------------------------------------------------------------------------|--------------------|
+| `autoDiscoveryDir`               | `string`            | Directory to recursively scan for tokenizer files. Can be set via `LOCAL_TOKENIZER_DIR` environment variable. | `"/mnt/models"`    |
+| `autoDiscoveryTokenizerFileName` | `string`            | Filename to search for during auto-discovery. Can be set via `LOCAL_TOKENIZER_FILENAME` environment variable. | `"tokenizer.json"` |
+| `modelTokenizerMap`              | `map[string]string` | Manual mapping from model name to tokenizer file path. Overrides auto-discovered model mappings.              | `{}`               |
 
 **Auto-Discovery Behavior:**
 
