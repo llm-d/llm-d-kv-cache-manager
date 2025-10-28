@@ -132,11 +132,18 @@ func (s *LongestPrefixScorer) Score(keys []kvblock.Key, keyToPods map[kvblock.Ke
 	return finalScores, nil
 }
 
-// extractPodIdentifierAndTier extracts the PodIdentifier and DeviceTier from a string in the format "PodIdentifier@DeviceTier"
+// extractPodIdentifierAndTier extracts the PodIdentifier and DeviceTier from a string
+// in the format "PodIdentifier@DeviceTier". If no '@' is found, the original string
+// is returned as PodIdentifier and DeviceTier is empty.
+//
+// It returns:
+// 1. podIdentifier: the extracted PodIdentifier.
+// 2. deviceTier: the extracted DeviceTier.
+//
+//nolint:gocritic // unnamedResult: conflicts with nonamedreturns linter preference
 func extractPodIdentifierAndTier(podString string) (string, string) {
 	if idx := strings.Index(podString, "@"); idx != -1 {
 		return podString[:idx], podString[idx+1:]
 	}
-	// If no @ found, return the original string as PodIdentifier and empty DeviceTier
 	return podString, ""
 }

@@ -18,7 +18,7 @@ package backend
 
 type BackendConfig struct {
 	// Weight represents the priority of this backend
-	Weight float64 `json:"weight`
+	Weight float64 `json:"weight"`
 }
 
 func DefaultBackendConfig() map[string]*BackendConfig {

@@ -74,7 +74,7 @@ func testBasicAddAndLookup(t *testing.T, ctx context.Context, index Index) {
 	// Add entries
 	err := index.Add(ctx, []Key{key}, entries)
 	require.NoError(t, err)
-	
+
 	// Lookup all entries
 	podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
 	require.NoError(t, err)
