@@ -19,10 +19,11 @@ package tokenization
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"net"
 	"net/http"
 	"strings"
@@ -54,11 +55,11 @@ const (
 	defaultSocketFile = "/tmp/tokenizer/tokenizer-uds.socket"
 	baseURL           = "http://tokenizer"
 
-	// Default timeout for requests
+	// Default timeout for requests.
 	defaultTimeout    = 5 * time.Second
 	defaultMaxRetries = 2
 
-	// Initial delay for exponential backoff
+	// Initial delay for exponential backoff.
 	initialRetryDelay = 100 * time.Millisecond
 )
 
@@ -171,7 +172,8 @@ func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) 
 
 // executeRequest executes an HTTP request with timeout and retry logic.
 func (u *UdsTokenizer) executeRequest(req *http.Request,
-	timeout time.Duration, maxRetries int) (*http.Response, error) {
+	timeout time.Duration, maxRetries int,
+) (*http.Response, error) {
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
@@ -214,8 +216,12 @@ func (u *UdsTokenizer) executeRequest(req *http.Request,
 		delay *= 2 // Exponential backoff
 
 		// Add some jitter to prevent thundering herd
-		jitter := time.Duration(rand.Int63n(int64(delay / 2)))
-		delay += jitter
+		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(delay/2)))
+		if err != nil {
+			// Fallback to using the full delay without jitter
+			jitter = big.NewInt(int64(delay / 2))
+		}
+		delay += time.Duration(jitter.Int64())
 	}
 
 	return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
