@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
@@ -107,6 +108,17 @@ func NewRedisIndex(config *RedisIndexConfig) (Index, error) {
 	}
 
 	redisClient := redis.NewClient(redisOpt)
+
+	// Enable automatic OpenTelemetry tracing for Redis operations
+	if err := redisotel.InstrumentTracing(redisClient); err != nil {
+		return nil, fmt.Errorf("failed to instrument Redis tracing: %w", err)
+	}
+
+	// Enable automatic OpenTelemetry metrics for Redis operations
+	if err := redisotel.InstrumentMetrics(redisClient); err != nil {
+		return nil, fmt.Errorf("failed to instrument Redis metrics: %w", err)
+	}
+
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %w", config.BackendType, err)
 	}
