@@ -64,15 +64,11 @@ func recordHitMetrics(keyToPods map[Key][]string) {
 	podCount := make(map[string]int)
 	for _, pods := range keyToPods {
 		for _, p := range pods {
-			if _, ok := podCount[p]; ok {
-				podCount[p]++
-			} else {
-				// First time seeing this pod in current lookup window.
-				// Reset to 1 because counts are local to this call (not cumulative over time).
-				// This ensures compatibility with sliding window attention (SWA) and cache eviction,
-				// where only recent hits within the active window are considered.
-				podCount[p] = 1
-			}
+			// First time seeing this pod in current lookup window.
+			// set to 1 because counts are local to this call (not cumulative over time).
+			// This ensures compatibility with sliding window attention (SWA) and cache eviction,
+			// where only recent hits within the active window are considered.
+			podCount[p]++
 		}
 	}
 
