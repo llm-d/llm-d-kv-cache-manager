@@ -84,7 +84,9 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
-
+	
+	// override backend configs with the ones from the config, if the defaults are not used.
+	config.KVBlockScorerConfig.BackendConfigs = config.BackendConfigs
 	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KVBlockScorer: %w", err)
