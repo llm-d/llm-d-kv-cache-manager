@@ -58,6 +58,9 @@ vllm:
   # -- Node affinity configuration
   affinity: {}
 
+  # -- tolerations configuration
+  tolerations: []
+
   # -- Liveness probe configuration
   livenessProbe:
     httpGet:
@@ -138,6 +141,8 @@ kvCacheManager:
     limits:
       cpu: "8"
       memory: "5Gi"
+  # -- tolerations configuration
+  tolerations: []
 
 # -- LMCache Connector Configuration
 lmcache:
@@ -185,6 +190,8 @@ lmcache:
         cpu: '4'
         # -- Redis memory request
         memory: 8G
+    # -- tolerations configuration
+    tolerations: []
     service:
       # -- Redis service name suffix
       nameSuffix: lookup-server-service
