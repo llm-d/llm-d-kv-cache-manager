@@ -119,13 +119,13 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				// If no pod identifiers are provided, return all pods
 				podsPerKey[key] = append(podsPerKey[key],
 					utils.SliceMap(pods.cache.Keys(), func(pod PodEntry) string {
-						return pod.PodIdentifier
+						return pod.String()
 					})...)
 			} else {
 				// Filter pods based on the provided pod identifiers
 				for _, pod := range pods.cache.Keys() {
 					if podIdentifierSet.Has(pod.PodIdentifier) {
-						podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+						podsPerKey[key] = append(podsPerKey[key], pod.String())
 					}
 				}
 			}

@@ -21,7 +21,7 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/backend"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +33,9 @@ const (
 
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
-	scorer := &kvcache.LongestPrefixScorer{}
+	scorer := &kvcache.LongestPrefixScorer{
+		BackendConfigs: backend.DefaultBackendConfig(),
+	}
 	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
 
 	hitmap := map[kvblock.Key][]string{

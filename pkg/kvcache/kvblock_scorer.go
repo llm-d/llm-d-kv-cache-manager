@@ -18,10 +18,12 @@ package kvcache
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/backend"
 )
 
 // KVScoringStrategy defines the strategy used to score pods for KV cache block reuse.
@@ -35,12 +37,14 @@ const (
 // KVBlockScorerConfig holds the configuration for the KVBlockScorer.
 type KVBlockScorerConfig struct {
 	ScoringStrategy KVScoringStrategy
+	BackendConfigs  map[string]*backend.BackendConfig `json:"backendConfigs"`
 }
 
 // DefaultKVBlockScorerConfig returns the default configuration for the KVBlockScorer.
 func DefaultKVBlockScorerConfig() *KVBlockScorerConfig {
 	return &KVBlockScorerConfig{
 		ScoringStrategy: LongestPrefixMatch,
+		BackendConfigs:  backend.DefaultBackendConfig(),
 	}
 }
 
@@ -58,7 +62,9 @@ type KVBlockScorer interface {
 func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 	switch config.ScoringStrategy {
 	case LongestPrefixMatch:
-		return &LongestPrefixScorer{}, nil
+		return &LongestPrefixScorer{
+			BackendConfigs: config.BackendConfigs,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scoring strategy: %s", config.ScoringStrategy)
 	}
@@ -66,46 +72,78 @@ func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 
 // LongestPrefixScorer scores based on longest consecutive block matches count
 // starting from block 0.
-type LongestPrefixScorer struct{}
+type LongestPrefixScorer struct {
+	BackendConfigs map[string]*backend.BackendConfig
+}
 
 // Strategy returns the strategy type: LongestPrefixMatch.
 func (s *LongestPrefixScorer) Strategy() KVScoringStrategy {
 	return LongestPrefixMatch
 }
 
-// Score implements the longest prefix scoring logic.
+// Score implements the longest prefix scoring logic with weighted sum based on BackendConfig.
 func (s *LongestPrefixScorer) Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]string) (map[string]int, error) {
-	podScores := make(map[string]int)
+	podScores := make(map[string]float64)
 
 	if len(keys) == 0 {
-		return podScores, nil
+		return make(map[string]int), nil
 	}
 
-	podsForFirstKey := keyToPods[keys[0]]
-	activePods := sets.NewString(podsForFirstKey...)
+	activePods := sets.NewString()
 
-	// set initial score of 1
-	// pods not in the first key will retain the default score of 0.
-	for _, pod := range podsForFirstKey {
-		podScores[pod] = 1
-	}
+	for i := 0; i < len(keys); i++ {
+		podsForKey := keyToPods[keys[i]]
+		currentPodsSet := sets.NewString(podsForKey...)
 
-	for i := 1; i < len(keys); i++ {
+		if i == 0 {
+			activePods = currentPodsSet
+		} else {
+			// update active pods to the intersection
+			activePods = activePods.Intersection(currentPodsSet)
+		}
+
 		if activePods.Len() == 0 {
 			break
 		}
 
-		podsForKey := keyToPods[keys[i]]
-		currentPodsSet := sets.NewString(podsForKey...)
+		for podString := range activePods {
+			podIdentifier, deviceTier := extractPodIdentifierAndTier(podString)
 
-		// update scores and active pods to the intersection
-		activePods = activePods.Intersection(currentPodsSet)
-		for pod := range activePods {
-			// increment score for each pod in the intersection
-			podScores[pod]++
+			// Get weight for this device tier from BackendConfigs
+			weight := 1.0 // default weight
+			if s.BackendConfigs != nil {
+				if backendConfig, exists := s.BackendConfigs[deviceTier]; exists {
+					weight = backendConfig.Weight
+				}
+			}
+
+			// Add weight for each match using PodIdentifier as key
+			podScores[podIdentifier] += weight
 		}
 	}
 
+	// Convert float64 scores to int
+	finalScores := make(map[string]int)
+	for podIdentifier, score := range podScores {
+		finalScores[podIdentifier] = int(score)
+	}
+
 	// Return the map containing the final score for each pod encountered.
-	return podScores, nil
+	return finalScores, nil
+}
+
+// extractPodIdentifierAndTier extracts the PodIdentifier and DeviceTier from a string
+// in the format "PodIdentifier@DeviceTier". If no '@' is found, the original string
+// is returned as PodIdentifier and DeviceTier is empty.
+//
+// It returns:
+// 1. podIdentifier: the extracted PodIdentifier.
+// 2. deviceTier: the extracted DeviceTier.
+//
+//nolint:gocritic // unnamedResult: conflicts with nonamedreturns linter preference
+func extractPodIdentifierAndTier(podString string) (string, string) {
+	if idx := strings.Index(podString, "@"); idx != -1 {
+		return podString[:idx], podString[idx+1:]
+	}
+	return podString, ""
 }

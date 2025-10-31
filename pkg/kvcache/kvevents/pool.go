@@ -233,12 +233,11 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
-	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
-	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
+	p.digestEvents(ctx, podIdentifier, modelName, events)
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []event, podEntries []kvblock.PodEntry,
+	events []event,
 ) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))
@@ -247,6 +246,16 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+			deviceTier := ""
+			if ev.Medium == nil {
+				deviceTier = "gpu"
+			} else {
+				deviceTier = *ev.Medium
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Create a slice to hold the processed keys.
 			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
@@ -270,6 +279,16 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			}
 
 		case BlockRemoved:
+			deviceTier := ""
+			if ev.Medium == nil {
+				deviceTier = "gpu"
+			} else {
+				deviceTier = *ev.Medium
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Iterate over the hashes, convert each one to uint64, and evict the key.
 			for _, rawHash := range ev.BlockHashes {
 				hash, err := getHashAsUint64(rawHash)

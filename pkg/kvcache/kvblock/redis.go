@@ -195,7 +195,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 		for _, p := range pods {
 			ip := strings.SplitN(p, "@", 2)[0]
 			if !filterPods || podIdentifierSet.Has(ip) {
-				filteredPods = append(filteredPods, ip)
+				filteredPods = append(filteredPods, p)
 			}
 		}
 
