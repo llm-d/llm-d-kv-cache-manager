@@ -37,8 +37,6 @@ type Config struct {
 	TopicFilter string `json:"topicFilter"`
 	// Concurrency is the number of parallel workers to run.
 	Concurrency int `json:"concurrency"`
-	// Backends is the backends supported by this pool.
-	Backends []string `json:"backends"`
 }
 
 // DefaultConfig returns a default configuration for the event processing pool.
@@ -47,7 +45,6 @@ func DefaultConfig() *Config {
 		ZMQEndpoint: "tcp://*:5557",
 		TopicFilter: "kv@",
 		Concurrency: 4,
-		Backends:    []string{"gpu", "cpu"},
 	}
 }
 
@@ -72,7 +69,6 @@ type Pool struct {
 	subscriber  *zmqSubscriber
 	index       kvblock.Index
 	wg          sync.WaitGroup
-	backends    []string
 }
 
 // NewPool creates a Pool with a sharded worker setup.
@@ -85,7 +81,6 @@ func NewPool(cfg *Config, index kvblock.Index) *Pool {
 		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
 		concurrency: cfg.Concurrency,
 		index:       index,
-		backends:    cfg.Backends,
 	}
 
 	for i := 0; i < p.concurrency; i++ {
@@ -251,18 +246,11 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
-
-			deviceTier := "gpu" // default device tier
-			if ev.Medium != nil && *ev.Medium != "" {
+			deviceTier := ""
+			if ev.Medium == nil {
+				deviceTier = "gpu"
+			} else {
 				deviceTier = *ev.Medium
-			}
-
-			// Validate backend support
-			if !p.isBackendSupported(deviceTier) {
-				debugLogger.Info("Skipping event from unsupported backend",
-					"podIdentifier", podIdentifier,
-					"deviceTier", deviceTier)
-				continue
 			}
 
 			// Create PodEntry for this specific event's device tier
@@ -291,18 +279,11 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			}
 
 		case BlockRemoved:
-
-			deviceTier := "gpu" // default device tier
-			if ev.Medium != nil && *ev.Medium != "" {
+			deviceTier := ""
+			if ev.Medium == nil {
+				deviceTier = "gpu"
+			} else {
 				deviceTier = *ev.Medium
-			}
-
-			// Validate backend support
-			if !p.isBackendSupported(deviceTier) {
-				debugLogger.Info("Skipping event from unsupported backend",
-					"podIdentifier", podIdentifier,
-					"deviceTier", deviceTier)
-				continue
 			}
 
 			// Create PodEntry for this specific event's device tier
@@ -357,14 +338,4 @@ func getHashAsUint64(hash any) (uint64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported hash type: %T", val)
 	}
-}
-
-// isBackendSupported checks if the given device tier is in the list of supported backends.
-func (p *Pool) isBackendSupported(deviceTier string) bool {
-	for _, backend := range p.backends {
-		if backend == deviceTier {
-			return true
-		}
-	}
-	return false
 }
