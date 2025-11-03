@@ -46,6 +46,10 @@ type HFTokenizerConfig struct {
 	TokenizersCacheDir string `json:"tokenizersCacheDir"` // Directory for caching tokenizers
 }
 
+func (cfg *HFTokenizerConfig) IsEnabled() bool {
+	return cfg != nil && cfg.Enabled
+}
+
 // DefaultHFTokenizerConfig returns a default configuration for the HuggingFace
 // tokenizer.
 func DefaultHFTokenizerConfig() *HFTokenizerConfig {

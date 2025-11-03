@@ -99,7 +99,7 @@ func createValkeyConfig() (*kvcache.Config, error) {
 
 	// Configure tokenizer
 	if hfToken := os.Getenv(envHFToken); hfToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = hfToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = hfToken
 	}
 
 	// Set a reasonable block size for demonstration

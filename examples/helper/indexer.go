@@ -35,7 +35,7 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	config.TokenProcessorConfig.BlockSize = 256

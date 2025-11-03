@@ -38,9 +38,10 @@ type Config struct {
 	WorkersCount int `json:"workersCount"`
 	// Minimum overlap ratio to skip full tokenization and use cached prefix tokens.
 	MinPrefixOverlapRatio float64 `json:"minPrefixOverlapRatio"`
-	*HFTokenizerConfig
-	*UdsTokenizerConfig
-	LocalTokenizerConfig *LocalTokenizerConfig `json:"local"`
+
+	LocalTokenizerConfig *LocalTokenizerConfig `json:"local,omitempty"`
+	UdsTokenizerConfig   *UdsTokenizerConfig   `json:"uds,omitempty"`
+	HFTokenizerConfig    *HFTokenizerConfig    `json:"hf,omitempty"`
 }
 
 // DefaultConfig returns a default configuration for the TokenizationPool.
@@ -99,7 +100,7 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 
 	tokenizers := make([]Tokenizer, 0, 2)
 
-	if config.LocalTokenizerConfig != nil && config.LocalTokenizerConfig.IsEnabled() {
+	if config.LocalTokenizerConfig.IsEnabled() {
 		localTokenizer, err := NewCachedLocalTokenizer(*config.LocalTokenizerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create local tokenizer: %w", err)
@@ -107,7 +108,7 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 		tokenizers = append(tokenizers, localTokenizer)
 	}
 
-	if config.UdsTokenizerConfig != nil {
+	if config.UdsTokenizerConfig.IsEnabled() {
 		udsTokenizer, err := NewUdsTokenizer(config.UdsTokenizerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create UDS tokenizer: %w", err)
@@ -115,8 +116,7 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 		tokenizers = append(tokenizers, udsTokenizer)
 	}
 
-	//nolint:staticcheck // Keep explicit field access for clarity
-	if config.HFTokenizerConfig != nil && config.HFTokenizerConfig.Enabled {
+	if config.HFTokenizerConfig.IsEnabled() {
 		hfTokenizer, err := NewCachedHFTokenizer(config.HFTokenizerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HuggingFace tokenizer: %w", err)
