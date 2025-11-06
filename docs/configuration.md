@@ -60,9 +60,10 @@ Here's a complete configuration example with all options:
   "tokenizersPoolConfig": {
     "workersCount": 8,
     "minPrefixOverlapRatio": 0.85,
-    "enabled": true,
-    "huggingFaceToken": "your_hf_token_here",
-    "tokenizersCacheDir": "/tmp/tokenizers",
+    "hf": {
+      "huggingFaceToken": "your_hf_token_here",
+      "tokenizersCacheDir": "/tmp/tokenizers"
+    },
     "local": {
       "autoDiscoveryDir": "/mnt/models",
       "autoDiscoveryTokenizerFileName": "tokenizer.json"
@@ -206,18 +207,27 @@ Configures the tokenization worker pool and cache utilization strategy.
 {
   "workersCount": 5,
   "minPrefixOverlapRatio": 0.8,
-  "huggingFaceToken": "",
-  "tokenizersCacheDir": ""
+  "hf": {
+    "enabled": true,
+    "huggingFaceToken": "",
+    "tokenizersCacheDir": ""
+  },
+  "local": {
+    "autoDiscoveryDir": "/mnt/models",
+    "autoDiscoveryTokenizerFileName": "tokenizer.json",
+    "modelTokenizerMap": {
+      "my-model": "/path/to/custom-model/tokenizer.json"
+    }
+  }
 }
 ```
 
-| Field | Type | Description | Default |
-|-------|------|-------------|--------|
-| `workersCount` | `integer` | Number of tokenization worker goroutines | `5` |
-| `minPrefixOverlapRatio` | `float64` | Minimum overlap ratio to use cached prefix tokens (0.0-1.0) | `0.8` |
-| `huggingFaceToken` | `string` | HuggingFace authentication token | `""` |
-| `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
-
+| Field                   | Type                   | Description                                                 | Default |
+|-------------------------|------------------------|-------------------------------------------------------------|---------|
+| `workersCount`          | `integer`              | Number of tokenization worker goroutines                    | `5`     |
+| `minPrefixOverlapRatio` | `float64`              | Minimum overlap ratio to use cached prefix tokens (0.0-1.0) | `0.8`   |
+| `hf`                    | `HFTokenizerConfig`    | HuggingFace tokenizer config                                |         |
+| `local`                 | `LocalTokenizerConfig` | Local tokenizer config                                      |         |
 
 ### Local Tokenizer Configuration (`LocalTokenizerConfig`)
 
@@ -228,7 +238,7 @@ Configures loading tokenizers from local files. Useful for air-gapped environmen
   "autoDiscoveryDir": "/mnt/models",
   "autoDiscoveryTokenizerFileName": "tokenizer.json",
   "modelTokenizerMap": {
-    "custom-model": "/path/to/custom-model/tokenizer.json"
+    "my-model": "/path/to/custom-model/tokenizer.json"
   }
 }
 ```
