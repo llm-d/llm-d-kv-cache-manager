@@ -27,7 +27,6 @@ import (
 // A containedTokenTrie is a character-based prefix tree that stores
 // the last token fully contained within the prefix ending at each node.
 type ContainedTokenStore struct {
-	mu    sync.RWMutex
 	tries sync.Map // Key: modelName
 }
 
