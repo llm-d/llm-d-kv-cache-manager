@@ -47,22 +47,23 @@ graph TD
         G[...]
     end
 
-    A--"(1) Score(prompt, pods)"-->B
-    B--"(2) Query Index"-->C
-    B--"(3) Return Scores"-->A
+    A--"1: Score(prompt, pods)"-->B
+    B--"2: Query Index"-->C
+    B--"3: Return Scores"-->A
     
-    E--"(A) Emit KVEvents"-->D
-    F--"(A) Emit KVEvents"-->D
-    D--"(B) Update Index"-->C
+    E--"A: Emit KVEvents"-->D
+    F--"A: Emit KVEvents"-->D
+    D--"B: Update Index"-->C
 ```
+
 **Read Path:**
-- (1)  **Scoring Request**: A scheduler asks the **KVCache Indexer** to score a set of pods for a given prompt
-- (2)  **Index Query**: The indexer calculates the necessary KV-block keys from the prompt and queries the **KV-Block Index** to see which pods have those blocks
-- (3)  **Return Scores**: The indexer returns a map of pods and their corresponding KV-cache-hit scores to the scheduler
+- 1: **Scoring Request**: A scheduler asks the **KVCache Indexer** to score a set of pods for a given prompt
+- 2: **Index Query**: The indexer calculates the necessary KV-block keys from the prompt and queries the **KV-Block Index** to see which pods have those blocks
+- 3: **Return Scores**: The indexer returns a map of pods and their corresponding KV-cache-hit scores to the scheduler
 
 **Write Path:**
-- (A)  **Event Ingestion**: As vLLM pods create or evict KV-blocks, they emit `KVEvents` containing metadata about these changes
-- (B)  **Index Update**: The **Event Subscriber** consumes these events and updates the **KV-Block Index** in near-real-time
+- A: **Event Ingestion**: As vLLM pods create or evict KV-blocks, they emit `KVEvents` containing metadata about these changes
+- B: **Index Update**: The **Event Subscriber** consumes these events and updates the **KV-Block Index** in near-real-time
 
 > For a more detailed breakdown, please see the high-level [Architecture](docs/architecture.md) and the [Configuration](docs/configuration.md) docs.
 
