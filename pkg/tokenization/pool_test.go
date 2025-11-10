@@ -54,6 +54,11 @@ func (m *MockTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.
 	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2) //nolint:errcheck // return mocked values
 }
 
+func (m *MockTokenizer) RenderChatTemplate(model string, messages []byte) (string, error) {
+	args := m.Called(model, messages)
+	return args.String(0), args.Error(1)
+}
+
 // MockIndexer implements the prefixstore.Indexer interface for testing.
 type MockIndexer struct {
 	mock.Mock
@@ -100,7 +105,7 @@ func TestPool_ProcessTask(t *testing.T) {
 	mockIndexer.On("AddTokenization", task.ModelName, task.Prompt, expectedTokens, expectedOffsets).Return(nil)
 
 	// Execute
-	err := pool.processTask(task)
+	err := pool.processTask(&task)
 
 	// Assert
 	assert.NoError(t, err)
@@ -257,7 +262,7 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
 		model := benchmarkModels[i%len(benchmarkModels)]
-		pool.Tokenize(prompt, model)
+		pool.Tokenize(prompt, nil, model)
 	}
 
 	b.StopTimer()

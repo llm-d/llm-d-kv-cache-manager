@@ -135,17 +135,12 @@ func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.O
 }
 
 // RenderChatTemplate renders a chat template using the UDS tokenizer service.
-func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) {
-	messagesBytes, err := json.Marshal(messages)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal messages: %w", err)
-	}
-
+func (u *UdsTokenizer) RenderChatTemplate(_ string, messages []byte) (string, error) {
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
 		u.baseURL+"/chat-template",
-		bytes.NewBuffer(messagesBytes),
+		bytes.NewBuffer(messages),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)

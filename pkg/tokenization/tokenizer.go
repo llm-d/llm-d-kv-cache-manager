@@ -17,13 +17,18 @@ limitations under the License.
 package tokenization
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"runtime"
 
 	"github.com/daulet/tokenizers"
+	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"golang.org/x/sync/singleflight"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // tokenizersCacheSize is the size of the LRU cache for tokenizers.
@@ -34,6 +39,7 @@ const tokenizersCacheSize = 20
 type Tokenizer interface {
 	// Encode tokenizes the input string and returns the token IDs and offsets.
 	Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error)
+	RenderChatTemplate(model string, messages []byte) (string, error)
 }
 
 // HFTokenizerConfig holds the configuration for the HuggingFace tokenizer.
@@ -56,9 +62,10 @@ func DefaultHFTokenizerConfig() *HFTokenizerConfig {
 // The implementation wraps an LRU-cache for holding loaded per-model
 // tokenizers.
 type CachedHFTokenizer struct {
-	cfg   tokenizers.TokenizerConfigOption
-	cache *lru.Cache[string, *tokenizers.Tokenizer]
-	group singleflight.Group
+	cfg           tokenizers.TokenizerConfigOption
+	cache         *lru.Cache[string, *tokenizers.Tokenizer]
+	group         singleflight.Group
+	chatTemplater preprocessing.ChatTemplatingProcessor
 }
 
 // NewCachedHFTokenizer creates a new instance of HFTokenizer with the provided configuration.
@@ -77,9 +84,16 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 		return nil, fmt.Errorf("failed to initialize tokenizer cache: %w", err)
 	}
 
+	chatTemplater := preprocessing.NewChatTemplatingProcessor()
+	err = chatTemplater.Initialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize chat templater: %w", err)
+	}
+
 	return &CachedHFTokenizer{
-		cfg:   cfg,
-		cache: tokenizersCache,
+		cfg:           cfg,
+		cache:         tokenizersCache,
+		chatTemplater: *chatTemplater,
 	}, nil
 }
 
@@ -127,4 +141,32 @@ func getTokenizerCacheDir() string {
 	_, filename, _, _ := runtime.Caller(0) // this file
 	base := filepath.Dir(filename)
 	return filepath.Join(base, "..", "..", "bin")
+}
+
+func (t *CachedHFTokenizer) RenderChatTemplate(model string, messages []byte) (string, error) {
+	conversations := []preprocessing.ChatMessage{}
+	err := json.Unmarshal(messages, &conversations)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal chat messages: %w", err)
+	}
+
+	ctx := context.TODO()
+	ctx = logr.NewContext(ctx, ctrl.Log)
+
+	chatTemplate, chatTemplateKWArgs, err := t.chatTemplater.FetchChatTemplate(ctx, preprocessing.FetchChatTemplateRequest{
+		Model: model,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch chat template: %w", err)
+	}
+
+	res, err := t.chatTemplater.RenderChatTemplate(ctx, &preprocessing.RenderJinjaTemplateRequest{
+		Conversations:      conversations,
+		ChatTemplate:       chatTemplate,
+		ChatTemplateKWArgs: chatTemplateKWArgs,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to render chat template: %w", err)
+	}
+	return res.RenderedChats[0], nil
 }

@@ -119,13 +119,13 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 // relevant.
 //
 // The function returns a map of pod identifiers to scores.
-func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
+func (k *Indexer) GetPodScores(ctx context.Context, prompt string, messages []byte, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
-	tokens := k.tokenizersPool.Tokenize(prompt, modelName)
+	tokens := k.tokenizersPool.Tokenize(prompt, messages, modelName)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)

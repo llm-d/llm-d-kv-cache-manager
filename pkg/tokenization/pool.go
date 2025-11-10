@@ -58,6 +58,7 @@ type tokenizationResponse struct {
 
 // Task represents a unit of work for tokenizing a prompt.
 type Task struct {
+	Messages  []byte
 	Prompt    string
 	ModelName string
 	ResultCh  chan<- tokenizationResponse // nil => fire-and-forget
@@ -66,7 +67,7 @@ type Task struct {
 // Pool encapsulates the queue, worker pool, and token indexer.
 type Pool struct {
 	workers int
-	queue   workqueue.TypedRateLimitingInterface[Task]
+	queue   workqueue.TypedRateLimitingInterface[*Task]
 	wg      sync.WaitGroup
 	indexer prefixstore.Indexer
 
@@ -103,7 +104,7 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 
 	return &Pool{
 		workers:               config.WorkersCount,
-		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Task]()),
+		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[*Task]()),
 		indexer:               store,
 		tokenizer:             tokenizer,
 		minPrefixOverlapRatio: config.MinPrefixOverlapRatio,
@@ -113,7 +114,7 @@ func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, erro
 // EnqueueTokenization enqueues a new tokenization task.
 // This method only enqueues the task and does not start processing it.
 func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
-	task := Task{
+	task := &Task{
 		Prompt:    prompt,
 		ModelName: modelName,
 	}
@@ -121,12 +122,13 @@ func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 }
 
 // Tokenize queues a task and blocks until the final result is available.
-func (pool *Pool) Tokenize(prompt, modelName string) []uint32 {
+func (pool *Pool) Tokenize(prompt string, messages []byte, modelName string) []uint32 {
 	resultCh := make(chan tokenizationResponse, 1)
-	pool.queue.Add(Task{
+	pool.queue.Add(&Task{
 		Prompt:    prompt,
 		ModelName: modelName,
 		ResultCh:  resultCh,
+		Messages:  messages,
 	})
 
 	res := <-resultCh
@@ -169,7 +171,18 @@ func (pool *Pool) workerLoop(_ int) {
 
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
-func (pool *Pool) processTask(task Task) error {
+func (pool *Pool) processTask(task *Task) error {
+	if task.Messages != nil {
+		// Render chat messages to a single prompt string.
+		renderedPrompt, err := pool.tokenizer.RenderChatTemplate(task.ModelName, task.Messages)
+		if err != nil {
+			klog.Error(err, "failed to render chat template", "messages", task.Messages)
+			return err
+		}
+		task.Prompt = renderedPrompt
+	}
+
+	// Check for existing tokenization prefix in the indexer.
 	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
 
 	// if the overlap ratio is low, get the full tokenization
