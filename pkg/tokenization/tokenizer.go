@@ -132,7 +132,7 @@ func (t *CachedHFTokenizer) Encode(input, modelName string) ([]uint32, []tokeniz
 		tokenizers.WithReturnOffsets(),
 	}
 
-	resp := tokenizer.EncodeWithOptions(input, true, encodeOptions...)
+	resp := tokenizer.EncodeWithOptions(input, false, encodeOptions...)
 	return resp.IDs, resp.Offsets, nil
 }
 
