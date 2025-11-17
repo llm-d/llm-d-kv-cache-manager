@@ -150,6 +150,6 @@ The example will:
 1. Initialize vLLM with KV events configuration
 2. Start an async ZMQ listener to capture events
 3. Run inference with a custom prompt
-4. Display captured `BlockStored`, `BlockRemoved`, and `AllBlocksCleared` events
+4. Display the first event batch containing `BlockStored`, `BlockRemoved`, and `AllBlocksCleared` events
 
 This demo is useful for understanding vLLM cache behavior and examining cache hashes during local development.
