@@ -32,6 +32,10 @@ from vllm.distributed.kv_events import (
 )
 from vllm.engine.arg_utils import EngineArgs
 
+MODEL_NAME = "facebook/opt-125m"
+ZMQ_PORT = 5557
+ZMQ_TOPIC = f"kv@localhost@{MODEL_NAME}"
+
 
 def patch_engine_args():
     # Force enable prefix caching by patching EngineArgs property
@@ -57,12 +61,12 @@ def create_llm():
         enable_kv_cache_events=True,
         publisher="zmq",
         # The publisher endpoint is where the listener connects
-        endpoint="tcp://*:5557",
-        topic="kv@localhost@facebook/opt-125m",
+        endpoint=f"tcp://*:{ZMQ_PORT}",
+        topic=ZMQ_TOPIC,
     )
 
     llm = LLM(
-        model="facebook/opt-125m",
+        model=MODEL_NAME,
         enable_prefix_caching=True,
         dtype="float16",
         enforce_eager=True,
@@ -80,8 +84,8 @@ async def listen_for_kv_event() -> list[BlockStored | BlockRemoved | AllBlocksCl
     decoder = Decoder(type=KVEventBatch)
     context = zmq.asyncio.Context()
     sub = context.socket(zmq.SUB)
-    sub.connect("tcp://localhost:5557")
-    topic = "kv@localhost@facebook/opt-125m"
+    sub.connect(f"tcp://localhost:{ZMQ_PORT}")
+    topic = ZMQ_TOPIC
     sub.setsockopt_string(zmq.SUBSCRIBE, topic)
 
     print("[ZMQ] Listener started and waiting for events on topic:", topic)
