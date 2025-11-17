@@ -39,7 +39,7 @@ def patch_engine_args():
     # CPU-based paged attention is only implemented for x86_64. Other architectures
     # skip KV cache functionality entirely.
     def always_true_prefix_caching(self):
-        # EngineArgs.enable_prefix_caching: Always returning True"
+        # EngineArgs.enable_prefix_caching: Always returning True
         return True
 
     def set_prefix_caching(self, value):
