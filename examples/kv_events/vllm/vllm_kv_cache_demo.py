@@ -43,7 +43,7 @@ def patch_engine_args():
         return True
 
     def set_prefix_caching(self, value):
-        # Ignoring attempt to set to set_prefix_caching, keeping True")
+        # Ignoring attempt to set prefix_caching, keeping True
         pass
 
     # Replace the enable_prefix_caching attribute with our property
