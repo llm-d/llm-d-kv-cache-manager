@@ -80,4 +80,7 @@ func recordHitMetrics(keyToPods map[Key][]string) {
 	}
 
 	metrics.LookupHits.Add(float64(maxHit))
+	if len(keyToPods) > 0 {
+		metrics.MaxPodHitRate.Observe(float64(maxHit) / float64(len(keyToPods)))
+	}
 }

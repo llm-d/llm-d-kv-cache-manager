@@ -42,10 +42,12 @@ func TestLogMetrics(t *testing.T) {
 		buf.Reset()
 
 		// Set test values for metrics
-		Admissions.Inc()       // 1 admission
-		Evictions.Add(2)       // 2 evictions
-		LookupRequests.Add(10) // 10 lookups
-		LookupHits.Add(5)      // 5 hits
+		Admissions.Inc()           // 1 admission
+		Evictions.Add(2)           // 2 evictions
+		LookupRequests.Add(10)     // 10 lookups
+		LookupHits.Add(5)          // 5 hits
+		MaxPodHitRate.Observe(0.4) // 0.4 hit rate
+		MaxPodHitRate.Observe(0.6) // 0.6 hit rate
 
 		// Call logMetrics
 		logMetrics(ctx)
@@ -59,6 +61,7 @@ func TestLogMetrics(t *testing.T) {
 			"evictions=2",
 			"lookups=10",
 			"hits=5",
+			"hit_rate_avg=0.5",
 			"latency_count=0",
 			"latency_sum=0",
 			"latency_avg=0",
