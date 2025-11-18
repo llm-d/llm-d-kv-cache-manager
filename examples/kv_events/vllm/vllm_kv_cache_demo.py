@@ -19,6 +19,7 @@ import zmq
 import zmq.asyncio
 from msgspec.msgpack import Decoder
 
+os.environ["PYTHONHASHSEED"] = "42"
 os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
