@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
@@ -119,13 +120,13 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 // relevant.
 //
 // The function returns a map of pod identifiers to scores.
-func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
+func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.RenderJinjaTemplateRequest, prompt, modelName string,
 	podIdentifiers []string,
 ) (map[string]int, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
-	tokens := k.tokenizersPool.Tokenize(prompt, modelName)
+	tokens := k.tokenizersPool.Tokenize(renderReq, prompt, modelName)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)

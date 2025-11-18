@@ -94,7 +94,7 @@ func (s *KVCacheSuite) TestCacheHit() {
 	blockKeys := s.promptToKeys(prompt, defaultModelName)
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
-	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, fakePodList)
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, prompt, defaultModelName, fakePodList)
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
@@ -105,7 +105,7 @@ func (s *KVCacheSuite) TestCacheMiss() {
 	prompt := "What is the capital of France?"
 	fakePodList := []string{s.Pod1IP}
 
-	pods, err := s.indexer.GetPodScores(s.ctx, prompt, defaultModelName, fakePodList)
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, prompt, defaultModelName, fakePodList)
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores since no keys were added to the index")
@@ -123,7 +123,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	fakePodList := []string{s.Pod1IP}
 
 	// Test 1: Full prompt (no match expected)
-	pods, err := s.indexer.GetPodScores(s.ctx, fullPrompt, defaultModelName, []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, fullPrompt, defaultModelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
@@ -131,14 +131,14 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.addEntriesToIndex(fullPromptBlockKeys, fakePodList)
 
 	// Test 2: mid-length prompt(should return a match)
-	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, defaultModelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, defaultModelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Greater(pods[s.Pod1IP], 0, "mid-prompt block keys should have been indexed")
 
 	// Test 3: short prompt(should return a match)
-	pods, err = s.indexer.GetPodScores(s.ctx, shortPrompt, defaultModelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, shortPrompt, defaultModelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
@@ -158,7 +158,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	fakePodList := []string{s.Pod1IP}
 
 	// Test 1: short prompt
-	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, shortPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
@@ -167,7 +167,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
 
 	// Test 2: mid prompt
-	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
@@ -177,7 +177,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
 
 	// Test 3: full prompt
-	pods, err = s.indexer.GetPodScores(s.ctx, fullPrompt, modelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, fullPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
@@ -197,7 +197,7 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	fakePodList := []string{s.Pod1IP}
 
 	// Test 1: short prompt (should return no pod scores yet)
-	pods, err := s.indexer.GetPodScores(s.ctx, shortPrompt, modelName, []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, shortPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Short prompt scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
@@ -207,7 +207,7 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
 
 	// Test 2: mid prompt (should return partial match if indexer picks it up)
-	pods, err = s.indexer.GetPodScores(s.ctx, midPrompt, modelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Mid prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
@@ -217,7 +217,7 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
 
 	// Test 3: long prompt (should return higher score)
-	pods, err = s.indexer.GetPodScores(s.ctx, longPrompt, modelName, []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, longPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Long prompt scores: %+v", pods)
 	s.True(len(pods) > 0, "expected at least one pod score for long prompt")
@@ -265,7 +265,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	fakePodList := []string{s.Pod1IP}
 
 	// First lookup - should return no scores initially.
-	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
@@ -274,7 +274,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Second lookup - should return scores.
-	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Second lookup - Received pod scores: %+v", pods)
 	s.Len(pods, 1, "expected one pod score")
@@ -339,7 +339,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	fakePodList := []string{s.Pod1IP}
 
 	// First lookup.
-	pods, err := s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
+	pods, err := s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("First lookup - Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores on first lookup")
@@ -348,7 +348,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.addEntriesToIndex(blockKeys, fakePodList)
 
 	// Second lookup.
-	pods, err = s.indexer.GetPodScores(s.ctx, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
+	pods, err = s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
 	s.Require().NoError(err)
 	s.T().Logf("Second lookup - Received pod scores: %+v", pods)
 	s.Len(pods, 1, "expected one pod score")

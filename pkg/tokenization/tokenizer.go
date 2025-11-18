@@ -17,12 +17,14 @@ limitations under the License.
 package tokenization
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
 
 	"github.com/daulet/tokenizers"
 	lru "github.com/hashicorp/golang-lru/v2"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -32,6 +34,7 @@ const tokenizersCacheSize = 20
 
 // Tokenizer interface defines the methods for tokenization.
 type Tokenizer interface {
+	RenderChatTemplate(string, *preprocessing.RenderJinjaTemplateRequest) (string, error)
 	// Encode tokenizes the input string and returns the token IDs and offsets.
 	Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error)
 }
@@ -56,9 +59,10 @@ func DefaultHFTokenizerConfig() *HFTokenizerConfig {
 // The implementation wraps an LRU-cache for holding loaded per-model
 // tokenizers.
 type CachedHFTokenizer struct {
-	cfg   tokenizers.TokenizerConfigOption
-	cache *lru.Cache[string, *tokenizers.Tokenizer]
-	group singleflight.Group
+	cfg           tokenizers.TokenizerConfigOption
+	cache         *lru.Cache[string, *tokenizers.Tokenizer]
+	group         singleflight.Group
+	chatTemplater *preprocessing.ChatTemplatingProcessor
 }
 
 // NewCachedHFTokenizer creates a new instance of HFTokenizer with the provided configuration.
@@ -77,9 +81,16 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 		return nil, fmt.Errorf("failed to initialize tokenizer cache: %w", err)
 	}
 
+	chatTemplater := preprocessing.NewChatTemplatingProcessor()
+	err = chatTemplater.Initialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize chat templater: %w", err)
+	}
+
 	return &CachedHFTokenizer{
-		cfg:   cfg,
-		cache: tokenizersCache,
+		cfg:           cfg,
+		cache:         tokenizersCache,
+		chatTemplater: chatTemplater,
 	}, nil
 }
 
@@ -104,6 +115,30 @@ func (t *CachedHFTokenizer) getTokenizer(modelName string) (*tokenizers.Tokenize
 		}
 	}
 	return tokenizer, nil
+}
+
+func (t *CachedHFTokenizer) RenderChatTemplate(
+	modelName string, renderReq *preprocessing.RenderJinjaTemplateRequest,
+) (string, error) {
+	ctx := context.TODO()
+
+	if renderReq.ChatTemplate == "" {
+		var err error
+		renderReq.ChatTemplate, renderReq.ChatTemplateKWArgs, err = t.chatTemplater.FetchChatTemplate(
+			ctx, preprocessing.FetchChatTemplateRequest{
+				Model: modelName,
+			},
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch chat template: %w", err)
+		}
+	}
+
+	res, err := t.chatTemplater.RenderChatTemplate(ctx, renderReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to render chat template: %w", err)
+	}
+	return res.RenderedChats[0], nil
 }
 
 // Encode converts a string into token IDs.

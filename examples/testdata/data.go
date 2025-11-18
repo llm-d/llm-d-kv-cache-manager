@@ -16,11 +16,15 @@ package testdata
 
 import (
 	_ "embed"
+
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 )
 
 const (
 	ModelName = "bert-base-uncased"
 )
+
+var RenderReq *preprocessing.RenderJinjaTemplateRequest = nil
 
 //go:embed prompt.txt
 var Prompt string

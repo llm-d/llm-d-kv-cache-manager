@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
@@ -58,6 +59,7 @@ type tokenizationResponse struct {
 
 // Task represents a unit of work for tokenizing a prompt.
 type Task struct {
+	RenderReq *preprocessing.RenderJinjaTemplateRequest
 	Prompt    string
 	ModelName string
 	ResultCh  chan<- tokenizationResponse // nil => fire-and-forget
@@ -121,9 +123,10 @@ func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 }
 
 // Tokenize queues a task and blocks until the final result is available.
-func (pool *Pool) Tokenize(prompt, modelName string) []uint32 {
+func (pool *Pool) Tokenize(renderReq *preprocessing.RenderJinjaTemplateRequest, prompt, modelName string) []uint32 {
 	resultCh := make(chan tokenizationResponse, 1)
 	pool.queue.Add(Task{
+		RenderReq: renderReq,
 		Prompt:    prompt,
 		ModelName: modelName,
 		ResultCh:  resultCh,
@@ -170,6 +173,15 @@ func (pool *Pool) workerLoop(_ int) {
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
+	if task.RenderReq != nil {
+		var err error
+		task.Prompt, err = pool.tokenizer.RenderChatTemplate(task.ModelName, task.RenderReq)
+		if err != nil {
+			klog.Error(err, "failed to render chat template", "modelName", task.ModelName)
+			return err
+		}
+	}
+
 	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
 
 	// if the overlap ratio is low, get the full tokenization
