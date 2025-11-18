@@ -83,5 +83,6 @@ func recordHitMetrics(keyToPods map[Key][]string) {
 		}
 	}
 
+	metrics.MaxPodHitCount.Add(float64(maxHit))
 	metrics.LookupHits.Add(float64(maxHit))
 }
