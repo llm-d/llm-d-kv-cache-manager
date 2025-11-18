@@ -18,19 +18,50 @@ limitations under the License.
 package integration_test
 
 import (
+	_ "embed"
+	"encoding/json"
 	"testing"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+//go:embed testdata/kv_event.json
+var kvEventJSON []byte
+
+//go:embed testdata/kv_event_with_lora.json
+var kvEventWithLoraJSON []byte
+
+type KVEventData struct {
+	Prompt          string   `json:"prompt"`
+	ModelName       string   `json:"model_name"`
+	LoraPath        *string  `json:"lora_path"`
+	LoraName        *string  `json:"lora_name"`
+	EventType       string   `json:"event_type"`
+	BlockHashes     []uint64 `json:"block_hashes"`
+	ParentBlockHash *uint64  `json:"parent_block_hash"`
+	TokenIds        []int    `json:"token_ids"`
+	BlockSize       int      `json:"block_size"`
+	Medium          string   `json:"medium"`
+	HashSeed        string   `json:"hash_seed"`
+}
+
+func parseTestData(t *testing.T, jsonData []byte) *KVEventData {
+	var eventData KVEventData
+	err := json.Unmarshal(jsonData, &eventData)
+	require.NoError(t, err, "failed to parse test data JSON")
+	return &eventData
+}
+
 func TestPromptToBlockHashesWithPrecomputedValues(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping precomputed hash comparison test in short mode")
 	}
+
+	// Parse embedded test data
+	testData := parseTestData(t, kvEventJSON)
 
 	// Setup tokenizer
 	config := &tokenization.HFTokenizerConfig{
@@ -39,20 +70,20 @@ func TestPromptToBlockHashesWithPrecomputedValues(t *testing.T) {
 	tokenizer, err := tokenization.NewCachedHFTokenizer(config)
 	require.NoError(t, err)
 
-	// Setup processor with config that should match vLLM settings
+	// Setup processor with config from test data
 	processorConfig := &kvblock.TokenProcessorConfig{
-		BlockSize: 16, // vLLM default
-		HashSeed:  "", // Match vLLM's default
+		BlockSize: testData.BlockSize,
+		HashSeed:  testData.HashSeed,
 	}
 	processor := kvblock.NewChunkedTokenDatabase(processorConfig)
 
-	// Tokenize the testdata prompt
-	tokenIds, _, err := tokenizer.Encode(testdata.Prompt, testdata.ModelName)
+	// Tokenize the prompt from test data
+	tokenIds, _, err := tokenizer.Encode(testData.Prompt, testData.ModelName)
 	require.NoError(t, err, "tokenization should succeed")
 	require.NotEmpty(t, tokenIds, "prompt should produce tokens")
 
 	// Generate block keys with hashes
-	blockKeys := processor.TokensToKVBlockKeys(tokenIds, testdata.ModelName)
+	blockKeys := processor.TokensToKVBlockKeys(tokenIds, testData.ModelName)
 	require.NotEmpty(t, blockKeys, "should generate block keys")
 
 	// Extract hashes for comparison
@@ -61,18 +92,56 @@ func TestPromptToBlockHashesWithPrecomputedValues(t *testing.T) {
 		actualHashes[i] = key.ChunkHash
 	}
 
-	// Compare with precomputed hashes from vLLM
-	assert.Equal(t, testdata.PromptHashes, actualHashes,
+	// Compare with precomputed hashes from test data
+	assert.Equal(t, testData.BlockHashes, actualHashes,
 		"computed hashes should match precomputed vLLM hashes")
+}
 
-	// Additional validations
-	assert.Equal(t, len(testdata.PromptHashes), len(actualHashes),
-		"number of hash blocks should match expected count")
-
-	for i, expectedHash := range testdata.PromptHashes {
-		if i < len(actualHashes) {
-			assert.Equal(t, expectedHash, actualHashes[i],
-				"hash at position %d should match vLLM precomputed value", i)
-		}
+func TestPromptToBlockHashesWithLoraAdapter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping precomputed hash comparison test in short mode")
 	}
+
+	// Parse embedded test data with LoRA
+	testData := parseTestData(t, kvEventWithLoraJSON)
+
+	// Setup tokenizer
+	config := &tokenization.HFTokenizerConfig{
+		TokenizersCacheDir: t.TempDir(),
+	}
+	tokenizer, err := tokenization.NewCachedHFTokenizer(config)
+	require.NoError(t, err)
+
+	// Setup processor with config from test data
+	processorConfig := &kvblock.TokenProcessorConfig{
+		BlockSize: testData.BlockSize,
+		HashSeed:  testData.HashSeed,
+	}
+	processor := kvblock.NewChunkedTokenDatabase(processorConfig)
+
+	// Build model name with LoRA adapter
+	modelNameWithLora := testData.ModelName
+	if testData.LoraName != nil {
+		// The model name should include LoRA information for proper hashing
+		modelNameWithLora = testData.ModelName + "+" + *testData.LoraName
+	}
+
+	// Tokenize the prompt from test data
+	tokenIds, _, err := tokenizer.Encode(testData.Prompt, testData.ModelName)
+	require.NoError(t, err, "tokenization should succeed")
+	require.NotEmpty(t, tokenIds, "prompt should produce tokens")
+
+	// Generate block keys with hashes using LoRA-aware model name
+	blockKeys := processor.TokensToKVBlockKeys(tokenIds, modelNameWithLora)
+	require.NotEmpty(t, blockKeys, "should generate block keys")
+
+	// Extract hashes for comparison
+	actualHashes := make([]uint64, len(blockKeys))
+	for i, key := range blockKeys {
+		actualHashes[i] = key.ChunkHash
+	}
+
+	// Compare with precomputed hashes from test data
+	assert.Equal(t, testData.BlockHashes, actualHashes,
+		"computed hashes with LoRA should match precomputed vLLM hashes")
 }
