@@ -53,6 +53,20 @@ type RenderJinjaTemplateRequest struct {
 	ChatTemplateKWArgs        map[string]interface{} `json:"chat_template_kwargs,omitempty"`
 }
 
+// DeepCopy creates a deep copy of the RenderJinjaTemplateRequest.
+func (req *RenderJinjaTemplateRequest) DeepCopy() (*RenderJinjaTemplateRequest, error) {
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	var out RenderJinjaTemplateRequest
+	err = json.Unmarshal(b, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // RenderJinjaTemplateResponse represents the response from rendering a chat template.
 type RenderJinjaTemplateResponse struct {
 	RenderedChats     []string  `json:"rendered_chats"`

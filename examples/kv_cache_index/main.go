@@ -41,11 +41,14 @@ const (
 )
 
 func getKVCacheIndexerConfig() (*kvcache.Config, error) {
-	config := kvcache.NewDefaultConfig()
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
-	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+	if huggingFaceToken != "" && config.TokenizersPoolConfig.HFTokenizerConfig != nil {
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	redisAddr := os.Getenv(envRedisAddr)

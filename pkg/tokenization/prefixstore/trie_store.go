@@ -27,8 +27,7 @@ import (
 // A containedTokenTrie is a character-based prefix tree that stores
 // the last token fully contained within the prefix ending at each node.
 type ContainedTokenStore struct {
-	mu    sync.RWMutex
-	tries map[string]*containedTokenTrie // Key: modelName
+	tries sync.Map // Key: modelName
 }
 
 var _ Indexer = &ContainedTokenStore{}
@@ -36,7 +35,7 @@ var _ Indexer = &ContainedTokenStore{}
 // NewContainedTokenStore creates a new indexer.
 func NewContainedTokenStore() Indexer {
 	return &ContainedTokenStore{
-		tries: make(map[string]*containedTokenTrie),
+		tries: sync.Map{},
 	}
 }
 
@@ -51,9 +50,7 @@ func (s *ContainedTokenStore) AddTokenization(modelName string, prompt string, t
 		return nil
 	}
 
-	s.mu.Lock()
 	trie := s.getOrCreateTrie(modelName)
-	s.mu.Unlock()
 
 	trie.mu.Lock()
 	defer trie.mu.Unlock()
@@ -70,10 +67,7 @@ func (s *ContainedTokenStore) AddTokenization(modelName string, prompt string, t
 //
 //nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
 func (s *ContainedTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
-	s.mu.RLock()
-	trie, ok := s.tries[modelName]
-	s.mu.RUnlock()
-
+	trie, ok := s.getTrie(modelName)
 	if !ok {
 		return nil, 0.0
 	}
@@ -83,14 +77,34 @@ func (s *ContainedTokenStore) FindLongestContainedTokens(prompt, modelName strin
 
 // getOrCreateTrie safely gets or creates a ContainedTokenTrie for a given
 // model.
-// Assumes the indexer's WRITE lock is held by the caller.
 func (s *ContainedTokenStore) getOrCreateTrie(modelName string) *containedTokenTrie {
-	trie, ok := s.tries[modelName]
+	trieAny, ok := s.tries.Load(modelName)
 	if !ok {
-		trie = newContainedTokenTrie(modelName)
-		s.tries[modelName] = trie
+		trieAny = newContainedTokenTrie(modelName)
+		trieAny, _ = s.tries.LoadOrStore(modelName, trieAny)
 	}
+
+	trie, ok := trieAny.(*containedTokenTrie)
+	if !ok {
+		panic("unexpected trie type from sync.Map")
+	}
+
 	return trie
+}
+
+// getTrie safely gets a ContainedTokenTrie for a given model.
+func (s *ContainedTokenStore) getTrie(modelName string) (*containedTokenTrie, bool) {
+	trieAny, ok := s.tries.Load(modelName)
+	if !ok {
+		return nil, false
+	}
+
+	trie, ok := trieAny.(*containedTokenTrie)
+	if !ok {
+		panic("unexpected trie type from sync.Map")
+	}
+
+	return trie, true
 }
 
 // containedTokenNode represents a node in the character-based Trie.

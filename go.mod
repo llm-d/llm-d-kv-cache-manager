@@ -17,6 +17,7 @@ require (
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
+	go.uber.org/multierr v1.11.0
 	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.68.1
