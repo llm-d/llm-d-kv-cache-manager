@@ -6,5 +6,4 @@
 
 # Package specific codeowners, including global owners
 /preprocessing @guygir
-/services/uds_tokenizer @delavet
-/services/uds_tokenizer @osswangxining
+/services/uds_tokenizer @delavet @osswangxining
