@@ -88,7 +88,7 @@ func (w *MockChatTemplateWrapper) RenderChatTemplate(req ChatTemplateRequest) (*
 // TestBasicE2E verifies that the indexer initially returns no scores for the first prompt and
 // correct scores for the second request.
 func (s *KVCacheSuite) TestCacheHit() {
-	prompt := "What is the capital of France?"
+	prompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 	fakePodList := []string{s.Pod1IP}
 
 	blockKeys := s.promptToKeys(prompt, defaultModelName)
