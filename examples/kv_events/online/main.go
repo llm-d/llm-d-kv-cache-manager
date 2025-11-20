@@ -340,8 +340,8 @@ func setupUnifiedHTTPEndpoints(
 		}
 
 		scoreResponse := struct {
-			PodScores        map[string]int `json:"podScores"`
-			RenderedTemplate string         `json:"templated_messages"`
+			PodScores        map[string]float64 `json:"podScores"`
+			RenderedTemplate string             `json:"templated_messages"`
 		}{
 			PodScores:        pods,
 			RenderedTemplate: renderedPrompt,

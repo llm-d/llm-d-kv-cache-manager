@@ -81,13 +81,9 @@ func (s *IndexerService) GetPodScores(ctx context.Context,
 	// Convert map[string]int to []*indexerpb.PodScore
 	scores := make([]*indexerpb.PodScore, 0, len(podScores))
 	for pod, score := range podScores {
-		// Check for potential integer overflow
-		if score > int(^uint32(0)>>1) || score < int(^uint32(0)>>1)*-1 {
-			return nil, fmt.Errorf("score %d for pod %s exceeds int32 range", score, pod)
-		}
 		scores = append(scores, &indexerpb.PodScore{
 			Pod:   pod,
-			Score: int32(score),
+			Score: score,
 		})
 	}
 

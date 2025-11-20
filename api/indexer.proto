@@ -39,5 +39,5 @@ message GetPodScoresResponse {
 
 message PodScore {
   string pod = 1;
-  int32 score = 2;
+  double score = 2;
 }

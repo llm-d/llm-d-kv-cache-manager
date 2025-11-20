@@ -38,6 +38,7 @@ type Config struct {
 	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
 	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
 	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
+	BackendConfigs       []*KVCacheBackendConfig       `json:"kvCacheBackendConfigs"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.
@@ -53,6 +54,7 @@ func NewDefaultConfig() (*Config, error) {
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
 		TokenizersPoolConfig: tokenizerPoolConfig,
+		BackendConfigs:       DefaultKVCacheBackendConfig(),
 	}, nil
 }
 
@@ -87,6 +89,8 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
 
+	// override backend configs with the ones from the config, if the defaults are not used.
+	config.KVBlockScorerConfig.BackendConfigs = config.BackendConfigs
 	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KVBlockScorer: %w", err)
@@ -126,7 +130,7 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 // The function returns a map of pod identifiers to scores.
 func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	podIdentifiers []string,
-) (map[string]int, error) {
+) (map[string]float64, error) {
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
@@ -160,11 +164,15 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	return podScores, nil
 }
 
-// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
-func podsPerKeyPrintHelper(ks map[kvblock.Key][]string) string {
+// podsPerKeyPrintHelper formats a map of keys to pod entries for printing.
+func podsPerKeyPrintHelper(ks map[kvblock.Key][]kvblock.PodEntry) string {
 	flattened := ""
 	for k, v := range ks {
-		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+		entries := make([]string, len(v))
+		for i, entry := range v {
+			entries[i] = entry.String()
+		}
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), entries)
 	}
 
 	return flattened

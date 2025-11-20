@@ -104,7 +104,7 @@ func (s *KVCacheSuite) TestCacheHit() {
 	s.Require().NoError(err)
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
-	s.Greater(pods[s.Pod1IP], 1, "expected pod score to equal 1")
+	s.Greater(pods[s.Pod1IP], 1.0, "expected pod score to equal 1.0")
 }
 
 func (s *KVCacheSuite) TestCacheMiss() {
@@ -141,7 +141,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Greater(pods[s.Pod1IP], 0, "mid-prompt block keys should have been indexed")
+	s.Greater(int(pods[s.Pod1IP]), 0, "mid-prompt block keys should have been indexed")
 
 	// Test 3: short prompt(should return a match)
 	pods, err = s.indexer.GetPodScores(s.ctx, shortPrompt, defaultModelName, []string{s.Pod1IP})
@@ -150,7 +150,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
 	s.T().Logf("Received pod scores: %+v", pods)
 	shortPromptBlockKeys := s.promptToKeys(shortPrompt, defaultModelName)
-	s.Equal(pods[s.Pod1IP], len(shortPromptBlockKeys), "all short-prompt block keys should have been indexed")
+	s.Equal(int(pods[s.Pod1IP]), len(shortPromptBlockKeys), "all short-prompt block keys should have been indexed")
 }
 
 // TestPrefixExpansion tests that prompts longer than the cached prefix still return partial match scores.
@@ -177,7 +177,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], len(shortPromptBlockKeys), "expected pod score to equal number of short prompt block keys")
+	s.Equal(int(pods[s.Pod1IP]), len(shortPromptBlockKeys), "expected pod score to equal number of short prompt block keys")
 
 	midPromptBlockKeys := s.promptToKeys(midPrompt, modelName)
 	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
@@ -187,7 +187,7 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(pods[s.Pod1IP], len(midPromptBlockKeys), "expected pod score to equal number of mid prompt block keys")
+	s.Equal(int(pods[s.Pod1IP]), len(midPromptBlockKeys), "expected pod score to equal number of mid prompt block keys")
 }
 
 func (s *KVCacheSuite) TestLongPrefixExpansion() {

@@ -153,13 +153,13 @@ var _ Index = &RedisIndex{}
 // 2. An error if any occurred during the operation.
 func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) (map[Key][]string, error) {
+) (map[Key][]PodEntry, error) {
 	if len(keys) == 0 {
-		return make(map[Key][]string), nil
+		return make(map[Key][]PodEntry), nil
 	}
 
 	logger := klog.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
-	podsPerKey := make(map[Key][]string)
+	podsPerKey := make(map[Key][]PodEntry)
 
 	// pipeline for single RTT
 	pipe := r.RedisClient.Pipeline()
@@ -191,11 +191,11 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 			return podsPerKey, nil // early stop since prefix-chain breaks here
 		}
 
-		var filteredPods []string
+		var filteredPods []PodEntry
 		for _, p := range pods {
 			ip := strings.SplitN(p, "@", 2)[0]
 			if !filterPods || podIdentifierSet.Has(ip) {
-				filteredPods = append(filteredPods, ip)
+				filteredPods = append(filteredPods, PodEntry{PodIdentifier: ip, DeviceTier: strings.SplitN(p, "@", 2)[1]})
 			}
 		}
 

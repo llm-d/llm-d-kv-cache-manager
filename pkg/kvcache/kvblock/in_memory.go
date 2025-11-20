@@ -96,14 +96,14 @@ type PodCache struct {
 // 2. An error if any occurred during the operation.
 func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) (map[Key][]string, error) {
+) (map[Key][]PodEntry, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no keys provided for lookup")
 	}
 
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
 
-	podsPerKey := make(map[Key][]string)
+	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
 
 	for idx, key := range keys {
@@ -117,15 +117,12 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 
 			if podIdentifierSet.Len() == 0 {
 				// If no pod identifiers are provided, return all pods
-				podsPerKey[key] = append(podsPerKey[key],
-					utils.SliceMap(pods.cache.Keys(), func(pod PodEntry) string {
-						return pod.PodIdentifier
-					})...)
+				podsPerKey[key] = pods.cache.Keys()
 			} else {
 				// Filter pods based on the provided pod identifiers
 				for _, pod := range pods.cache.Keys() {
 					if podIdentifierSet.Has(pod.PodIdentifier) {
-						podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+						podsPerKey[key] = append(podsPerKey[key], pod)
 					}
 				}
 			}
@@ -238,10 +235,12 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 }
 
 // podsPerKeyPrintHelper formats a map of keys to pod names for printing.
-func podsPerKeyPrintHelper(ks map[Key][]string) string {
+func podsPerKeyPrintHelper(ks map[Key][]PodEntry) string {
 	flattened := ""
 	for k, v := range ks {
-		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), utils.SliceMap(v, func(pod PodEntry) string {
+			return pod.String()
+		}))
 	}
 
 	return flattened

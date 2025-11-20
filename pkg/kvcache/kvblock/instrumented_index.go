@@ -48,7 +48,7 @@ func (m *instrumentedIndex) Lookup(
 	ctx context.Context,
 	keys []Key,
 	podIdentifierSet sets.Set[string],
-) (map[Key][]string, error) {
+) (map[Key][]PodEntry, error) {
 	timer := prometheus.NewTimer(metrics.LookupLatency)
 	defer timer.ObserveDuration()
 
@@ -60,7 +60,7 @@ func (m *instrumentedIndex) Lookup(
 	return pods, err
 }
 
-func recordHitMetrics(keyToPods map[Key][]string) {
+func recordHitMetrics(keyToPods map[Key][]PodEntry) {
 	podCount := make(map[string]int)
 	for _, pods := range keyToPods {
 		for _, p := range pods {
@@ -68,7 +68,7 @@ func recordHitMetrics(keyToPods map[Key][]string) {
 			// set to 1 because counts are local to this call (not cumulative over time).
 			// This ensures compatibility with sliding window attention (SWA) and cache eviction,
 			// where only recent hits within the active window are considered.
-			podCount[p]++
+			podCount[p.PodIdentifier]++
 		}
 	}
 

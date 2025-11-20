@@ -19,9 +19,8 @@ package kvcache
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // KVScoringStrategy defines the strategy used to score pods for KV cache block reuse.
@@ -35,12 +34,14 @@ const (
 // KVBlockScorerConfig holds the configuration for the KVBlockScorer.
 type KVBlockScorerConfig struct {
 	ScoringStrategy KVScoringStrategy
+	BackendConfigs  []*KVCacheBackendConfig `json:"backendConfigs"`
 }
 
 // DefaultKVBlockScorerConfig returns the default configuration for the KVBlockScorer.
 func DefaultKVBlockScorerConfig() *KVBlockScorerConfig {
 	return &KVBlockScorerConfig{
 		ScoringStrategy: LongestPrefixMatch,
+		BackendConfigs:  DefaultKVCacheBackendConfig(),
 	}
 }
 
@@ -51,14 +52,22 @@ type KVBlockScorer interface {
 	Strategy() KVScoringStrategy
 	// Score scores the blocks based on the scoring strategy.
 	// It returns a map of pod names to their scores.
-	Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]string) (map[string]int, error)
+	Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]kvblock.PodEntry) (map[string]float64, error)
 }
 
 // NewKVBlockScorer creates a new KVBlockScorer based on the provided strategy.
 func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 	switch config.ScoringStrategy {
 	case LongestPrefixMatch:
-		return &LongestPrefixScorer{}, nil
+		// Build weight map from list of BackendConfigs for efficient lookup
+		weightMap := make(map[string]float64)
+		for _, medium := range config.BackendConfigs {
+			weightMap[medium.Name] = medium.Weight
+		}
+
+		return &LongestPrefixScorer{
+			MediumWeights: weightMap,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scoring strategy: %s", config.ScoringStrategy)
 	}
@@ -66,28 +75,56 @@ func NewKVBlockScorer(config *KVBlockScorerConfig) (KVBlockScorer, error) {
 
 // LongestPrefixScorer scores based on longest consecutive block matches count
 // starting from block 0.
-type LongestPrefixScorer struct{}
+type LongestPrefixScorer struct {
+	// mediumWeights maps medium/device tier names to their scoring weights
+	MediumWeights map[string]float64
+}
 
 // Strategy returns the strategy type: LongestPrefixMatch.
 func (s *LongestPrefixScorer) Strategy() KVScoringStrategy {
 	return LongestPrefixMatch
 }
 
-// Score implements the longest prefix scoring logic.
-func (s *LongestPrefixScorer) Score(keys []kvblock.Key, keyToPods map[kvblock.Key][]string) (map[string]int, error) {
-	podScores := make(map[string]int)
+// getMaxWeight returns the maximum weight for a given pod across all device tiers.
+func getMaxWeight(entries []kvblock.PodEntry, podID string, mediumWeights map[string]float64) float64 {
+	maxWeight := 0.0
+	for _, entry := range entries {
+		if entry.PodIdentifier == podID {
+			weight := 1.0
+			if mediumWeights != nil {
+				if w, exists := mediumWeights[entry.DeviceTier]; exists {
+					weight = w
+				}
+			}
+			if weight > maxWeight {
+				maxWeight = weight
+			}
+		}
+	}
+	return maxWeight
+}
+
+// Score implements the longest prefix scoring logic with weighted sum based on BackendConfig.
+func (s *LongestPrefixScorer) Score(
+	keys []kvblock.Key,
+	keyToPods map[kvblock.Key][]kvblock.PodEntry,
+) (map[string]float64, error) {
+	podScores := make(map[string]float64)
 
 	if len(keys) == 0 {
-		return podScores, nil
+		return make(map[string]float64), nil
 	}
 
 	podsForFirstKey := keyToPods[keys[0]]
-	activePods := sets.NewString(podsForFirstKey...)
 
-	// set initial score of 1
-	// pods not in the first key will retain the default score of 0.
+	activePods := sets.NewString()
 	for _, pod := range podsForFirstKey {
-		podScores[pod] = 1
+		activePods.Insert(pod.PodIdentifier)
+	}
+
+	// pods not in the first key will retain the default score of 0.
+	for pod := range activePods {
+		podScores[pod] = getMaxWeight(podsForFirstKey, pod, s.MediumWeights)
 	}
 
 	for i := 1; i < len(keys); i++ {
@@ -96,13 +133,16 @@ func (s *LongestPrefixScorer) Score(keys []kvblock.Key, keyToPods map[kvblock.Ke
 		}
 
 		podsForKey := keyToPods[keys[i]]
-		currentPodsSet := sets.NewString(podsForKey...)
+		currentPodsSet := sets.NewString()
+		for _, pod := range podsForKey {
+			currentPodsSet.Insert(pod.PodIdentifier)
+		}
 
 		// update scores and active pods to the intersection
 		activePods = activePods.Intersection(currentPodsSet)
 		for pod := range activePods {
 			// increment score for each pod in the intersection
-			podScores[pod]++
+			podScores[pod] += getMaxWeight(podsForKey, pod, s.MediumWeights)
 		}
 	}
 

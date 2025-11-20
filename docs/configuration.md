@@ -23,7 +23,8 @@ The main configuration structure for the KV Cache Indexer module.
   "prefixStoreConfig": { ... },
   "tokenProcessorConfig": { ... },
   "kvBlockIndexConfig": { ... },
-  "tokenizersPoolConfig": { ... }
+  "tokenizersPoolConfig": { ... },
+  "kvCacheBackendConfigs": { ... }
 }
 ```
 
@@ -33,6 +34,7 @@ The main configuration structure for the KV Cache Indexer module.
 | `tokenProcessorConfig` | [TokenProcessorConfig](#token-processor-configuration-tokenprocessorconfig) | Configuration for token processing | See defaults |
 | `kvBlockIndexConfig` | [IndexConfig](#index-configuration-indexconfig) | Configuration for KV block indexing | See defaults |
 | `tokenizersPoolConfig` | [Config](#tokenization-pool-configuration-config) | Configuration for tokenization pool | See defaults |
+| `kvCacheBackendConfigs` | [KVCacheBackendConfig](#kv-cache-backend-configuration-kvcachebackendconfig) | Configuration for KV Cache Device Backends | See defaults |
 
 
 ## Complete Example Configuration
@@ -68,7 +70,17 @@ Here's a complete configuration example with all options:
       "autoDiscoveryDir": "/mnt/models",
       "autoDiscoveryTokenizerFileName": "tokenizer.json"
     }
-  }
+  },
+  "kvCacheBackendConfigs": [
+    {
+      "name": "gpu",
+      "weight": 1.0
+    },
+    {
+      "name": "cpu",
+      "weight": 0.8
+    }
+  ]
 }
 ```
 
@@ -328,6 +340,27 @@ For the ZMQ event processing pool:
 | `zmqEndpoint` | `string` | ZMQ address to connect to | `"tcp://*:5557"` |
 | `topicFilter` | `string` | ZMQ subscription filter | `"kv@"` |
 | `concurrency` | `integer` | Number of parallel workers | `4` |
+
+## KV Cache Backend Tiers
+
+### KV Cache Backend Configuration (`KVCacheBackendConfig`)
+
+Configures the available device backends which store the KV Cache blocks. This will be used in scoring. 
+
+```json
+{
+  [
+    {
+      "name": "gpu",
+      "weight": 1.0,
+    },
+    {
+      "name": "cpu",
+      "weight": 0.8,
+    }
+  ]
+}
+```
 
 ---
 ## Notes

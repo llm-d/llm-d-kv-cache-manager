@@ -78,7 +78,7 @@ func TestCostAwareIndexSize(t *testing.T) {
 	assert.Len(t, podsPerKey, 1) // Only key3 should be present
 	assert.Len(t, podsPerKey[key3], 1)
 
-	assert.Contains(t, podsPerKey[key3], "pod3")
+	assert.Contains(t, podsPerKey[key3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }
 
 func TestSizeHumanize(t *testing.T) {

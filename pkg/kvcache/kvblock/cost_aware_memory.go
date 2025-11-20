@@ -177,7 +177,7 @@ func (m *CostAwareMemoryIndex) Add(ctx context.Context, keys []Key, entries []Po
 
 func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) (map[Key][]string, error) {
+) (map[Key][]PodEntry, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -187,7 +187,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 
 	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Lookup")
 
-	podsPerKey := make(map[Key][]string)
+	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
 
 	for idx, key := range keys {
@@ -204,7 +204,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				// If no pod identifiers are provided, return all pods
 				pods.cache.Range(func(k, value interface{}) bool {
 					if pod, ok := k.(PodEntry); ok {
-						podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+						podsPerKey[key] = append(podsPerKey[key], pod)
 					}
 					return true
 				})
@@ -213,7 +213,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 				pods.cache.Range(func(k, value interface{}) bool {
 					if pod, ok := k.(PodEntry); ok {
 						if podIdentifierSet.Has(pod.PodIdentifier) {
-							podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+							podsPerKey[key] = append(podsPerKey[key], pod)
 						}
 					}
 					return true

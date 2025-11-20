@@ -29,6 +29,10 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
 
+const (
+	DefaultDeviceTier = "gpu"
+)
+
 // Config holds the configuration for the event processing pool.
 type Config struct {
 	// ZMQEndpoint is the ZMQ address to connect to (e.g., "tcp://indexer:5557").
@@ -233,12 +237,11 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
-	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
-	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
+	p.digestEvents(ctx, podIdentifier, modelName, events)
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []event, podEntries []kvblock.PodEntry,
+	events []event,
 ) {
 	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))
@@ -247,6 +250,16 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+			// Default to gpu.
+			// For non-gpu events, vLLM KV event has a non-empty Medium field.
+			deviceTier := DefaultDeviceTier
+			if ev.Medium != nil {
+				deviceTier = *ev.Medium
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Create a slice to hold the processed keys.
 			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
@@ -270,6 +283,16 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			}
 
 		case BlockRemoved:
+			// Default to gpu.
+			// For non-gpu events, vLLM KV event has a non-empty Medium field.
+			deviceTier := DefaultDeviceTier
+			if ev.Medium != nil {
+				deviceTier = *ev.Medium
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Iterate over the hashes, convert each one to uint64, and evict the key.
 			for _, rawHash := range ev.BlockHashes {
 				hash, err := getHashAsUint64(rawHash)

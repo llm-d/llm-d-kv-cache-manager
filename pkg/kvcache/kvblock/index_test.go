@@ -80,7 +80,10 @@ func testBasicAddAndLookup(t *testing.T, ctx context.Context, index Index) {
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
 	assert.Contains(t, podsPerKey, key)
-	assert.ElementsMatch(t, podsPerKey[key], []string{"pod1", "pod2"})
+	assert.ElementsMatch(t, podsPerKey[key], []PodEntry{
+		{PodIdentifier: "pod1", DeviceTier: "gpu"},
+		{PodIdentifier: "pod2", DeviceTier: "gpu"},
+	})
 }
 
 // testDuplicatePodHandling tests behavior when adding duplicate pod identifiers.
@@ -118,7 +121,12 @@ func testDuplicatePodHandling(t *testing.T, ctx context.Context, index Index) {
 
 	// Should contain all pod entries, including duplicates with different tiers
 	// Expected: pod1(gpu), pod2(gpu), pod2(cpu), pod3(gpu)
-	expected := []string{"pod1", "pod2", "pod2", "pod3"}
+	expected := []PodEntry{
+		{PodIdentifier: "pod1", DeviceTier: "gpu"},
+		{PodIdentifier: "pod2", DeviceTier: "gpu"},
+		{PodIdentifier: "pod2", DeviceTier: "cpu"},
+		{PodIdentifier: "pod3", DeviceTier: "gpu"},
+	}
 	assert.ElementsMatch(t, podsPerKey[key], expected)
 }
 
@@ -142,14 +150,17 @@ func testFilteredLookup(t *testing.T, ctx context.Context, index Index) {
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
 	assert.Contains(t, podsPerKey, key)
-	assert.Equal(t, []string{"pod1"}, podsPerKey[key])
+	assert.Equal(t, []PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}}, podsPerKey[key])
 
 	// Lookup with multiple filters
 	filterSet = sets.New("pod1", "pod3")
 	podsPerKey, err = index.Lookup(ctx, []Key{key}, filterSet)
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.ElementsMatch(t, podsPerKey[key], []string{"pod1", "pod3"})
+	assert.ElementsMatch(t, podsPerKey[key], []PodEntry{
+		{PodIdentifier: "pod1", DeviceTier: "gpu"},
+		{PodIdentifier: "pod3", DeviceTier: "gpu"},
+	})
 
 	// Lookup with non-existent pod filter should return empty result
 	filterSet = sets.New("pod999")
@@ -188,7 +199,11 @@ func testEvictBasic(t *testing.T, ctx context.Context, index Index) {
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
 	assert.Contains(t, podsPerKey, key)
-	assert.ElementsMatch(t, []string{"pod2", "pod3"}, podsPerKey[key])
+	expected := []PodEntry{
+		{PodIdentifier: "pod2", DeviceTier: "gpu"},
+		{PodIdentifier: "pod3", DeviceTier: "gpu"},
+	}
+	assert.ElementsMatch(t, expected, podsPerKey[key])
 }
 
 // testConcurrentOperations tests thread safety with concurrent operations.
@@ -218,7 +233,11 @@ func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 						errChan <- err
 					}
 					assert.Contains(t, podsPerKey, key)
-					assert.Contains(t, podsPerKey[key], fmt.Sprintf("pod-%d-%d", id, operationIndex-1))
+					expectedPod := PodEntry{
+						PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-1),
+						DeviceTier:    "gpu",
+					}
+					assert.Contains(t, podsPerKey[key], expectedPod)
 				case 2: // Evict
 					entries := []PodEntry{{PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-2), DeviceTier: "gpu"}}
 					if err := index.Evict(ctx, key, entries); err != nil {
@@ -229,7 +248,11 @@ func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 						errChan <- err
 					}
 					if _, ok := podsPerKey[key]; ok {
-						assert.NotContains(t, podsPerKey[key], fmt.Sprintf("pod-%d-%d", id, operationIndex-2))
+						evictedPod := PodEntry{
+							PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-2),
+							DeviceTier:    "gpu",
+						}
+						assert.NotContains(t, podsPerKey[key], evictedPod)
 					}
 				}
 			}

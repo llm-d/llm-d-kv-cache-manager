@@ -125,7 +125,7 @@ type Index interface {
 	// It returns:
 	// 1. A map where the keys are those in (1) and the values are pod-identifiers.
 	// 2. An error if any occurred during the operation.
-	Lookup(ctx context.Context, keys []Key, podIdentifierSet sets.Set[string]) (map[Key][]string, error)
+	Lookup(ctx context.Context, keys []Key, podIdentifierSet sets.Set[string]) (map[Key][]PodEntry, error)
 	// Add adds a set of keys and their associated pod entries to the index backend.
 	Add(ctx context.Context, keys []Key, entries []PodEntry) error
 	// Evict removes a key and its associated pod entries from the index backend.
