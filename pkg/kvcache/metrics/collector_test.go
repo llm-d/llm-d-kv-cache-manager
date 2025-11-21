@@ -45,7 +45,7 @@ func TestLogMetrics(t *testing.T) {
 		Admissions.Inc()       // 1 admission
 		Evictions.Add(2)       // 2 evictions
 		LookupRequests.Add(10) // 10 lookups
-		MaxPodHitCount.Add(5)  // 5 hits
+		LookupHits.Add(5)      // 5 hits
 
 		// Call logMetrics
 		logMetrics(ctx)
