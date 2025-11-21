@@ -174,7 +174,7 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 // index method based on the event type. It returns an error to trigger retries.
 func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
+	debugLogger.V(logging.TRACE).Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
 	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
@@ -245,7 +245,7 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 	events []event,
 ) {
 	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.Info("Digesting events", "count", len(events))
+	debugLogger.V(logging.TRACE).Info("Digesting events", "count", len(events))
 
 	// Process each event in the batch
 	for _, event := range events {

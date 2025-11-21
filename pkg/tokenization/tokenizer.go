@@ -26,9 +26,10 @@ import (
 
 	"github.com/daulet/tokenizers"
 	lru "github.com/hashicorp/golang-lru/v2"
-	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"go.uber.org/multierr"
 	"golang.org/x/sync/singleflight"
+
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 )
 
 // tokenizersCacheSize is the size of the LRU cache for tokenizers.
@@ -267,10 +268,10 @@ type tokenizerProvider interface {
 // The implementation wraps an LRU-cache for holding loaded per-model
 // tokenizers.
 type CachedTokenizer struct {
-	cache             *lru.Cache[string, *tokenizers.Tokenizer]
-	group             singleflight.Group
-	tokenizerProvider tokenizerProvider
-	chatTemplater     *preprocessing.ChatTemplatingProcessor
+	cache                *lru.Cache[string, *tokenizers.Tokenizer]
+	group                singleflight.Group
+	tokenizerProvider    tokenizerProvider
+	chatTemplateRenderer *preprocessing.ChatTemplatingProcessor
 }
 
 // NewCachedHFTokenizer creates a new instance of CachedTokenizer downloading tokenizer configs from HuggingFace with
@@ -290,8 +291,8 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 		return nil, fmt.Errorf("failed to initialize tokenizer cache: %w", err)
 	}
 
-	chatTemplater := preprocessing.NewChatTemplatingProcessor()
-	err = chatTemplater.Initialize()
+	chatTemplateRenderer := preprocessing.NewChatTemplatingProcessor()
+	err = chatTemplateRenderer.Initialize()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize chat templater: %w", err)
 	}
@@ -302,7 +303,7 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 			cfgOpt:    cfg,
 			authToken: config.HuggingFaceToken,
 		},
-		chatTemplater: chatTemplater,
+		chatTemplateRenderer: chatTemplateRenderer,
 	}, nil
 }
 
@@ -337,7 +338,7 @@ func NewCachedLocalTokenizer(config LocalTokenizerConfig) (Tokenizer, error) {
 		tokenizerProvider: &localTokenizerProvider{
 			cfg: config,
 		},
-		chatTemplater: chatTemplater,
+		chatTemplateRenderer: chatTemplater,
 	}, nil
 }
 
@@ -374,7 +375,7 @@ func (t *CachedTokenizer) RenderChatTemplate(
 		if err != nil {
 			return "", fmt.Errorf("failed to create fetch chat template request: %w", err)
 		}
-		renderReq.ChatTemplate, renderReq.ChatTemplateKWArgs, err = t.chatTemplater.FetchChatTemplate(
+		renderReq.ChatTemplate, renderReq.ChatTemplateKWArgs, err = t.chatTemplateRenderer.FetchChatTemplate(
 			ctx, req,
 		)
 		if err != nil {
@@ -382,10 +383,11 @@ func (t *CachedTokenizer) RenderChatTemplate(
 		}
 	}
 
-	res, err := t.chatTemplater.RenderChatTemplate(ctx, renderReq)
+	res, err := t.chatTemplateRenderer.RenderChatTemplate(ctx, renderReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to render chat template: %w", err)
 	}
+
 	return res.RenderedChats[0], nil
 }
 

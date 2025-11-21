@@ -143,7 +143,7 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 				continue // Useless if we can't extract pod identifier
 			}
 
-			debugLogger.Info("Received message from zmq subscriber",
+			debugLogger.V(logging.TRACE).Info("Received message from zmq subscriber",
 				"topic", topic,
 				"seq", seq,
 				"podIdentifier", podIdentifier,

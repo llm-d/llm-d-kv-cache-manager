@@ -681,7 +681,6 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 
 // TestMain provides a controlled setup and teardown for tests in this package.
 func TestMain(m *testing.M) {
-	log.FromContext(context.Background())
 	// Create a new processor to handle initialization.
 	processor := preprocessing.NewChatTemplatingProcessor()
 
