@@ -50,6 +50,12 @@ var (
 		Namespace: "kvcache", Subsystem: "index", Name: "lookup_hits_total",
 		Help: "Number of keys found in the cache on Lookup()",
 	})
+	// MaxPodHitRate is the distribution of maximum cache hit rate (hits/keys) on Lookup().
+	MaxPodHitRate = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "kvcache", Subsystem: "index", Name: "max_pod_hit_rate",
+		Help:    "Distribution of maximum cache hit rate (hits/keys) on Lookup()",
+		Buckets: prometheus.LinearBuckets(0, 0.1, 11),
+	})
 	// LookupLatency logs latency of lookup calls.
 	LookupLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "kvcache", Subsystem: "index", Name: "lookup_latency_seconds",
@@ -62,7 +68,7 @@ var (
 func Collectors() []prometheus.Collector {
 	return []prometheus.Collector{
 		Admissions, Evictions,
-		LookupRequests, LookupHits, LookupLatency,
+		LookupRequests, LookupHits, MaxPodHitRate, LookupLatency,
 	}
 }
 
@@ -115,6 +121,18 @@ func logMetrics(ctx context.Context) {
 	}
 	hits := hitsMetric.GetCounter().GetValue()
 
+	var hitRateMetric dto.Metric
+	if err = MaxPodHitRate.Write(&hitRateMetric); err != nil {
+		return
+	}
+	hitRateCount := hitRateMetric.GetHistogram().GetSampleCount()
+	hitRateSum := hitRateMetric.GetHistogram().GetSampleSum()
+
+	hitRateAvg := 0.0
+	if hitRateCount > 0 {
+		hitRateAvg = hitRateSum / float64(hitRateCount)
+	}
+
 	var latencyMetric dto.Metric
 	err = LookupLatency.Write(&latencyMetric)
 	if err != nil {
@@ -133,6 +151,7 @@ func logMetrics(ctx context.Context) {
 		"evictions", evictions,
 		"lookups", lookups,
 		"hits", hits,
+		"hit_rate_avg", hitRateAvg,
 		"latency_count", latencyCount,
 		"latency_sum", latencySum,
 		"latency_avg", latencyAvg,
