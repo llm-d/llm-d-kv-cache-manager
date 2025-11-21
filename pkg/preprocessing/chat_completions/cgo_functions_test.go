@@ -18,7 +18,6 @@ package preprocessing_test
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -29,7 +28,7 @@ import (
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Global singleton wrapper to prevent multiple Python interpreter initializations.
@@ -682,29 +681,25 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 
 // TestMain provides a controlled setup and teardown for tests in this package.
 func TestMain(m *testing.M) {
-	klog.InitFlags(nil)
-	if err := flag.Set("v", "5"); err != nil {
-		klog.Fatalf("Failed to set klog verbosity for tests: %v", err)
-	}
-	flag.Parse()
-
+	log.FromContext(context.Background())
 	// Create a new processor to handle initialization.
 	processor := preprocessing.NewChatTemplatingProcessor()
 
 	// Set up: Initialize the Python interpreter.
-	klog.Info("Initializing Python interpreter for tests...")
+	log.Log.Info("Initializing Python interpreter for tests...")
 	if err := processor.Initialize(); err != nil {
-		klog.Fatalf("Failed to initialize Python interpreter: %v", err)
+		log.Log.Error(err, "Failed to initialize Python interpreter")
+		os.Exit(1)
 	}
-	klog.Info("Python interpreter initialized successfully.")
+	log.Log.Info("Python interpreter initialized successfully.")
 
 	// Run all the tests in the package.
 	exitCode := m.Run()
 
 	// Tear down: Finalize the Python interpreter.
-	klog.Info("Finalizing Python interpreter...")
+	log.Log.Info("Finalizing Python interpreter...")
 	processor.Finalize()
-	klog.Info("Python interpreter finalized.")
+	log.Log.Info("Python interpreter finalized.")
 
 	// Exit with the result of the test run.
 	os.Exit(exitCode)

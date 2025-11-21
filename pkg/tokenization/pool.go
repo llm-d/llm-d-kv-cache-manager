@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
@@ -200,7 +200,7 @@ func (pool *Pool) processTask(task Task) error {
 		var err error
 		task.Prompt, err = pool.tokenizer.RenderChatTemplate(task.ModelName, task.RenderReq)
 		if err != nil {
-			klog.Error(err, "failed to render chat template", "modelName", task.ModelName)
+			log.Log.Error(err, "failed to render chat template", "modelName", task.ModelName)
 			return err
 		}
 	}
@@ -211,7 +211,7 @@ func (pool *Pool) processTask(task Task) error {
 	if overlapRatio < pool.minPrefixOverlapRatio {
 		tokens, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 		if err != nil {
-			klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
+			log.Log.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
 			return err
 		}
 
