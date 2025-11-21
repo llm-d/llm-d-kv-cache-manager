@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dustin/go-humanize"
@@ -153,7 +153,7 @@ func (m *CostAwareMemoryIndex) Add(ctx context.Context, keys []Key, entries []Po
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Add")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Add")
 
 	for _, key := range keys {
 		keyStr := key.String()
@@ -185,7 +185,7 @@ func (m *CostAwareMemoryIndex) Lookup(ctx context.Context, keys []Key,
 		return nil, fmt.Errorf("no keys provided for lookup")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Lookup")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Lookup")
 
 	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
@@ -239,7 +239,7 @@ func (m *CostAwareMemoryIndex) Evict(ctx context.Context, key Key, entries []Pod
 		return fmt.Errorf("no entries provided for eviction from index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Evict")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.CostAwareMemoryIndex.Evict")
 	keyStr := key.String()
 	podCache, found := m.data.Get(keyStr)
 	if !found || podCache == nil {

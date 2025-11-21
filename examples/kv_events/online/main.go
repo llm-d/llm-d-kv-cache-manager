@@ -28,13 +28,12 @@ import (
 	"syscall"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -66,7 +65,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -84,7 +83,7 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Setup Python path environment for chat completions
 	logger.Info("Setting up Python path environment...")
@@ -140,7 +139,7 @@ func run(ctx context.Context) error {
 }
 
 func setupPythonPath(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Check if PYTHONPATH is already set
 	pythonPath := os.Getenv("PYTHONPATH")
@@ -221,7 +220,7 @@ func getEventsPoolConfig() *kvevents.Config {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg, err := getKVCacheIndexerConfig()
 	if err != nil {
@@ -242,7 +241,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.Pool {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg := getEventsPoolConfig()
 
@@ -257,7 +256,7 @@ func setupUnifiedHTTPEndpoints(
 	kvCacheIndexer *kvcache.Indexer,
 	chatTemplatingProcessor *preprocessing.ChatTemplatingProcessor,
 ) *http.Server {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	mux := http.NewServeMux()
 

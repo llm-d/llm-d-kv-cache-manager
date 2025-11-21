@@ -23,7 +23,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
@@ -101,7 +101,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 		return nil, fmt.Errorf("no keys provided for lookup")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
 
 	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
@@ -143,7 +143,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
 
 	for _, key := range keys {
 		var podCache *PodCache
@@ -197,7 +197,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		return fmt.Errorf("no entries provided for eviction from index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
 
 	podCache, found := m.data.Get(key)
 	if !found || podCache == nil {

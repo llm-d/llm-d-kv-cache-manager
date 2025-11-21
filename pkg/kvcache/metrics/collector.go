@@ -21,7 +21,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -128,7 +128,7 @@ func logMetrics(ctx context.Context) {
 		latencyAvg = latencySum / float64(latencyCount)
 	}
 
-	klog.FromContext(ctx).WithName("metrics").Info("metrics beat",
+	log.FromContext(ctx).WithName("metrics").Info("metrics beat",
 		"admissions", admissions,
 		"evictions", evictions,
 		"lookups", lookups,

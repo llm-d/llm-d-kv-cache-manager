@@ -22,7 +22,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"google.golang.org/grpc"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	indexerpb "github.com/llm-d/llm-d-kv-cache-manager/api"
 )
@@ -33,7 +33,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Starting KV cache index service Example")
 
 	lc := &net.ListenConfig{}
@@ -77,7 +77,7 @@ func main() {
 }
 
 func setupIndexerService(ctx context.Context) (*IndexerService, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	indexer, err := helper.SetupKVCacheIndexer(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create indexer: %w", err)

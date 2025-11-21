@@ -21,7 +21,7 @@ import (
 	"time"
 
 	zmq "github.com/pebbe/zmq4"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
 )
@@ -53,7 +53,7 @@ func newZMQSubscriber(pool *Pool, endpoint, topicFilter string) *zmqSubscriber {
 // wraps them in Message structs, and pushes them into the pool.
 // This loop will run until the provided context is canceled.
 func (z *zmqSubscriber) Start(ctx context.Context) {
-	logger := klog.FromContext(ctx).WithName("zmq-subscriber")
+	logger := log.FromContext(ctx).WithName("zmq-subscriber")
 
 	for {
 		select {
@@ -79,7 +79,7 @@ func (z *zmqSubscriber) Start(ctx context.Context) {
 // runSubscriber connects to the ZMQ PUB socket, subscribes to the topic filter,
 // and listens for messages.
 func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
-	logger := klog.FromContext(ctx).WithName("zmq-subscriber")
+	logger := log.FromContext(ctx).WithName("zmq-subscriber")
 	sub, err := zmq.NewSocket(zmq.SUB)
 	if err != nil {
 		logger.Error(err, "Failed to create subscriber socket")

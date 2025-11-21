@@ -25,7 +25,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // RedisIndexConfig holds the configuration for the RedisIndex.
@@ -158,7 +158,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 		return make(map[Key][]PodEntry), nil
 	}
 
-	logger := klog.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
+	logger := log.FromContext(ctx).WithName("kvblock.RedisIndex.Lookup")
 	podsPerKey := make(map[Key][]PodEntry)
 
 	// pipeline for single RTT

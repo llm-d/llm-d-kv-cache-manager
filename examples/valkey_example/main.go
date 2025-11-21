@@ -26,7 +26,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -37,7 +37,7 @@ const (
 
 func main() {
 	ctx := context.Background()
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Create KV-Cache Manager configuration with Valkey backend
 	config, err := createValkeyConfig()
@@ -109,7 +109,7 @@ func createValkeyConfig() (*kvcache.Config, error) {
 }
 
 func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) error {
-	logger := klog.FromContext(ctx).WithName("valkey-demo")
+	logger := log.FromContext(ctx).WithName("valkey-demo")
 
 	modelName := testdata.ModelName
 	prompt := testdata.Prompt

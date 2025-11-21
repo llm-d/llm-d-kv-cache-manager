@@ -20,7 +20,7 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -44,7 +44,7 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 }
 
 func SetupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg, err := getKVCacheIndexerConfig()
 	if err != nil {

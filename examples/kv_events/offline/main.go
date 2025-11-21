@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -55,7 +55,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Starting KV Events Pool Example")
 
 	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
@@ -106,7 +106,7 @@ func main() {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg, err := getKVCacheIndexerConfig()
 	if err != nil {
@@ -127,7 +127,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publisher *helper.Publisher) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	logger.Info("@@@ Starting KV Events Demo", "model", testdata.ModelName)
 

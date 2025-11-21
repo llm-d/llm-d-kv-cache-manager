@@ -25,7 +25,7 @@ import (
 
 	zmq "github.com/pebbe/zmq4"
 	"github.com/vmihailenco/msgpack/v5"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Publisher sends KV cache events to a ZMQ endpoint.
@@ -57,7 +57,7 @@ func NewPublisher(endpoint string) (*Publisher, error) {
 // PublishEvent publishes a KV cache event batch to the ZMQ topic.
 // topic should include the pod identifier (e.g., "kv.pod1").
 func (p *Publisher) PublishEvent(ctx context.Context, topic string, batch interface{}) error {
-	logger := klog.FromContext(ctx).V(0)
+	logger := log.FromContext(ctx).V(0)
 
 	// Use an encoder configured for struct as array
 	var payload bytes.Buffer
@@ -91,7 +91,7 @@ func (p *Publisher) Close() error {
 }
 
 func SetupPublisher(ctx context.Context) (*Publisher, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	endpoint := "tcp://localhost:5557"
 	logger.Info("Creating ZMQ publisher (simulating vLLM engines)", "endpoint", endpoint)

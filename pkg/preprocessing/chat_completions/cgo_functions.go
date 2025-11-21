@@ -28,9 +28,8 @@ import (
 	*/
 	"C"
 
-	"k8s.io/klog/v2"
-
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ChatMessage represents a single message in a conversation.
@@ -120,7 +119,7 @@ func (w *ChatTemplatingProcessor) Finalize() {
 func (w *ChatTemplatingProcessor) RenderChatTemplate(ctx context.Context,
 	req *RenderJinjaTemplateRequest,
 ) (*RenderJinjaTemplateResponse, error) {
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("RenderChatTemplate")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("RenderChatTemplate")
 	if req == nil {
 		traceLogger.Error(nil, "Received nil request")
 		return nil, fmt.Errorf("received nil request")
@@ -158,7 +157,7 @@ func (w *ChatTemplatingProcessor) FetchChatTemplate(
 	ctx context.Context,
 	req FetchChatTemplateRequest,
 ) (string, map[string]interface{}, error) {
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("FetchChatTemplate")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("FetchChatTemplate")
 
 	// Convert request to JSON
 	reqJSON, err := json.Marshal(req)
@@ -187,7 +186,7 @@ func (w *ChatTemplatingProcessor) FetchChatTemplate(
 
 // ClearCaches clears all caches for testing purposes.
 func ClearCaches(ctx context.Context) error {
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("clearCaches")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("clearCaches")
 
 	// Call the C function
 	cResult := C.Py_ClearCaches()

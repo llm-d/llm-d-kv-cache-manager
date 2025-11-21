@@ -25,7 +25,7 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/redis/go-redis/v9"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -75,7 +75,7 @@ func getModelName() string {
 
 func main() {
 	ctx := context.Background()
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
 	if err != nil {
@@ -90,7 +90,7 @@ func main() {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	config, err := getKVCacheIndexerConfig()
 	if err != nil {
@@ -114,7 +114,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	modelName := getModelName()
 	logger.Info("Started Indexer", "model", modelName)

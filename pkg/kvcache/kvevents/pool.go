@@ -23,7 +23,7 @@ import (
 
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
@@ -98,7 +98,7 @@ func NewPool(cfg *Config, index kvblock.Index) *Pool {
 // Start begins the worker pool and the ZMQ subscriber.
 // It is non-blocking.
 func (p *Pool) Start(ctx context.Context) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Starting sharded event processing pool", "workers", p.concurrency)
 
 	p.wg.Add(p.concurrency)
@@ -112,7 +112,7 @@ func (p *Pool) Start(ctx context.Context) {
 
 // Shutdown gracefully stops the pool and its subscriber.
 func (p *Pool) Shutdown(ctx context.Context) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Shutting down event processing pool...")
 
 	for _, queue := range p.queues {
@@ -172,7 +172,7 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 // processEvent deserializes the message payload and calls the appropriate
 // index method based on the event type. It returns an error to trigger retries.
 func (p *Pool) processEvent(ctx context.Context, msg *Message) {
-	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
+	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
 	var eventBatch EventBatch
@@ -243,7 +243,7 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
 	events []event,
 ) {
-	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
+	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
 	debugLogger.Info("Digesting events", "count", len(events))
 
 	// Process each event in the batch
