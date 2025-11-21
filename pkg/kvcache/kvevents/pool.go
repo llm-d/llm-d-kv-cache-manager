@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"sync"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -254,7 +255,7 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			// For non-gpu events, vLLM KV event has a non-empty Medium field.
 			deviceTier := DefaultDeviceTier
 			if ev.Medium != nil {
-				deviceTier = *ev.Medium
+				deviceTier = strings.ToLower(*ev.Medium)
 			}
 
 			// Create PodEntry for this specific event's device tier
@@ -287,7 +288,7 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			// For non-gpu events, vLLM KV event has a non-empty Medium field.
 			deviceTier := DefaultDeviceTier
 			if ev.Medium != nil {
-				deviceTier = *ev.Medium
+				deviceTier = strings.ToLower(*ev.Medium)
 			}
 
 			// Create PodEntry for this specific event's device tier
