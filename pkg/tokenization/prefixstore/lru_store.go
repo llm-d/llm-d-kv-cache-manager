@@ -87,7 +87,7 @@ func NewLRUTokenStore(config *Config) (Indexer, error) {
 }
 
 // AddTokenization adds the full tokenization of a string to the
-// indexer for a given model.
+// indexer.
 // The function assumes tokens and offsets are of the same length.
 // The function assumes that tokens will not be mutated after the call.
 func (c *LRUTokenStore) AddTokenization(prompt string, tokens []uint32,
