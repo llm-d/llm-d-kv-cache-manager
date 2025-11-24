@@ -22,8 +22,9 @@ import (
 	"sync"
 
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
@@ -38,17 +39,25 @@ type Config struct {
 	WorkersCount int `json:"workersCount"`
 	// Minimum overlap ratio to skip full tokenization and use cached prefix tokens.
 	MinPrefixOverlapRatio float64 `json:"minPrefixOverlapRatio"`
-	*HFTokenizerConfig
-	*UdsTokenizerConfig
+
+	LocalTokenizerConfig *LocalTokenizerConfig `json:"local,omitempty"`
+	UdsTokenizerConfig   *UdsTokenizerConfig   `json:"uds,omitempty"`
+	HFTokenizerConfig    *HFTokenizerConfig    `json:"hf,omitempty"`
 }
 
 // DefaultConfig returns a default configuration for the TokenizationPool.
-func DefaultConfig() *Config {
+func DefaultConfig() (*Config, error) {
+	localTokenizerConfig, err := DefaultLocalTokenizerConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default local tokenizer config: %w", err)
+	}
+
 	return &Config{
 		WorkersCount:          defaultWorkers,
 		MinPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
 		HFTokenizerConfig:     DefaultHFTokenizerConfig(),
-	}
+		LocalTokenizerConfig:  localTokenizerConfig,
+	}, nil
 }
 
 // tokenizationResponse holds the result of a tokenization operation.
@@ -58,6 +67,7 @@ type tokenizationResponse struct {
 
 // Task represents a unit of work for tokenizing a prompt.
 type Task struct {
+	RenderReq *preprocessing.RenderJinjaTemplateRequest
 	Prompt    string
 	ModelName string
 	ResultCh  chan<- tokenizationResponse // nil => fire-and-forget
@@ -70,7 +80,7 @@ type Pool struct {
 	wg      sync.WaitGroup
 	indexer prefixstore.Indexer
 
-	// Tokenizer caches multiple HuggingFace tokenizers in memory.
+	// Tokenizer caches multiple tokenizers in memory.
 	// The cache is shared between all pool workers. Since each tokenizer
 	// is immutable, Encode calls are safe for concurrent use without locks.
 	tokenizer Tokenizer
@@ -83,29 +93,44 @@ type Pool struct {
 // of workers and the provided Indexer.
 func NewTokenizationPool(config *Config, store prefixstore.Indexer) (*Pool, error) {
 	if config == nil {
-		config = DefaultConfig()
+		var err error
+		config, err = DefaultConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create default config: %w", err)
+		}
 	}
 
-	var tokenizer Tokenizer
-	var err error
-	switch {
-	case config.HFTokenizerConfig != nil:
-		tokenizer, err = NewCachedHFTokenizer(config.HFTokenizerConfig)
+	tokenizers := make([]Tokenizer, 0, 3)
+
+	if config.LocalTokenizerConfig.IsEnabled() {
+		localTokenizer, err := NewCachedLocalTokenizer(*config.LocalTokenizerConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create tokenizer: %w", err)
+			return nil, fmt.Errorf("failed to create local tokenizer: %w", err)
 		}
-	case config.UdsTokenizerConfig != nil:
-		tokenizer, err = NewUdsTokenizer(config.UdsTokenizerConfig)
+		tokenizers = append(tokenizers, localTokenizer)
+	}
+
+	if config.UdsTokenizerConfig.IsEnabled() {
+		udsTokenizer, err := NewUdsTokenizer(config.UdsTokenizerConfig)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create tokenizer: %w", err)
+			return nil, fmt.Errorf("failed to create UDS tokenizer: %w", err)
 		}
+		tokenizers = append(tokenizers, udsTokenizer)
+	}
+
+	if config.HFTokenizerConfig.IsEnabled() {
+		hfTokenizer, err := NewCachedHFTokenizer(config.HFTokenizerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create HuggingFace tokenizer: %w", err)
+		}
+		tokenizers = append(tokenizers, hfTokenizer)
 	}
 
 	return &Pool{
 		workers:               config.WorkersCount,
 		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Task]()),
 		indexer:               store,
-		tokenizer:             tokenizer,
+		tokenizer:             &CompositeTokenizer{Tokenizers: tokenizers},
 		minPrefixOverlapRatio: config.MinPrefixOverlapRatio,
 	}, nil
 }
@@ -121,9 +146,10 @@ func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
 }
 
 // Tokenize queues a task and blocks until the final result is available.
-func (pool *Pool) Tokenize(prompt, modelName string) []uint32 {
+func (pool *Pool) Tokenize(renderReq *preprocessing.RenderJinjaTemplateRequest, prompt, modelName string) []uint32 {
 	resultCh := make(chan tokenizationResponse, 1)
 	pool.queue.Add(Task{
+		RenderReq: renderReq,
 		Prompt:    prompt,
 		ModelName: modelName,
 		ResultCh:  resultCh,
@@ -170,13 +196,22 @@ func (pool *Pool) workerLoop(_ int) {
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
+	if task.RenderReq != nil {
+		var err error
+		task.Prompt, err = pool.tokenizer.RenderChatTemplate(task.ModelName, task.RenderReq)
+		if err != nil {
+			log.Log.Error(err, "failed to render chat template", "modelName", task.ModelName)
+			return err
+		}
+	}
+
 	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
 
 	// if the overlap ratio is low, get the full tokenization
 	if overlapRatio < pool.minPrefixOverlapRatio {
 		tokens, offsets, err := pool.tokenizer.Encode(task.Prompt, task.ModelName)
 		if err != nil {
-			klog.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
+			log.Log.Error(err, "failed to encode tokens", "prompt", task.Prompt, "modelName", task.ModelName)
 			return err
 		}
 

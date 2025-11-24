@@ -28,13 +28,12 @@ import (
 	"syscall"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -66,7 +65,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -84,7 +83,7 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Setup Python path environment for chat completions
 	logger.Info("Setting up Python path environment...")
@@ -140,7 +139,7 @@ func run(ctx context.Context) error {
 }
 
 func setupPythonPath(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Check if PYTHONPATH is already set
 	pythonPath := os.Getenv("PYTHONPATH")
@@ -162,12 +161,15 @@ func setupChatTemplatingProcessor() (*preprocessing.ChatTemplatingProcessor, err
 	return processor, nil
 }
 
-func getKVCacheIndexerConfig() *kvcache.Config {
-	config := kvcache.NewDefaultConfig()
+func getKVCacheIndexerConfig() (*kvcache.Config, error) {
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	hashSeed := os.Getenv(pythonHashSeed)
@@ -189,7 +191,7 @@ func getKVCacheIndexerConfig() *kvcache.Config {
 	config.KVBlockIndexConfig.EnableMetrics = true
 	config.KVBlockIndexConfig.MetricsLoggingInterval = 30 * time.Second
 
-	return config
+	return config, nil
 }
 
 func getEventsPoolConfig() *kvevents.Config {
@@ -218,9 +220,14 @@ func getEventsPoolConfig() *kvevents.Config {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
+	cfg, err := getKVCacheIndexerConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +241,7 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func setupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.Pool {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg := getEventsPoolConfig()
 
@@ -249,7 +256,7 @@ func setupUnifiedHTTPEndpoints(
 	kvCacheIndexer *kvcache.Indexer,
 	chatTemplatingProcessor *preprocessing.ChatTemplatingProcessor,
 ) *http.Server {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	mux := http.NewServeMux()
 
@@ -267,7 +274,7 @@ func setupUnifiedHTTPEndpoints(
 			return
 		}
 
-		pods, err := kvCacheIndexer.GetPodScores(ctx, req.Prompt, req.Model, nil)
+		pods, err := kvCacheIndexer.GetPodScores(ctx, nil, req.Prompt, req.Model, nil)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
 			return
@@ -325,15 +332,15 @@ func setupUnifiedHTTPEndpoints(
 		renderedPrompt := response.RenderedChats[0]
 
 		// Get score
-		pods, err := kvCacheIndexer.GetPodScores(ctx, renderedPrompt, req.Model, nil)
+		pods, err := kvCacheIndexer.GetPodScores(ctx, nil, renderedPrompt, req.Model, nil)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get score request: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		scoreResponse := struct {
-			PodScores        map[string]int `json:"podScores"`
-			RenderedTemplate string         `json:"templated_messages"`
+			PodScores        map[string]float64 `json:"podScores"`
+			RenderedTemplate string             `json:"templated_messages"`
 		}{
 			PodScores:        pods,
 			RenderedTemplate: renderedPrompt,

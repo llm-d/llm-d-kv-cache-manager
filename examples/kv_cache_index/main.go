@@ -25,7 +25,7 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/redis/go-redis/v9"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -41,11 +41,14 @@ const (
 )
 
 func getKVCacheIndexerConfig() (*kvcache.Config, error) {
-	config := kvcache.NewDefaultConfig()
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
-	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+	if huggingFaceToken != "" && config.TokenizersPoolConfig.HFTokenizerConfig != nil {
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	redisAddr := os.Getenv(envRedisAddr)
@@ -72,7 +75,7 @@ func getModelName() string {
 
 func main() {
 	ctx := context.Background()
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
 	if err != nil {
@@ -87,7 +90,7 @@ func main() {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	config, err := getKVCacheIndexerConfig()
 	if err != nil {
@@ -111,13 +114,13 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	modelName := getModelName()
 	logger.Info("Started Indexer", "model", modelName)
 
 	// Get pods for the prompt
-	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, modelName, nil)
+	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.RenderReq, testdata.Prompt, modelName, nil)
 	if err != nil {
 		return err
 	}
@@ -138,7 +141,7 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 	time.Sleep(3 * time.Second)
 
 	// Get pods for the prompt
-	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, modelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.RenderReq, testdata.Prompt, modelName, nil)
 	if err != nil {
 		return err
 	}

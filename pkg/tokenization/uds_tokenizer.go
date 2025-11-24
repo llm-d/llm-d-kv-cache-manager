@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/daulet/tokenizers"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"golang.org/x/net/http2"
 )
 
@@ -37,6 +38,10 @@ import (
 // including the socket file path.
 type UdsTokenizerConfig struct {
 	SocketFile string `json:"socketFile"`
+}
+
+func (cfg *UdsTokenizerConfig) IsEnabled() bool {
+	return cfg != nil && cfg.SocketFile != ""
 }
 
 // UdsTokenizer communicates with a Unix Domain Socket server for tokenization.
@@ -135,10 +140,12 @@ func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.O
 }
 
 // RenderChatTemplate renders a chat template using the UDS tokenizer service.
-func (u *UdsTokenizer) RenderChatTemplate(messages interface{}) (string, error) {
-	messagesBytes, err := json.Marshal(messages)
+func (u *UdsTokenizer) RenderChatTemplate(
+	_ string, renderReq *preprocessing.RenderJinjaTemplateRequest,
+) (string, error) {
+	messagesBytes, err := json.Marshal(renderReq.Conversations)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal messages: %w", err)
+		return "", fmt.Errorf("failed to marshal chat-completions messages: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(

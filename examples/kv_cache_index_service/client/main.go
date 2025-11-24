@@ -55,7 +55,7 @@ func main() {
 		fmt.Println("  No scores returned (KV cache might be empty or no matches found)")
 	} else {
 		for _, score := range resp.Scores {
-			fmt.Printf("Pod: %s, Score: %d\n", score.Pod, score.Score)
+			fmt.Printf("Pod: %s, Score: %f\n", score.Pod, score.Score)
 		}
 	}
 }

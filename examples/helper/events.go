@@ -24,13 +24,13 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/vmihailenco/msgpack/v5"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const topic = "kv@vllm-pod1@" + testdata.ModelName
 
 func SimulateProduceEvent(ctx context.Context, publisher *Publisher) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("@@@ Simulating vLLM engine publishing BlockStored events...")
 	blockStoredEvent := kvevents.BlockStored{
 		BlockHashes:     utils.SliceMap(testdata.PromptHashes, func(h uint64) any { return h }),
@@ -65,7 +65,7 @@ func SimulateProduceEvent(ctx context.Context, publisher *Publisher) error {
 }
 
 func SimulateRemoveEvent(ctx context.Context, publisher *Publisher) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("@@@ Simulating vLLM engine removing some blocks...")
 	blockRemovedEvent := kvevents.BlockRemoved{
 		BlockHashes: []any{testdata.PromptHashes[2], testdata.PromptHashes[3]},
@@ -92,7 +92,7 @@ func SimulateRemoveEvent(ctx context.Context, publisher *Publisher) error {
 }
 
 func SetupEventsPool(ctx context.Context, kvBlockIndex kvblock.Index) *kvevents.Pool {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	cfg := kvevents.DefaultConfig()
 

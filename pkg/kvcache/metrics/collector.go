@@ -21,7 +21,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -39,6 +39,11 @@ var (
 	LookupRequests = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "kvcache", Subsystem: "index", Name: "lookup_requests_total",
 		Help: "Total number of lookup calls",
+	})
+	// MaxPodHitCount counts the maximum cache hits on a single pod on Lookup().
+	MaxPodHitCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "kvcache", Subsystem: "index", Name: "max_pod_hit_count_total",
+		Help: "Maximum cache hits on a single pod on Lookup()",
 	})
 	// LookupHits counts how many keys were found in the cache on Lookup().
 	LookupHits = prometheus.NewCounter(prometheus.CounterOpts{
@@ -123,7 +128,7 @@ func logMetrics(ctx context.Context) {
 		latencyAvg = latencySum / float64(latencyCount)
 	}
 
-	klog.FromContext(ctx).WithName("metrics").Info("metrics beat",
+	log.FromContext(ctx).WithName("metrics").Info("metrics beat",
 		"admissions", admissions,
 		"evictions", evictions,
 		"lookups", lookups,

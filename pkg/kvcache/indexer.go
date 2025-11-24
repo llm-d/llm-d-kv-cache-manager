@@ -21,9 +21,10 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
@@ -38,17 +39,24 @@ type Config struct {
 	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
 	KVBlockScorerConfig  *KVBlockScorerConfig          // not exported
 	TokenizersPoolConfig *tokenization.Config          `json:"tokenizersPoolConfig"`
+	BackendConfigs       []*KVCacheBackendConfig       `json:"kvCacheBackendConfigs"`
 }
 
 // NewDefaultConfig returns a default configuration for the Indexer module.
-func NewDefaultConfig() *Config {
+func NewDefaultConfig() (*Config, error) {
+	tokenizerPoolConfig, err := tokenization.DefaultConfig()
+	if err != nil {
+		return &Config{}, fmt.Errorf("failed to get default tokenizer pool config: %w", err)
+	}
+
 	return &Config{
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
 		KVBlockScorerConfig:  DefaultKVBlockScorerConfig(),
-		TokenizersPoolConfig: tokenization.DefaultConfig(),
-	}
+		TokenizersPoolConfig: tokenizerPoolConfig,
+		BackendConfigs:       DefaultKVCacheBackendConfig(),
+	}, nil
 }
 
 // Indexer is a concrete implementation of the KVCacheIndex interface.
@@ -65,7 +73,7 @@ type Indexer struct {
 
 // NewKVCacheIndexer creates a KVCacheIndex given a Config.
 func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	if config != nil && config.TokenProcessorConfig != nil {
 		logger.Info("NewKVCacheIndexer config", "blockSize", config.TokenProcessorConfig.BlockSize)
 	}
@@ -82,6 +90,8 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create RedisKVBlockIndexer: %w", err)
 	}
 
+	// override backend configs with the ones from the config, if the defaults are not used.
+	config.KVBlockScorerConfig.BackendConfigs = config.BackendConfigs
 	scorer, err := NewKVBlockScorer(config.KVBlockScorerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KVBlockScorer: %w", err)
@@ -119,13 +129,13 @@ func (k *Indexer) KVBlockIndex() kvblock.Index {
 // relevant.
 //
 // The function returns a map of pod identifiers to scores.
-func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
+func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.RenderJinjaTemplateRequest, prompt, modelName string,
 	podIdentifiers []string,
-) (map[string]int, error) {
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
+) (map[string]float64, error) {
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
-	tokens := k.tokenizersPool.Tokenize(prompt, modelName)
+	tokens := k.tokenizersPool.Tokenize(renderReq, prompt, modelName)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
@@ -155,11 +165,15 @@ func (k *Indexer) GetPodScores(ctx context.Context, prompt, modelName string,
 	return podScores, nil
 }
 
-// podsPerKeyPrintHelper formats a map of keys to pod names for printing.
-func podsPerKeyPrintHelper(ks map[kvblock.Key][]string) string {
+// podsPerKeyPrintHelper formats a map of keys to pod entries for printing.
+func podsPerKeyPrintHelper(ks map[kvblock.Key][]kvblock.PodEntry) string {
 	flattened := ""
 	for k, v := range ks {
-		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+		entries := make([]string, len(v))
+		for i, entry := range v {
+			entries[i] = entry.String()
+		}
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), entries)
 	}
 
 	return flattened

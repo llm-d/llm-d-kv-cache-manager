@@ -19,14 +19,19 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"sync"
 
 	"github.com/vmihailenco/msgpack/v5"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+)
+
+const (
+	DefaultDeviceTier = "gpu"
 )
 
 // Config holds the configuration for the event processing pool.
@@ -94,7 +99,7 @@ func NewPool(cfg *Config, index kvblock.Index) *Pool {
 // Start begins the worker pool and the ZMQ subscriber.
 // It is non-blocking.
 func (p *Pool) Start(ctx context.Context) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Starting sharded event processing pool", "workers", p.concurrency)
 
 	p.wg.Add(p.concurrency)
@@ -108,7 +113,7 @@ func (p *Pool) Start(ctx context.Context) {
 
 // Shutdown gracefully stops the pool and its subscriber.
 func (p *Pool) Shutdown(ctx context.Context) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Shutting down event processing pool...")
 
 	for _, queue := range p.queues {
@@ -168,8 +173,8 @@ func (p *Pool) worker(ctx context.Context, workerIndex int) {
 // processEvent deserializes the message payload and calls the appropriate
 // index method based on the event type. It returns an error to trigger retries.
 func (p *Pool) processEvent(ctx context.Context, msg *Message) {
-	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
+	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
+	debugLogger.V(logging.TRACE).Info("Processing event", "topic", msg.Topic, "seq", msg.Seq)
 
 	var eventBatch EventBatch
 	if err := msgpack.Unmarshal(msg.Payload, &eventBatch); err != nil {
@@ -233,20 +238,29 @@ func (p *Pool) processEvent(ctx context.Context, msg *Message) {
 
 	podIdentifier := msg.PodIdentifier
 	modelName := msg.ModelName
-	entries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: "gpu"}}
-	p.digestEvents(ctx, podIdentifier, modelName, events, entries)
+	p.digestEvents(ctx, podIdentifier, modelName, events)
 }
 
 func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string,
-	events []event, podEntries []kvblock.PodEntry,
+	events []event,
 ) {
-	debugLogger := klog.FromContext(ctx).V(logging.DEBUG)
-	debugLogger.Info("Digesting events", "count", len(events))
+	debugLogger := log.FromContext(ctx).V(logging.DEBUG)
+	debugLogger.V(logging.TRACE).Info("Digesting events", "count", len(events))
 
 	// Process each event in the batch
 	for _, event := range events {
 		switch ev := event.(type) {
 		case BlockStored:
+			// Default to gpu.
+			// For non-gpu events, vLLM KV event has a non-empty Medium field.
+			deviceTier := DefaultDeviceTier
+			if ev.Medium != nil {
+				deviceTier = strings.ToLower(*ev.Medium)
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Create a slice to hold the processed keys.
 			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
@@ -270,6 +284,16 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			}
 
 		case BlockRemoved:
+			// Default to gpu.
+			// For non-gpu events, vLLM KV event has a non-empty Medium field.
+			deviceTier := DefaultDeviceTier
+			if ev.Medium != nil {
+				deviceTier = strings.ToLower(*ev.Medium)
+			}
+
+			// Create PodEntry for this specific event's device tier
+			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
+
 			// Iterate over the hashes, convert each one to uint64, and evict the key.
 			for _, rawHash := range ev.BlockHashes {
 				hash, err := getHashAsUint64(rawHash)

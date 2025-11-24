@@ -26,7 +26,7 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -37,10 +37,14 @@ const (
 
 func main() {
 	ctx := context.Background()
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// Create KV-Cache Manager configuration with Valkey backend
-	config := createValkeyConfig()
+	config, err := createValkeyConfig()
+	if err != nil {
+		logger.Error(err, "failed to create valkey config")
+		os.Exit(1)
+	}
 
 	logger.Info("Initializing KV-Cache Manager with Valkey backend",
 		"valkeyAddr", config.KVBlockIndexConfig.ValkeyConfig.Address,
@@ -65,8 +69,11 @@ func main() {
 	logger.Info("Valkey example completed successfully")
 }
 
-func createValkeyConfig() *kvcache.Config {
-	config := kvcache.NewDefaultConfig()
+func createValkeyConfig() (*kvcache.Config, error) {
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default config: %w", err)
+	}
 
 	// Configure Valkey backend
 	valkeyAddr := os.Getenv(envValkeyAddr)
@@ -92,17 +99,17 @@ func createValkeyConfig() *kvcache.Config {
 
 	// Configure tokenizer
 	if hfToken := os.Getenv(envHFToken); hfToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = hfToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = hfToken
 	}
 
 	// Set a reasonable block size for demonstration
 	config.TokenProcessorConfig.BlockSize = 128
 
-	return config
+	return config, nil
 }
 
 func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) error {
-	logger := klog.FromContext(ctx).WithName("valkey-demo")
+	logger := log.FromContext(ctx).WithName("valkey-demo")
 
 	modelName := testdata.ModelName
 	prompt := testdata.Prompt
@@ -115,7 +122,7 @@ func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) 
 	logger.Info("Processing testdata prompt", "model", modelName, "promptLength", len(prompt))
 
 	// First, let's demonstrate basic scoring without any cache entries
-	scores, err := indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
+	scores, err := indexer.GetPodScores(ctx, nil, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
 	if err != nil {
 		return fmt.Errorf("failed to get pod scores: %w", err)
 	}
@@ -141,7 +148,7 @@ func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) 
 	logger.Info("Added cache entries", "keys", len(promptKeys), "pods", len(podEntries))
 
 	// Query for cache scores again
-	scores, err = indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
+	scores, err = indexer.GetPodScores(ctx, nil, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
 	if err != nil {
 		return fmt.Errorf("failed to get pod scores after adding entries: %w", err)
 	}
@@ -176,7 +183,7 @@ func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) 
 	logger.Info("Cache lookup after eviction", "keysFound", len(lookupAfterEvict))
 
 	// Final score check to see the difference
-	finalScores, err := indexer.GetPodScores(ctx, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
+	finalScores, err := indexer.GetPodScores(ctx, nil, prompt, modelName, []string{"demo-pod-1", "demo-pod-2"})
 	if err != nil {
 		return fmt.Errorf("failed to get final pod scores: %w", err)
 	}

@@ -23,7 +23,8 @@ The main configuration structure for the KV Cache Indexer module.
   "prefixStoreConfig": { ... },
   "tokenProcessorConfig": { ... },
   "kvBlockIndexConfig": { ... },
-  "tokenizersPoolConfig": { ... }
+  "tokenizersPoolConfig": { ... },
+  "kvCacheBackendConfigs": { ... }
 }
 ```
 
@@ -33,6 +34,7 @@ The main configuration structure for the KV Cache Indexer module.
 | `tokenProcessorConfig` | [TokenProcessorConfig](#token-processor-configuration-tokenprocessorconfig) | Configuration for token processing | See defaults |
 | `kvBlockIndexConfig` | [IndexConfig](#index-configuration-indexconfig) | Configuration for KV block indexing | See defaults |
 | `tokenizersPoolConfig` | [Config](#tokenization-pool-configuration-config) | Configuration for tokenization pool | See defaults |
+| `kvCacheBackendConfigs` | [KVCacheBackendConfig](#kv-cache-backend-configuration-kvcachebackendconfig) | Configuration for KV Cache Device Backends | See defaults |
 
 
 ## Complete Example Configuration
@@ -60,9 +62,25 @@ Here's a complete configuration example with all options:
   "tokenizersPoolConfig": {
     "workersCount": 8,
     "minPrefixOverlapRatio": 0.85,
-    "huggingFaceToken": "your_hf_token_here",
-    "tokenizersCacheDir": "/tmp/tokenizers"
-  }
+    "hf": {
+      "huggingFaceToken": "your_hf_token_here",
+      "tokenizersCacheDir": "/tmp/tokenizers"
+    },
+    "local": {
+      "autoDiscoveryDir": "/mnt/models",
+      "autoDiscoveryTokenizerFileName": "tokenizer.json"
+    }
+  },
+  "kvCacheBackendConfigs": [
+    {
+      "name": "gpu",
+      "weight": 1.0
+    },
+    {
+      "name": "cpu",
+      "weight": 0.8
+    }
+  ]
 }
 ```
 
@@ -201,34 +219,95 @@ Configures the tokenization worker pool and cache utilization strategy.
 {
   "workersCount": 5,
   "minPrefixOverlapRatio": 0.8,
-  "huggingFaceToken": "",
-  "tokenizersCacheDir": ""
+  "hf": {
+    "enabled": true,
+    "huggingFaceToken": "",
+    "tokenizersCacheDir": ""
+  },
+  "local": {
+    "autoDiscoveryDir": "/mnt/models",
+    "autoDiscoveryTokenizerFileName": "tokenizer.json",
+    "modelTokenizerMap": {
+      "my-model": "/path/to/custom-model/tokenizer.json"
+    }
+  }
 }
 ```
 
-| Field | Type | Description | Default |
-|-------|------|-------------|--------|
-| `workersCount` | `integer` | Number of tokenization worker goroutines | `5` |
-| `minPrefixOverlapRatio` | `float64` | Minimum overlap ratio to use cached prefix tokens (0.0-1.0) | `0.8` |
-| `huggingFaceToken` | `string` | HuggingFace authentication token | `""` |
-| `tokenizersCacheDir` | `string` | Directory for caching tokenizers | `""` |
+| Field                   | Type                   | Description                                                 | Default |
+|-------------------------|------------------------|-------------------------------------------------------------|---------|
+| `workersCount`          | `integer`              | Number of tokenization worker goroutines                    | `5`     |
+| `minPrefixOverlapRatio` | `float64`              | Minimum overlap ratio to use cached prefix tokens (0.0-1.0) | `0.8`   |
+| `hf`                    | `HFTokenizerConfig`    | HuggingFace tokenizer config                                |         |
+| `local`                 | `LocalTokenizerConfig` | Local tokenizer config                                      |         |
 
+### Local Tokenizer Configuration (`LocalTokenizerConfig`)
 
-### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
-
-Configures the HuggingFace tokenizer backend.
+Configures loading tokenizers from local files. Useful for air-gapped environments or when models are pre-loaded.
 
 ```json
 {
+  "autoDiscoveryDir": "/mnt/models",
+  "autoDiscoveryTokenizerFileName": "tokenizer.json",
+  "modelTokenizerMap": {
+    "my-model": "/path/to/custom-model/tokenizer.json"
+  }
+}
+```
+
+| Field                            | Type                | Description                                                                                                   | Default            |
+|----------------------------------|---------------------|---------------------------------------------------------------------------------------------------------------|--------------------|
+| `autoDiscoveryDir`               | `string`            | Directory to recursively scan for tokenizer files. Can be set via `LOCAL_TOKENIZER_DIR` environment variable. | `"/mnt/models"`    |
+| `autoDiscoveryTokenizerFileName` | `string`            | Filename to search for during auto-discovery. Can be set via `LOCAL_TOKENIZER_FILENAME` environment variable. | `"tokenizer.json"` |
+| `modelTokenizerMap`              | `map[string]string` | Manual mapping from model name to tokenizer file path. Overrides auto-discovered model mappings.              | `{}`               |
+
+**Auto-Discovery Behavior:**
+
+When `autoDiscoveryDir` is set, the system recursively scans the directory for files matching `autoDiscoveryTokenizerFileName`. It supports two directory structure patterns:
+
+1. **HuggingFace Cache Structure** (automatically detected):
+   ```
+   ~/.cache/huggingface/hub/
+     models--Qwen--Qwen3-0.6B/snapshots/{hash}/tokenizer.json
+       → Model name: "Qwen/Qwen3-0.6B"
+     models--meta-llama--Llama-2-7b-chat-hf/snapshots/{hash}/tokenizer.json
+       → Model name: "meta-llama/Llama-2-7b-chat-hf"
+   ```
+
+2. **Custom Directory Structure** (arbitrary nesting):
+   ```
+   /mnt/models/
+     llama-7b/tokenizer.json
+       → Model name: "llama-7b"
+     Qwen/Qwen3/tokenizer.json
+       → Model name: "Qwen/Qwen3"
+     org/team/model/tokenizer.json
+       → Model name: "org/team/model"
+   ```
+
+**Environment Variables:**
+- `LOCAL_TOKENIZER_DIR`: Overrides the default auto-discovery directory
+- `LOCAL_TOKENIZER_FILENAME`: Overrides the default tokenizer filename
+
+### HuggingFace Tokenizer Configuration (`HFTokenizerConfig`)
+
+Configures the HuggingFace tokenizer backend for downloading tokenizers from HuggingFace Hub.
+
+```json
+{
+  "enabled": true,
   "huggingFaceToken": "",
-  "tokenizersCacheDir": ""
+  "tokenizersCacheDir": "./bin"
 }
 ```
 
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
-| `huggingFaceToken` | `string` | HuggingFace API token for accessing models | `""` |
+| `enabled` | `boolean` | Enable HuggingFace tokenizer backend | `true` |
+| `huggingFaceToken` | `string` | HuggingFace API token for accessing private models | `""` |
 | `tokenizersCacheDir` | `string` | Local directory for caching downloaded tokenizers | `"./bin"` |
+
+**Note**: The system uses a composite tokenizer by default that tries local tokenizers first, then falls back to HuggingFace tokenizers if enabled and the model is not found locally.
 
 ## KV-Event Processing Configuration
 
@@ -261,6 +340,27 @@ For the ZMQ event processing pool:
 | `zmqEndpoint` | `string` | ZMQ address to connect to | `"tcp://*:5557"` |
 | `topicFilter` | `string` | ZMQ subscription filter | `"kv@"` |
 | `concurrency` | `integer` | Number of parallel workers | `4` |
+
+## KV Cache Backend Tiers
+
+### KV Cache Backend Configuration (`KVCacheBackendConfig`)
+
+Configures the available device backends which store the KV Cache blocks. This will be used in scoring. 
+
+```json
+{
+  [
+    {
+      "name": "gpu",
+      "weight": 1.0,
+    },
+    {
+      "name": "cpu",
+      "weight": 0.8,
+    }
+  ]
+}
+```
 
 ---
 ## Notes

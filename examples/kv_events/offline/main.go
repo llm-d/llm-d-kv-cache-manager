@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
@@ -35,24 +35,27 @@ const (
 	envHFToken = "HF_TOKEN"
 )
 
-func getKVCacheIndexerConfig() *kvcache.Config {
-	config := kvcache.NewDefaultConfig()
+func getKVCacheIndexerConfig() (*kvcache.Config, error) {
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	config.TokenProcessorConfig.BlockSize = 256
 
-	return config
+	return config, nil
 }
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("Starting KV Events Pool Example")
 
 	kvCacheIndexer, err := setupKVCacheIndexer(ctx)
@@ -103,9 +106,14 @@ func main() {
 }
 
 func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
+	cfg, err := getKVCacheIndexerConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -119,12 +127,12 @@ func setupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
 }
 
 func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publisher *helper.Publisher) error {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	logger.Info("@@@ Starting KV Events Demo", "model", testdata.ModelName)
 
 	// Initial query - should be empty since no events have been published
-	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
+	pods, err := kvCacheIndexer.GetPodScores(ctx, testdata.RenderReq, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}
@@ -137,7 +145,7 @@ func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	}
 
 	// Query again to see the effect of the events
-	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.RenderReq, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}
@@ -150,7 +158,7 @@ func RunEventsDemo(ctx context.Context, kvCacheIndexer *kvcache.Indexer, publish
 	}
 
 	// Final query
-	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.Prompt, testdata.ModelName, nil)
+	pods, err = kvCacheIndexer.GetPodScores(ctx, testdata.RenderReq, testdata.Prompt, testdata.ModelName, nil)
 	if err != nil {
 		return err
 	}

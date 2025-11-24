@@ -50,7 +50,10 @@ type KVCacheAwareScorer struct {
 // If the environment variables are not set, or if the indexer
 // fails to initialize, an error is returned.
 func NewKVCacheAwareScorer(ctx context.Context) (plugins.Scorer, error) {
-	config := kvcache.NewDefaultConfig()
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	redisAddr := os.Getenv(kvCacheRedisEnvVar)
 	if redisAddr != "" {

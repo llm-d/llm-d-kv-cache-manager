@@ -21,7 +21,6 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,27 +32,69 @@ const (
 
 // TestLongestPrefixScorer verifies scoring based on consecutive block hits from the start.
 func TestLongestPrefixScorer(t *testing.T) {
-	scorer := &kvcache.LongestPrefixScorer{}
-	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
-
-	hitmap := map[kvblock.Key][]string{
-		{ModelName: testModelName, ChunkHash: 1001}: {podA},
-		{ModelName: testModelName, ChunkHash: 1002}: {podA},
-		{ModelName: testModelName, ChunkHash: 1003}: {podA},
-		{ModelName: testModelName, ChunkHash: 1004}: {podB},
-		{ModelName: testModelName, ChunkHash: 1005}: {podB},
-		{ModelName: testModelName, ChunkHash: 1006}: {podA},
+	mediumWeights := map[string]float64{
+		"gpu": 1.0,
+		"cpu": 0.5,
 	}
 
-	expected := map[string]int{
-		"pod-a": 3,
-		"pod-b": 0,
+	scorer := &kvcache.LongestPrefixScorer{
+		MediumWeights: mediumWeights,
+	}
+	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
+
+	hitmap := map[kvblock.Key][]kvblock.PodEntry{
+		{ModelName: testModelName, ChunkHash: 1001}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+		{ModelName: testModelName, ChunkHash: 1002}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+		{ModelName: testModelName, ChunkHash: 1003}: {
+			{PodIdentifier: podA, DeviceTier: "gpu"},
+			{PodIdentifier: podA, DeviceTier: "cpu"},
+		},
+		{ModelName: testModelName, ChunkHash: 1004}: {{PodIdentifier: podB, DeviceTier: "cpu"}},
+		{ModelName: testModelName, ChunkHash: 1005}: {{PodIdentifier: podB, DeviceTier: "cpu"}},
+		{ModelName: testModelName, ChunkHash: 1006}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+	}
+
+	expected := map[string]float64{
+		podA: 3.0,
+		podB: 0.0,
 	}
 
 	scored, err := scorer.Score(blockKeys, hitmap)
 	assert.NoError(t, err)
 	for pod, score := range scored {
-		assert.Equal(t, expected[pod], score)
+		assert.InDelta(t, expected[pod], score, 0.0001)
+	}
+}
+
+func TestLongestPrefixScorerDifferentTiers(t *testing.T) {
+	mediumWeights := map[string]float64{
+		"gpu": 1.0,
+		"cpu": 0.5,
+	}
+
+	scorer := &kvcache.LongestPrefixScorer{
+		MediumWeights: mediumWeights,
+	}
+	blockKeys := int64KeysToKVBlockKeys([]uint64{1001, 1002, 1003, 1004, 1005, 1006})
+
+	hitmap := map[kvblock.Key][]kvblock.PodEntry{
+		{ModelName: testModelName, ChunkHash: 1001}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+		{ModelName: testModelName, ChunkHash: 1002}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+		{ModelName: testModelName, ChunkHash: 1003}: {{PodIdentifier: podA, DeviceTier: "cpu"}},
+		{ModelName: testModelName, ChunkHash: 1004}: {{PodIdentifier: podB, DeviceTier: "cpu"}},
+		{ModelName: testModelName, ChunkHash: 1005}: {{PodIdentifier: podB, DeviceTier: "cpu"}},
+		{ModelName: testModelName, ChunkHash: 1006}: {{PodIdentifier: podA, DeviceTier: "gpu"}},
+	}
+
+	expected := map[string]float64{
+		podA: 2.5,
+		podB: 0.0,
+	}
+
+	scored, err := scorer.Score(blockKeys, hitmap)
+	assert.NoError(t, err)
+	for pod, score := range scored {
+		assert.InDelta(t, expected[pod], score, 0.0001)
 	}
 }
 

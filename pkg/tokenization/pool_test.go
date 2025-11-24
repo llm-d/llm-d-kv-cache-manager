@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization/prefixstore"
 )
 
@@ -47,6 +48,13 @@ var benchmarkModels = []string{
 // MockTokenizer implements the Tokenizer interface for testing.
 type MockTokenizer struct {
 	mock.Mock
+}
+
+func (m *MockTokenizer) RenderChatTemplate(
+	prompt string, renderReq *preprocessing.RenderJinjaTemplateRequest,
+) (string, error) {
+	args := m.Called(prompt, renderReq)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
@@ -257,7 +265,7 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
 		model := benchmarkModels[i%len(benchmarkModels)]
-		pool.Tokenize(prompt, model)
+		pool.Tokenize(nil, prompt, model)
 	}
 
 	b.StopTimer()

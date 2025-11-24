@@ -20,30 +20,38 @@ import (
 
 	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
 	envHFToken = "HF_TOKEN"
 )
 
-func getKVCacheIndexerConfig() *kvcache.Config {
-	config := kvcache.NewDefaultConfig()
+func getKVCacheIndexerConfig() (*kvcache.Config, error) {
+	config, err := kvcache.NewDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	huggingFaceToken := os.Getenv(envHFToken)
 	if huggingFaceToken != "" {
-		config.TokenizersPoolConfig.HuggingFaceToken = huggingFaceToken
+		config.TokenizersPoolConfig.HFTokenizerConfig.HuggingFaceToken = huggingFaceToken
 	}
 
 	config.TokenProcessorConfig.BlockSize = 256
 
-	return config
+	return config, nil
 }
 
 func SetupKVCacheIndexer(ctx context.Context) (*kvcache.Indexer, error) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, getKVCacheIndexerConfig())
+	cfg, err := getKVCacheIndexerConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	kvCacheIndexer, err := kvcache.NewKVCacheIndexer(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

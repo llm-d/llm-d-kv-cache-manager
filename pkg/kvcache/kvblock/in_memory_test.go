@@ -73,8 +73,8 @@ func TestInMemoryIndexSize(t *testing.T) {
 	assert.Len(t, podsPerKey, 2) // Only key2 and key3 should be present
 	assert.Len(t, podsPerKey[key2], 1)
 	assert.Len(t, podsPerKey[key3], 1)
-	assert.Contains(t, podsPerKey[key2], "pod2")
-	assert.Contains(t, podsPerKey[key3], "pod3")
+	assert.Contains(t, podsPerKey[key2], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
+	assert.Contains(t, podsPerKey[key3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }
 
 func TestInMemoryIndexPodCacheSize(t *testing.T) {
@@ -105,6 +105,6 @@ func TestInMemoryIndexPodCacheSize(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
 	assert.Len(t, podsPerKey[key], 2, "Should only have 2 pods due to PodCacheSize limit")
-	assert.Contains(t, podsPerKey[key], "pod2")
-	assert.Contains(t, podsPerKey[key], "pod3")
+	assert.Contains(t, podsPerKey[key], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
+	assert.Contains(t, podsPerKey[key], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }

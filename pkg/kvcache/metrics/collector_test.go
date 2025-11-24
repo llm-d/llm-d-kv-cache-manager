@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func TestLogMetrics(t *testing.T) {
@@ -33,7 +33,7 @@ func TestLogMetrics(t *testing.T) {
 		Level: slog.LevelInfo,
 	})
 	logrLogger := logr.FromSlogHandler(handler)
-	klog.SetLogger(logrLogger)
+	log.SetLogger(logrLogger)
 
 	ctx := context.Background()
 

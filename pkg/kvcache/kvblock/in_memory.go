@@ -23,7 +23,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
@@ -96,14 +96,14 @@ type PodCache struct {
 // 2. An error if any occurred during the operation.
 func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 	podIdentifierSet sets.Set[string],
-) (map[Key][]string, error) {
+) (map[Key][]PodEntry, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no keys provided for lookup")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Lookup")
 
-	podsPerKey := make(map[Key][]string)
+	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
 
 	for idx, key := range keys {
@@ -117,15 +117,12 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, keys []Key,
 
 			if podIdentifierSet.Len() == 0 {
 				// If no pod identifiers are provided, return all pods
-				podsPerKey[key] = append(podsPerKey[key],
-					utils.SliceMap(pods.cache.Keys(), func(pod PodEntry) string {
-						return pod.PodIdentifier
-					})...)
+				podsPerKey[key] = pods.cache.Keys()
 			} else {
 				// Filter pods based on the provided pod identifiers
 				for _, pod := range pods.cache.Keys() {
 					if podIdentifierSet.Has(pod.PodIdentifier) {
-						podsPerKey[key] = append(podsPerKey[key], pod.PodIdentifier)
+						podsPerKey[key] = append(podsPerKey[key], pod)
 					}
 				}
 			}
@@ -146,7 +143,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, keys []Key, entries []PodEntry)
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Add")
 
 	for _, key := range keys {
 		var podCache *PodCache
@@ -200,7 +197,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 		return fmt.Errorf("no entries provided for eviction from index")
 	}
 
-	traceLogger := klog.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
+	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
 
 	podCache, found := m.data.Get(key)
 	if !found || podCache == nil {
@@ -238,10 +235,12 @@ func (m *InMemoryIndex) Evict(ctx context.Context, key Key, entries []PodEntry) 
 }
 
 // podsPerKeyPrintHelper formats a map of keys to pod names for printing.
-func podsPerKeyPrintHelper(ks map[Key][]string) string {
+func podsPerKeyPrintHelper(ks map[Key][]PodEntry) string {
 	flattened := ""
 	for k, v := range ks {
-		flattened += fmt.Sprintf("%s: %v\n", k.String(), v)
+		flattened += fmt.Sprintf("%s: %v\n", k.String(), utils.SliceMap(v, func(pod PodEntry) string {
+			return pod.String()
+		}))
 	}
 
 	return flattened

@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 
 	"github.com/fxamacker/cbor/v2"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
 )
@@ -84,13 +84,13 @@ func (db *ChunkedTokenDatabase) getInitHash() []byte {
 
 	encMode, err := cbor.CanonicalEncOptions().EncMode() // deterministic
 	if err != nil {
-		klog.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
+		log.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
 		return nil
 	}
 
 	b, err := encMode.Marshal(db.HashSeed)
 	if err != nil {
-		klog.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
+		log.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
 		return nil
 	}
 
@@ -106,13 +106,13 @@ func (db *ChunkedTokenDatabase) hash(parent []byte, tokens []uint32, extra inter
 
 	encMode, err := cbor.CanonicalEncOptions().EncMode() // deterministic
 	if err != nil {
-		klog.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
+		log.FromContext(context.Background()).Error(err, "failed to create CBOR encoder")
 		return nil
 	}
 
 	b, err := encMode.Marshal(payload)
 	if err != nil {
-		klog.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
+		log.FromContext(context.Background()).Error(err, "failed to marshal payload to CBOR")
 		return nil
 	}
 
