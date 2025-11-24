@@ -38,7 +38,7 @@ func DefaultConfig() *Config {
 // TODO: generalize interface to a generic prefix-based store.
 type Indexer interface {
 	// AddTokenization adds the full tokenization of a string to the
-	// indexer for a given model.
+	// indexer.
 	// The function assumes tokens and offsets are of the same length.
 	// The function assumes that tokens will not be mutated after the call.
 	AddTokenization(prompt string, tokens []uint32, offsets []tokenizers.Offset) error
