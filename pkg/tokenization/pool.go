@@ -205,7 +205,7 @@ func (pool *Pool) processTask(task Task) error {
 		}
 	}
 
-	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
+	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt)
 
 	// if the overlap ratio is low, get the full tokenization
 	if overlapRatio < pool.minPrefixOverlapRatio {
@@ -216,7 +216,7 @@ func (pool *Pool) processTask(task Task) error {
 		}
 
 		// update the indexer with the new tokenization
-		if e := pool.indexer.AddTokenization(task.ModelName, task.Prompt, tokens, offsets); e != nil {
+		if e := pool.indexer.AddTokenization(task.Prompt, tokens, offsets); e != nil {
 			err = fmt.Errorf("tokenization failed for model %s: %w", task.ModelName, e)
 			return err
 		}

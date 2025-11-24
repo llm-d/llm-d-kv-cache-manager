@@ -67,14 +67,14 @@ type MockIndexer struct {
 	mock.Mock
 }
 
-func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
-	args := m.Called(modelName, prompt, tokens, offsets)
+func (m *MockIndexer) AddTokenization(prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
+	args := m.Called(prompt, tokens, offsets)
 	return args.Error(0)
 }
 
 //nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
-func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
-	args := m.Called(prompt, modelName)
+func (m *MockIndexer) FindLongestContainedTokens(prompt string) ([]uint32, float64) {
+	args := m.Called(prompt)
 	tokens := args.Get(0).([]uint32) //nolint:errcheck // unused mock
 	return tokens, 0.0
 }
