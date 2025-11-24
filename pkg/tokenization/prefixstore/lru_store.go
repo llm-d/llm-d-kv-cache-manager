@@ -35,8 +35,8 @@ const (
 
 // LRUStoreConfig contains initialization settings for LRUTokenStore (block size and cache size).
 type LRUStoreConfig struct {
-	CacheSize int `json:"cacheSize"`
-	BlockSize int `json:"blockSize"` // number of tokens per block
+	CacheSize int    `json:"cacheSize"`
+	BlockSize int    `json:"blockSize"` // number of tokens per block
 }
 
 // defaultLRUStoreConfig returns an LRUStoreConfig instance with default configuration.
@@ -63,7 +63,7 @@ type LRUTokenStore struct {
 	cacheSize int
 	blockSize int
 
-	store map[string]*lru.Cache[uint64, Block]
+	cache *lru.Cache[uint64, Block]
 }
 
 var _ Indexer = &LRUTokenStore{}
@@ -74,10 +74,15 @@ func NewLRUTokenStore(config *Config) (Indexer, error) {
 		config = DefaultConfig()
 	} // TODO: add validation
 
+	cache, err := lru.New[uint64, Block](config.CacheSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize in-memory index: %w", err)
+	}
+
 	return &LRUTokenStore{
 		cacheSize: config.CacheSize,
 		blockSize: config.BlockSize,
-		store:     make(map[string]*lru.Cache[uint64, Block]),
+		cache:     cache,
 	}, nil
 }
 
@@ -85,7 +90,7 @@ func NewLRUTokenStore(config *Config) (Indexer, error) {
 // indexer for a given model.
 // The function assumes tokens and offsets are of the same length.
 // The function assumes that tokens will not be mutated after the call.
-func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens []uint32,
+func (c *LRUTokenStore) AddTokenization(prompt string, tokens []uint32,
 	offsets []tokenizers.Offset,
 ) error {
 	if prompt == "" || len(tokens) == 0 {
@@ -94,18 +99,6 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	// Get or create the LRU cache for the model
-	cache, ok := c.store[modelName]
-	if !ok {
-		var err error
-		cache, err = lru.New[uint64, Block](c.cacheSize)
-		if err != nil {
-			return fmt.Errorf("failed to create LRU cache for model %s: %w", modelName, err)
-		}
-
-		c.store[modelName] = cache
-	}
 
 	promptBytes := []byte(prompt)
 	tokenIdxIterator := 0
@@ -145,7 +138,7 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 			}
 		}
 
-		cache.Add(blockHash, block)
+		c.cache.Add(blockHash, block)
 	}
 
 	return nil
@@ -157,15 +150,7 @@ func (c *LRUTokenStore) AddTokenization(modelName string, prompt string, tokens 
 // that was covered by the matched tokens.
 //
 //nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
-func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
-	c.mu.RLock()
-	cache, ok := c.store[modelName]
-	c.mu.RUnlock()
-
-	if !ok {
-		return nil, 0.0
-	}
-
+func (c *LRUTokenStore) FindLongestContainedTokens(prompt string) ([]uint32, float64) {
 	containedTokens := []uint32{}
 
 	promptBytes := []byte(prompt)
@@ -192,7 +177,7 @@ func (c *LRUTokenStore) FindLongestContainedTokens(prompt, modelName string) ([]
 		blockHash := digest.Sum64()
 		previousHash = blockHash
 
-		block, ok := cache.Get(blockHash)
+		block, ok := c.cache.Get(blockHash)
 		if !ok {
 			break // early-stop
 		}
