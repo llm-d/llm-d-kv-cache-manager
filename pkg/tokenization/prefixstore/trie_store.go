@@ -22,29 +22,6 @@ import (
 	"github.com/daulet/tokenizers"
 )
 
-// TrieTokenStore is a character-based prefix tree that stores
-// the last token fully contained within the prefix ending at each node.
-var _ Indexer = &TrieTokenStore{}
-
-// AddTokenization adds the full tokenization of a string to the indexer for
-// a given model.
-// The function assumes tokens and offsets are of the same length.
-// The function assumes that tokens will not be mutated after the call.
-func (t *TrieTokenStore) AddTokenization(prompt string, tokens []uint32,
-	offsets []tokenizers.Offset,
-) error {
-	if prompt == "" || len(tokens) == 0 || len(tokens) != len(offsets) {
-		return nil
-	}
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.addFullTokenization(prompt, tokens, offsets)
-
-	return nil
-}
-
 // containedTokenNode represents a node in the character-based Trie.
 // TODO: consider chunking and hashing?
 // It stores information about the last token fully contained within the prefix
@@ -67,12 +44,34 @@ func newContainedTokenNode() *containedTokenNode {
 }
 
 // TrieTokenStore holds the root of the character-based prefix tree.
+// TrieTokenStore is a character-based prefix tree that stores
+// the last token fully contained within the prefix ending at each node.
 type TrieTokenStore struct {
 	mu   sync.RWMutex
 	root *containedTokenNode
 }
 
-// newContainedTokenTrie creates an empty containedTokenTrie.
+var _ Indexer = &TrieTokenStore{}
+
+// AddTokenization adds the full tokenization of a string to the indexer.
+// The function assumes tokens and offsets are of the same length.
+// The function assumes that tokens will not be mutated after the call.
+func (t *TrieTokenStore) AddTokenization(prompt string, tokens []uint32,
+	offsets []tokenizers.Offset,
+) error {
+	if prompt == "" || len(tokens) == 0 || len(tokens) != len(offsets) {
+		return nil
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.addFullTokenization(prompt, tokens, offsets)
+
+	return nil
+}
+
+// NewContainedTokenTrie creates an empty containedTokenTrie.
 func NewContainedTokenTrie() *TrieTokenStore {
 	return &TrieTokenStore{
 		root: newContainedTokenNode(),

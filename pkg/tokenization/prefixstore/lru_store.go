@@ -35,8 +35,8 @@ const (
 
 // LRUStoreConfig contains initialization settings for LRUTokenStore (block size and cache size).
 type LRUStoreConfig struct {
-	CacheSize int    `json:"cacheSize"`
-	BlockSize int    `json:"blockSize"` // number of tokens per block
+	CacheSize int `json:"cacheSize"`
+	BlockSize int `json:"blockSize"` // number of tokens per block
 }
 
 // defaultLRUStoreConfig returns an LRUStoreConfig instance with default configuration.
