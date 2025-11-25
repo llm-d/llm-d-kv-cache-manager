@@ -80,8 +80,8 @@ type Pool struct {
 	wg        sync.WaitGroup
 	indexer   prefixstore.Indexer
 
-	// Tokenizer caches multiple tokenizers in memory.
-	// The cache is shared between all pool workers. Since each tokenizer
+	// Tokenizer is configured for the specific model this pool handles.
+	// It's shared between all pool workers. Since the tokenizer
 	// is immutable, Encode calls are safe for concurrent use without locks.
 	tokenizer Tokenizer
 

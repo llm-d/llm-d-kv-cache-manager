@@ -30,10 +30,6 @@ import (
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 )
 
-// tokenizersCacheSize is the size of the LRU cache for tokenizers.
-// 1 tokenizer per base-model (NOT LoRAs).
-const tokenizersCacheSize = 20
-
 // Tokenizer interface defines the methods for tokenization.
 type Tokenizer interface {
 	RenderChatTemplate(string, *preprocessing.RenderJinjaTemplateRequest) (string, error)
@@ -261,10 +257,9 @@ type tokenizerProvider interface {
 	get(modelName string) (*tokenizers.Tokenizer, error)
 }
 
-// CachedTokenizer implements the Tokenizer interface using
-// tokenizerProvider to get the tokenizer.
-// The implementation wraps an LRU-cache for holding loaded per-model
-// tokenizers.
+// CachedTokenizer implements the Tokenizer interface for a specific model.
+// It holds a single tokenizer instance that is initialized at creation time
+// for the target model, providing efficient tokenization without caching overhead.
 type CachedTokenizer struct {
 	tokenizer            *tokenizers.Tokenizer
 	tokenizerProvider    tokenizerProvider
@@ -301,8 +296,8 @@ func NewCachedHFTokenizer(modelID string, config *HFTokenizerConfig) (Tokenizer,
 //   - Pre-loaded models in containerized deployments
 //   - Reducing startup latency by avoiding downloads
 //
-// The tokenizer uses an LRU cache to keep frequently used tokenizers in memory,
-// avoiding repeated file I/O for the same models.
+// The tokenizer is initialized for a specific model at creation time,
+// providing direct access without caching overhead.
 func NewCachedLocalTokenizer(modelName string, config LocalTokenizerConfig) (Tokenizer, error) {
 	if err := discoverLocalTokenizerMap(&config); err != nil {
 		return nil, fmt.Errorf("failed to discover local tokenizer map: %w", err)
@@ -374,6 +369,7 @@ func getFetchChatTemplateRequest(modelName string, t tokenizerProvider) (preproc
 }
 
 // Encode converts a string into token IDs.
+// The modelName parameter is ignored since this tokenizer is bound to a specific model.
 func (t *CachedTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
 	encodeOptions := []tokenizers.EncodeOption{
 		tokenizers.WithReturnTypeIDs(),
