@@ -139,7 +139,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
-	tokens := k.tokenizersPool.Tokenize(renderReq, prompt, modelName)
+	tokens := k.tokenizersPool.Tokenize(renderReq, prompt)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
