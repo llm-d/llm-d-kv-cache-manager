@@ -72,12 +72,12 @@ func (s *KVCacheSuite) SetupTest() {
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.BlockSize = 4
 
-	// Configure the indexer's tokenization pool to support "test-model"
+	// Configure the indexer's tokenization pool to support local models
 	// This is needed because GetPodScores uses the indexer's internal pool for tokenization
-	testModelPath, err := filepath.Abs("testdata/test-model")
+	testDataPath, err := filepath.Abs("testdata")
 	s.Require().NoError(err)
 
-	s.config.TokenizersPoolConfig.LocalTokenizerConfig.AutoDiscoveryDir = filepath.Dir(testModelPath)
+	s.config.TokenizersPoolConfig.LocalTokenizerConfig.AutoDiscoveryDir = testDataPath
 
 	// Create a composite tokenizer for direct use in tests (not used by the indexer)
 	localTokenizer, err := tokenization.NewCachedLocalTokenizer(*s.config.TokenizersPoolConfig.LocalTokenizerConfig)
