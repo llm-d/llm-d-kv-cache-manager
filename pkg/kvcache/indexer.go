@@ -78,7 +78,16 @@ type Indexer struct {
 // NewKVCacheIndexer creates a KVCacheIndex given a Config.
 func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	logger := log.FromContext(ctx)
-	if config != nil && config.TokenProcessorConfig != nil {
+
+	if config == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	if config.BaseModelName == "" {
+		return nil, fmt.Errorf("config.BaseModelName cannot be empty")
+	}
+
+	if config.TokenProcessorConfig != nil {
 		logger.Info("NewKVCacheIndexer config", "blockSize", config.TokenProcessorConfig.BlockSize)
 	}
 
