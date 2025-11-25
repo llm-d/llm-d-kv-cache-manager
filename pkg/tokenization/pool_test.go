@@ -148,7 +148,7 @@ func TestPool_RunIntegration(t *testing.T) {
 	defer cancel()
 
 	for _, prompt := range prompts {
-		pool.EnqueueTokenization(prompt, testModelName)
+		pool.EnqueueTokenization(prompt)
 	}
 
 	// Run pool
@@ -214,7 +214,7 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 			// Generate and enqueue prompts on-the-fly to avoid memory bloat
 			for range b.N {
 				prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
-				pool.EnqueueTokenization(prompt, modelName)
+				pool.EnqueueTokenization(prompt)
 			}
 
 			// Create context for the pool

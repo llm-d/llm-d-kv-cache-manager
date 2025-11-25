@@ -144,7 +144,7 @@ func NewTokenizationPool(modelName string, config *Config, store prefixstore.Ind
 
 // EnqueueTokenization enqueues a new tokenization task.
 // This method only enqueues the task and does not start processing it.
-func (pool *Pool) EnqueueTokenization(prompt, modelName string) {
+func (pool *Pool) EnqueueTokenization(prompt string) {
 	task := Task{
 		Prompt: prompt,
 	}
