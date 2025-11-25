@@ -204,7 +204,7 @@ func (pool *Pool) processTask(task Task) error {
 		}
 	}
 
-	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, task.ModelName)
+	tokenIDs, overlapRatio := pool.indexer.FindLongestContainedTokens(task.Prompt, pool.modelName)
 
 	// if the overlap ratio is low, get the full tokenization
 	if overlapRatio < pool.minPrefixOverlapRatio {
