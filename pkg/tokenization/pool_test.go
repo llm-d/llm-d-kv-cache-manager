@@ -84,6 +84,7 @@ func TestPool_ProcessTask(t *testing.T) {
 	mockTokenizer := &MockTokenizer{}
 
 	pool := &Pool{
+		modelName:             testModelName,
 		workers:               1,
 		indexer:               mockIndexer,
 		tokenizer:             mockTokenizer,
@@ -91,8 +92,7 @@ func TestPool_ProcessTask(t *testing.T) {
 	}
 
 	task := Task{
-		Prompt:    "hello world",
-		ModelName: testModelName,
+		Prompt: "hello world",
 	}
 
 	// Setup specific mock return values
@@ -100,12 +100,12 @@ func TestPool_ProcessTask(t *testing.T) {
 	expectedOffsets := []tokenizers.Offset{{0, 5}, {6, 11}}
 
 	// Mock FindLongestContainedTokens to return low overlap ratio
-	mockIndexer.On("FindLongestContainedTokens", task.Prompt, task.ModelName).Return([]uint32{}, 0.0)
+	mockIndexer.On("FindLongestContainedTokens", task.Prompt, testModelName).Return([]uint32{}, 0.0)
 
-	mockTokenizer.On("Encode", task.Prompt, task.ModelName).Return(expectedTokens, expectedOffsets, nil)
+	mockTokenizer.On("Encode", task.Prompt, testModelName).Return(expectedTokens, expectedOffsets, nil)
 
 	// Verify that indexer receives exactly the same tokens and offsets that tokenizer returned
-	mockIndexer.On("AddTokenization", task.ModelName, task.Prompt, expectedTokens, expectedOffsets).Return(nil)
+	mockIndexer.On("AddTokenization", testModelName, task.Prompt, expectedTokens, expectedOffsets).Return(nil)
 
 	// Execute
 	err := pool.processTask(task)
@@ -140,7 +140,7 @@ func TestPool_RunIntegration(t *testing.T) {
 		MinPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
 	}
 
-	pool, err := NewTokenizationPool(config, mockIndexer)
+	pool, err := NewTokenizationPool(testModelName, config, mockIndexer)
 	require.NoError(t, err)
 
 	// Create context for the pool
@@ -180,7 +180,7 @@ func generateRandomSentence(wordLength, maxWords int, rng *rand.Rand) string {
 	return strings.Join(words, " ")
 }
 
-func setupStressTest(b *testing.B) *Pool {
+func setupStressTest(b *testing.B, modelName string) *Pool {
 	b.Helper()
 
 	config := &Config{
@@ -194,13 +194,8 @@ func setupStressTest(b *testing.B) *Pool {
 	inMemoryIndexer, err := prefixstore.NewLRUTokenStore(nil)
 	require.NoError(b, err)
 
-	pool, err := NewTokenizationPool(config, inMemoryIndexer)
+	pool, err := NewTokenizationPool(modelName, config, inMemoryIndexer)
 	require.NoError(b, err)
-
-	for _, modelName := range benchmarkModels {
-		_, _, err := pool.tokenizer.Encode("", modelName)
-		require.NoError(b, err)
-	}
 	return pool
 }
 
@@ -209,37 +204,40 @@ func BenchmarkAsyncTokenizationStress(b *testing.B) {
 		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	pool := setupStressTest(b)
+	for _, modelName := range benchmarkModels {
+		b.Run(modelName, func(b *testing.B) {
+			pool := setupStressTest(b, modelName)
 
-	// Return RNG for on-demand prompt generation
-	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
+			// Return RNG for on-demand prompt generation
+			rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
-	// Generate and enqueue prompts on-the-fly to avoid memory bloat
-	for i := range b.N {
-		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
-		modelName := benchmarkModels[i%len(benchmarkModels)]
-		pool.EnqueueTokenization(prompt, modelName)
+			// Generate and enqueue prompts on-the-fly to avoid memory bloat
+			for range b.N {
+				prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
+				pool.EnqueueTokenization(prompt, modelName)
+			}
+
+			// Create context for the pool
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Run pool
+			go pool.Run(ctx)
+
+			b.ResetTimer()
+
+			// when pool gets empty pool.queue.Len() == 0 call cancel to the context:
+			for pool.queue.Len() > 0 {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			b.StopTimer()
+			cancel()
+
+			frequency := float64(b.N) / b.Elapsed().Seconds()
+			b.Logf("%s - Processed %d tasks in %v (%.2f tasks/sec)",
+				modelName, b.N, b.Elapsed(), frequency)
+		})
 	}
-
-	// Create context for the pool
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Run pool
-	go pool.Run(ctx)
-
-	b.ResetTimer()
-
-	// when poo gets empty pool.queue.Len() == 0 call cancel to the context:
-	for pool.queue.Len() > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	b.StopTimer()
-	cancel()
-
-	frequency := float64(b.N) / b.Elapsed().Seconds()
-	b.Logf("Processed %d tasks in %v (%.2f tasks/sec)",
-		b.N, b.Elapsed(), frequency)
 }
 
 func BenchmarkSyncTokenizationStress(b *testing.B) {
@@ -247,31 +245,34 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 		b.Skip("Skipping tokenizer integration test in short mode")
 	}
 
-	pool := setupStressTest(b)
+	for _, modelName := range benchmarkModels {
+		b.Run(modelName, func(b *testing.B) {
+			pool := setupStressTest(b, modelName)
 
-	// Return RNG for on-demand prompt generation
-	rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
+			// Return RNG for on-demand prompt generation
+			rng := rand.New(rand.NewSource(benchmarkSeed)) //nolint:gosec // Test code - weak random is acceptable
 
-	// Create context for the pool
-	ctx, cancel := context.WithCancel(context.Background())
+			// Create context for the pool
+			ctx, cancel := context.WithCancel(context.Background())
 
-	// Run pool
-	go pool.Run(ctx)
+			// Run pool
+			go pool.Run(ctx)
 
-	// Now that workers are running, reset benchmark timer
-	b.ResetTimer()
+			// Now that workers are running, reset benchmark timer
+			b.ResetTimer()
 
-	// Submit tokenization requests in a loop until limit
-	for i := 0; b.Loop(); i++ {
-		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
-		model := benchmarkModels[i%len(benchmarkModels)]
-		pool.Tokenize(nil, prompt, model)
+			// Submit tokenization requests in a loop until limit
+			for i := 0; b.Loop(); i++ {
+				prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
+				pool.Tokenize(nil, prompt, modelName)
+			}
+
+			b.StopTimer()
+			cancel()
+
+			frequency := float64(b.N) / b.Elapsed().Seconds()
+			b.Logf("%s - Processed %d tasks in %v (%.2f tasks/sec)",
+				modelName, b.N, b.Elapsed(), frequency)
+		})
 	}
-
-	b.StopTimer()
-	cancel()
-
-	frequency := float64(b.N) / b.Elapsed().Seconds()
-	b.Logf("Processed %d tasks in %v (%.2f tasks/sec)",
-		b.N, b.Elapsed(), frequency)
 }
