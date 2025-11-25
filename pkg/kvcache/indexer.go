@@ -34,6 +34,10 @@ import (
 // The configuration cover the different components found in the Indexer
 // module.
 type Config struct {
+	// BaseModelName is the canonical base model identifier.
+	// Used to distinguish base-model requests from LoRA-adapted requests
+	// to ensure consistent key generation.
+	BaseModelName        string                        `json:"baseModelName"`
 	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
 	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
 	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
