@@ -33,7 +33,9 @@ import (
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 const (
@@ -122,6 +124,7 @@ func run(ctx context.Context) error {
 	logger.Info("Available endpoints:")
 	logger.Info("  - POST /score_completions - Score /v1/completions requests")
 	logger.Info("  - POST /score_chat_completions - Score /v1/chat_completions requests")
+	logger.Info("  - GET /metrics - Prometheus metrics endpoint")
 
 	// Wait for shutdown
 	<-ctx.Done()
@@ -184,7 +187,9 @@ func getKVCacheIndexerConfig() (*kvcache.Config, error) {
 
 	useExternalTokenization, err := strconv.ParseBool(os.Getenv(envExternalTokenization))
 	if err == nil && useExternalTokenization {
-		config.TokenizersPoolConfig.UdsTokenizerConfig = &tokenization.UdsTokenizerConfig{}
+		config.TokenizersPoolConfig.UdsTokenizerConfig = &tokenization.UdsTokenizerConfig{
+			SocketFile: "/tmp/tokenizer/tokenizer-uds.socket",
+		}
 		config.TokenizersPoolConfig.HFTokenizerConfig = nil
 	}
 
@@ -259,6 +264,10 @@ func setupUnifiedHTTPEndpoints(
 	logger := log.FromContext(ctx)
 
 	mux := http.NewServeMux()
+
+	mux.Handle("/metrics", promhttp.HandlerFor(ctrlmetrics.Registry, promhttp.HandlerOpts{
+		EnableOpenMetrics: true,
+	}))
 
 	mux.HandleFunc("/score_completions", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

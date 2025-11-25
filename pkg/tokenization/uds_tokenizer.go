@@ -177,6 +177,10 @@ func (u *UdsTokenizer) RenderChatTemplate(
 	return string(body), nil
 }
 
+func (u *UdsTokenizer) Type() string {
+	return "external-uds"
+}
+
 // executeRequest executes an HTTP request with timeout and retry logic.
 func (u *UdsTokenizer) executeRequest(req *http.Request,
 	timeout time.Duration, maxRetries int,
