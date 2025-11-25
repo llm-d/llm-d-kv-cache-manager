@@ -261,6 +261,8 @@ func parseHFCacheModelName(dirName string) (string, bool) {
 
 type tokenizerProvider interface {
 	get(modelName string) (*tokenizers.Tokenizer, error)
+
+	getFetchChatTemplateRequest(modelName string) (preprocessing.FetchChatTemplateRequest, error)
 }
 
 // CachedTokenizer implements the Tokenizer interface using
@@ -371,7 +373,7 @@ func (t *CachedTokenizer) RenderChatTemplate(
 	ctx := context.TODO()
 
 	if renderReq.ChatTemplate == "" {
-		req, err := getFetchChatTemplateRequest(modelName, t.tokenizerProvider)
+		req, err := t.tokenizerProvider.getFetchChatTemplateRequest(modelName)
 		if err != nil {
 			return "", fmt.Errorf("failed to create fetch chat template request: %w", err)
 		}
@@ -389,22 +391,6 @@ func (t *CachedTokenizer) RenderChatTemplate(
 	}
 
 	return res.RenderedChats[0], nil
-}
-
-func getFetchChatTemplateRequest(modelName string, t tokenizerProvider) (preprocessing.FetchChatTemplateRequest, error) {
-	var req preprocessing.FetchChatTemplateRequest
-	if localTokenizerProvider, ok := t.(*localTokenizerProvider); ok {
-		path, ok := localTokenizerProvider.cfg.ModelTokenizerMap[modelName]
-		if !ok {
-			return req, fmt.Errorf("tokenizer for model %q not found", modelName)
-		}
-		req.Model = path
-	}
-	if hfTokenizerProvider, ok := t.(*hfTokenizerProvider); ok {
-		req.Model = modelName
-		req.Token = hfTokenizerProvider.authToken
-	}
-	return req, nil
 }
 
 // Encode converts a string into token IDs.
@@ -447,6 +433,14 @@ func (p *hfTokenizerProvider) get(modelName string) (*tokenizers.Tokenizer, erro
 	return tokenizers.FromPretrained(modelName, p.cfgOpt)
 }
 
+func (p *hfTokenizerProvider) getFetchChatTemplateRequest(modelName string) (preprocessing.FetchChatTemplateRequest, error) {
+	return preprocessing.FetchChatTemplateRequest{
+		Model:       modelName,
+		Token:       p.authToken,
+		IsLocalPath: false,
+	}, nil
+}
+
 // localTokenizerProvider implements tokenizerProvider by loading tokenizers from local files.
 // It looks up the tokenizer file path in the configuration mapping and loads it from disk.
 type localTokenizerProvider struct {
@@ -462,6 +456,20 @@ func (p *localTokenizerProvider) get(modelName string) (*tokenizers.Tokenizer, e
 		return nil, fmt.Errorf("tokenizer for model %q not found", modelName)
 	}
 	return tokenizers.FromFile(path)
+}
+
+func (p *localTokenizerProvider) getFetchChatTemplateRequest(modelName string) (preprocessing.FetchChatTemplateRequest, error) {
+	req := preprocessing.FetchChatTemplateRequest{
+		IsLocalPath: true,
+	}
+
+	path, ok := p.cfg.ModelTokenizerMap[modelName]
+	if !ok {
+		return req, fmt.Errorf("tokenizer for model %q not found", modelName)
+	}
+	req.Model = filepath.Dir(path)
+
+	return req, nil
 }
 
 // CompositeTokenizer implements the Tokenizer interface with a fallback mechanism.

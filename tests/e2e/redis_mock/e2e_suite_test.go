@@ -19,14 +19,16 @@ package e2e
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
+	"github.com/go-logr/logr/testr"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/stretchr/testify/suite"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -53,7 +55,13 @@ type KVCacheSuite struct {
 
 // SetupTest initializes the mock Redis, tokenizer, config, and starts the indexer before each test.
 func (s *KVCacheSuite) SetupTest() {
+	// Initialize controller-runtime logger with test logger
+	// This will display logs in test output with -v flag
+	testLogger := testr.New(s.T())
+	log.SetLogger(testLogger)
+
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.ctx = log.IntoContext(s.ctx, testLogger)
 
 	var err error
 	s.Require().NoError(err)
@@ -64,8 +72,24 @@ func (s *KVCacheSuite) SetupTest() {
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.BlockSize = 4
 
-	s.tokenizer, err = tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	// Configure the indexer's tokenization pool to support "test-model"
+	// This is needed because GetPodScores uses the indexer's internal pool for tokenization
+	testModelPath, err := filepath.Abs("testdata/test-model")
 	s.Require().NoError(err)
+
+	s.config.TokenizersPoolConfig.LocalTokenizerConfig.AutoDiscoveryDir = filepath.Dir(testModelPath)
+
+	// Create a composite tokenizer for direct use in tests (not used by the indexer)
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(*s.config.TokenizersPoolConfig.LocalTokenizerConfig)
+	s.Require().NoError(err)
+
+	hfTokenizer, err := tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	s.Require().NoError(err)
+
+	// Use composite tokenizer: try local first, then fall back to HF
+	s.tokenizer = &tokenization.CompositeTokenizer{
+		Tokenizers: []tokenization.Tokenizer{localTokenizer, hfTokenizer},
+	}
 
 	s.tokensProcessor = kvblock.NewChunkedTokenDatabase(s.config.TokenProcessorConfig)
 
