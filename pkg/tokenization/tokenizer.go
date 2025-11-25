@@ -277,7 +277,7 @@ func NewCachedHFTokenizer(modelID string, config *HFTokenizerConfig) (Tokenizer,
 	tokenizerProvider := newHFTokenizerProvider(config)
 	tokenizer, err := tokenizerProvider.get(modelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tokenizer for model %q: %w", config.ModelID, err)
+		return nil, fmt.Errorf("failed to get tokenizer for model %q: %w", modelID, err)
 	}
 
 	chatTemplateRenderer := preprocessing.NewChatTemplatingProcessor()
