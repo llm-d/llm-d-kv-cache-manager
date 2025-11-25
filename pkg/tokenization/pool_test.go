@@ -135,7 +135,7 @@ func TestPool_RunIntegration(t *testing.T) {
 	config := &Config{
 		WorkersCount: 5,
 		HFTokenizerConfig: &HFTokenizerConfig{
-			TokenizersCacheDir: t.TempDir(),
+			Enabled: true, TokenizersCacheDir: t.TempDir(),
 		},
 		MinPrefixOverlapRatio: defaultMinPrefixOverlapRatio,
 	}

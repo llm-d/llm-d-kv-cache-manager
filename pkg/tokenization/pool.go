@@ -100,6 +100,12 @@ func NewTokenizationPool(modelName string, config *Config, store prefixstore.Ind
 		}
 	}
 
+	if !config.LocalTokenizerConfig.IsEnabled() &&
+		!config.UdsTokenizerConfig.IsEnabled() &&
+		!config.HFTokenizerConfig.IsEnabled() {
+		return nil, fmt.Errorf("at least one tokenizer config must be enabled")
+	}
+
 	tokenizers := make([]Tokenizer, 0, 3)
 
 	if config.LocalTokenizerConfig.IsEnabled() {
