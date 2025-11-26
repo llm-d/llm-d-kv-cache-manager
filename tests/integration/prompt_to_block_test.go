@@ -28,10 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed testdata/kv_event.json
+//go:embed testdata/kv_event_base.json
 var kvEventJSON []byte
 
-//go:embed testdata/kv_event_with_lora.json
+//go:embed testdata/kv_event_lora.json
 var kvEventWithLoraJSON []byte
 
 type KVEventData struct {
