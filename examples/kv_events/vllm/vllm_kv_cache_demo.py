@@ -11,18 +11,17 @@ os.environ["PYTHONHASHSEED"] = "42"
 os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+from huggingface_hub import snapshot_download
 from vllm import LLM
 from vllm.config.kv_events import KVEventsConfig
-from vllm.lora.request import LoRARequest
-from vllm.distributed.kv_events import (    
+from vllm.distributed.kv_events import (
     AllBlocksCleared,
     BlockRemoved,
     BlockStored,
     KVEventBatch,
 )
 from vllm.engine.arg_utils import EngineArgs
-from huggingface_hub import snapshot_download
-
+from vllm.lora.request import LoRARequest
 
 # Update these constants at the top of the file
 MODEL_NAME = "Qwen/Qwen3-0.6B"  # Small Qwen model that supports LoRA
