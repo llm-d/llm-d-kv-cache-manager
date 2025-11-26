@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import asyncio
+import json
 import os
 
 import zmq
@@ -117,7 +118,7 @@ async def listen_for_kv_event() -> list[BlockStored | BlockRemoved | AllBlocksCl
     return events
 
 
-async def main():
+async def main(with_lora: bool):
     # 0. Download LoRA adapter
     lora_path = snapshot_download(repo_id=LORA_MODEL)
 
@@ -142,25 +143,23 @@ async def main():
     Anarchism employs a diversity of tactics in order to meet its ideal ends which can be broadly separated into revolutionary and evolutionary tactics; there is significant overlap between the two, which are merely descriptive. Revolutionary tactics aim to bring down authority and state, having taken a violent turn in the past, while evolutionary tactics aim to prefigure what an anarchist society would be like. Anarchist thought, criticism, and praxis have played a part in diverse areas of human society. Criticism of anarchism include claims that it is internally inconsistent, violent, or utopian.
     """.strip()  # noqa: E501
 
-    print("\n--- Request 1: Base model (no LoRA) ---")
-    outputs = llm.generate([prompt])
-
-    print("\n--- Request 2: With Alice LoRA ---")
-    # outputs2 = llm.generate(
-    #     [prompt],
-    #     lora_request=LoRARequest(LORA_NAME, 1, lora_path)
-    # )
+    if with_lora:
+        print("\n--- Request With Alice LoRA ---")
+        outputs = llm.generate(
+            [prompt], lora_request=LoRARequest(LORA_NAME, 1, lora_path)
+        )
+    else:
+        print("\n--- Request to Base model (no LoRA) ---")
+        outputs = llm.generate([prompt])
 
     print("--- Inference Complete. Waiting for Listener Task ---")
+
     # 4. Wait for and get the results from the event task
     events = await event_task
 
     print(f"\nReceived {len(events)} KV cache events:")
     for event in events:
         print(f"  - {event}")
-
-    # save event as json:
-    import json
 
     events_json = {
         "prompt": prompt,
@@ -175,10 +174,13 @@ async def main():
         "medium": events[0].medium,
         "hash_seed": os.environ["PYTHONHASHSEED"],
     }
-    with open("kv_events.json", "w") as f:
+
+    fname = "kv_event_lora.json" if with_lora else "kv_event_base.json"
+    with open(fname, "w") as f:
         json.dump(events_json, f, indent=4)
     print("\nKV events saved to kv_events_lora.json")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(with_lora=False))
+    asyncio.run(main(with_lora=True))
