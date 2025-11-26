@@ -158,12 +158,17 @@ export CGO_LDFLAGS=$(CGO_LDFLAGS_FINAL)
 export PYTHONPATH=$(shell pwd)/pkg/preprocessing/chat_completions:$(VENV_DIR)/lib/python$(PYTHON_VERSION)/site-packages
 
 .PHONY: test
-test: unit-test ## Run all tests
+test: unit-test e2e-test ## Run all tests
 
 .PHONY: unit-test
 unit-test: download-tokenizer install-python-deps download-zmq ## Run unit tests
 	@printf "\033[33;1m==== Running unit tests ====\033[0m\n"
 	@go test -v ./pkg/...
+
+.PHONY: e2e-test
+e2e-test: download-tokenizer install-python-deps download-zmq ## Run end-to-end tests
+	@printf "\033[33;1m==== Running e2e tests ====\033[0m\n"
+	@go test -v ./tests/...
 
 .PHONY: bench
 bench: download-tokenizer install-python-deps download-zmq ## Run benchmarks
