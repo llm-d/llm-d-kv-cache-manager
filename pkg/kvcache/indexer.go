@@ -54,6 +54,7 @@ func NewDefaultConfig() (*Config, error) {
 	}
 
 	return &Config{
+		BaseModelName:        "",
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),

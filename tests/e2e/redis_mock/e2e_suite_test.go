@@ -61,10 +61,11 @@ func (s *KVCacheSuite) SetupTest() {
 	s.config, err = kvcache.NewDefaultConfig()
 	s.Require().NoError(err)
 
+	s.config.BaseModelName = defaultModelName
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.BlockSize = 4
 
-	s.tokenizer, err = tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	s.tokenizer, err = tokenization.NewCachedHFTokenizer(defaultModelName, s.config.TokenizersPoolConfig.HFTokenizerConfig)
 	s.Require().NoError(err)
 
 	s.tokensProcessor = kvblock.NewChunkedTokenDatabase(s.config.TokenProcessorConfig)
