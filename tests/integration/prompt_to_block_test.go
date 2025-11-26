@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//nolint:testpackage // need to test internal types
 package integration_test
 
 import (
@@ -49,6 +48,7 @@ type KVEventData struct {
 }
 
 func parseTestData(t *testing.T, jsonData []byte) *KVEventData {
+	t.Helper()
 	var eventData KVEventData
 	err := json.Unmarshal(jsonData, &eventData)
 	require.NoError(t, err, "failed to parse test data JSON")
