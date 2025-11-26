@@ -1,17 +1,5 @@
-# Copyright 2024 The HuggingFace Team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 import asyncio
 import os
 
@@ -25,17 +13,25 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from vllm import LLM
 from vllm.config.kv_events import KVEventsConfig
-from vllm.distributed.kv_events import (
+from vllm.lora.request import LoRARequest
+from vllm.distributed.kv_events import (    
     AllBlocksCleared,
     BlockRemoved,
     BlockStored,
     KVEventBatch,
 )
 from vllm.engine.arg_utils import EngineArgs
+from huggingface_hub import snapshot_download
 
-MODEL_NAME = "facebook/opt-125m"
-ZMQ_PORT = 5557
+
+# Update these constants at the top of the file
+MODEL_NAME = "Qwen/Qwen3-0.6B"  # Small Qwen model that supports LoRA
 ZMQ_TOPIC = f"kv@localhost@{MODEL_NAME}"
+ZMQ_PORT = 5557
+
+# LoRA configuration - using one from your working example
+LORA_MODEL = "charent/self_cognition_Alice"  # Working LoRA adapter
+LORA_NAME = "Alice"
 
 
 def patch_engine_args():
@@ -73,6 +69,10 @@ def create_llm():
         enforce_eager=True,
         disable_hybrid_kv_cache_manager=True,
         kv_events_config=kv_events_config,
+        block_size=16,
+        prefix_caching_hash_algo="sha256_cbor",
+        enable_lora=True,
+        max_model_len=4096,
     )
     return llm
 
@@ -98,7 +98,7 @@ async def listen_for_kv_event() -> list[BlockStored | BlockRemoved | AllBlocksCl
         # Use a timeout to prevent an infinite block if the publisher fails
         # The inference run should complete well within this time.
         _, seq_bytes, payload = await asyncio.wait_for(
-            sub.recv_multipart(), timeout=20.0
+            sub.recv_multipart(), timeout=60.0
         )
 
         # Decode and store the events
@@ -107,7 +107,7 @@ async def listen_for_kv_event() -> list[BlockStored | BlockRemoved | AllBlocksCl
         print(f"[ZMQ] Received {len(events)} events in the first batch.")
 
     except asyncio.TimeoutError:
-        print("[ZMQ] Timeout (20s) reached while waiting for the first event batch.")
+        print("[ZMQ] Timeout (60s) reached while waiting for the first event batch.")
     except Exception as e:
         print(f"[ZMQ] Listener: An error occurred while receiving ZMQ message: {e}")
 
@@ -119,6 +119,9 @@ async def listen_for_kv_event() -> list[BlockStored | BlockRemoved | AllBlocksCl
 
 
 async def main():
+    # 0. Download LoRA adapter
+    lora_path = snapshot_download(repo_id=LORA_MODEL)
+
     # 1. Start listening for events in background IMMEDIATELY
     # The listener runs in a task while the rest of main executes.
     event_task = asyncio.create_task(listen_for_kv_event())
@@ -133,15 +136,21 @@ async def main():
     llm = create_llm()
     print("--- LLM Initialization Complete ---")
 
+    # Update the prompts for better Qwen performance
     prompt = """
     Anarchism is a political philosophy and movement that is sceptical of authority and rejects all involuntary, coercive forms of hierarchy. Anarchism calls for the abolition of the state, which it holds to be unnecessary, undesirable, and harmful. As a historically left-wing movement, placed on the farthest left of the political spectrum, it is usually described alongside communalism and libertarian Marxism as the libertarian wing (libertarian socialism) of the socialist movement, and has a strong historical association with anti-capitalism and socialism.
     Humans lived in societies without formal hierarchies long before the establishment of formal states, realms, or empires. With the rise of organised hierarchical bodies, scepticism toward authority also rose. Although traces of anarchist thought are found throughout history, modern anarchism emerged from the Enlightenment. During the latter half of the 19th and the first decades of the 20th century, the anarchist movement flourished in most parts of the world and had a significant role in workers' struggles for emancipation. Various anarchist schools of thought formed during this period. Anarchists have taken part in several revolutions, most notably in the Paris Commune, the Russian Civil War and the Spanish Civil War, whose end marked the end of the classical era of anarchism. In the last decades of the 20th and into the 21st century, the anarchist movement has been resurgent once more.
     Anarchism employs a diversity of tactics in order to meet its ideal ends which can be broadly separated into revolutionary and evolutionary tactics; there is significant overlap between the two, which are merely descriptive. Revolutionary tactics aim to bring down authority and state, having taken a violent turn in the past, while evolutionary tactics aim to prefigure what an anarchist society would be like. Anarchist thought, criticism, and praxis have played a part in diverse areas of human society. Criticism of anarchism include claims that it is internally inconsistent, violent, or utopian.
     """.strip()  # noqa: E501
 
-    print("\n--- Request ---")
-    # 3. Run inference (this triggers the LLM to publish KV events)
-    _ = llm.generate([prompt])
+    print("\n--- Request 1: Base model (no LoRA) ---")
+    outputs = llm.generate([prompt])
+
+    print("\n--- Request 2: With Alice LoRA ---")
+    # outputs2 = llm.generate(
+    #     [prompt],
+    #     lora_request=LoRARequest(LORA_NAME, 1, lora_path)
+    # )
 
     print("--- Inference Complete. Waiting for Listener Task ---")
     # 4. Wait for and get the results from the event task
@@ -150,6 +159,26 @@ async def main():
     print(f"\nReceived {len(events)} KV cache events:")
     for event in events:
         print(f"  - {event}")
+
+    # save event as json:
+    import json
+
+    events_json = {
+        "prompt": prompt,
+        "model_name": MODEL_NAME,
+        "lora_path": LORA_MODEL,
+        "lora_name": events[0].lora_name,
+        "event_type": events[0].__class__.__name__,
+        "block_hashes": events[0].block_hashes,
+        "parent_block_hash": events[0].parent_block_hash,
+        "token_ids": events[0].token_ids,
+        "block_size": events[0].block_size,
+        "medium": events[0].medium,
+        "hash_seed": os.environ["PYTHONHASHSEED"],
+    }
+    with open("kv_events.json", "w") as f:
+        json.dump(events_json, f, indent=4)
+    print("\nKV events saved to kv_events_lora.json")
 
 
 if __name__ == "__main__":
