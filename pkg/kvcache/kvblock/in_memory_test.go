@@ -29,7 +29,9 @@ import (
 func createInMemoryIndexForTesting(t *testing.T) Index {
 	t.Helper()
 	cfg := DefaultInMemoryIndexConfig()
-	cfg.PodCacheSize = 100 // for testConcurrentOperations
+	// Set PodCacheSize to 500 to accommodate testConcurrentOperations
+	// (100 goroutines * 4 pods each = 400 max concurrent pods)
+	cfg.PodCacheSize = 500
 	index, err := NewInMemoryIndex(cfg)
 	require.NoError(t, err)
 	return index
