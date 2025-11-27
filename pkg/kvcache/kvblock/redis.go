@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -221,7 +220,7 @@ func (r *RedisIndex) Add(ctx context.Context, keys []Key, entries []PodEntry) er
 		redisKey := key.String()
 		for _, entry := range entries {
 			// Use HSet to add the pod identifier as a field in the hash
-			pipe.HSet(ctx, redisKey, entry.String(), time.Now().Format(time.RFC3339))
+			pipe.HSet(ctx, redisKey, entry.String(), "")
 		}
 	}
 
