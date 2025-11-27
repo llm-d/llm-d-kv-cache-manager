@@ -160,3 +160,9 @@ func (z *zmqSubscriber) runSubscriber(ctx context.Context) {
 		}
 	}
 }
+
+// Close gracefully shuts down the ZMQ subscriber.
+// Note: ZMQ socket cleanup is handled in runSubscriber.
+func (z *zmqSubscriber) Close() error {
+	return nil
+}
