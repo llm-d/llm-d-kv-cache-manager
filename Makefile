@@ -149,6 +149,15 @@ copr-fix:
 	@echo "Adding copyright headers..."
 	@docker run -i --rm -v $(shell pwd):/github/workspace apache/skywalking-eyes header fix
 
+clang:
+	@echo "Running clang-format..."
+	@find kv_connectors -type f \( \
+	    -name "*.cu" -o -name "*.cuh" -o \
+	    -name "*.cc" -o -name "*.cpp" -o \
+	    -name "*.hpp" -o -name "*.h" \
+	\) -exec clang-format -i {} +
+
+
 ##@ Development
 
 # Common environment variables for Go tests and builds
