@@ -679,6 +679,153 @@ func compareVLLMOutput(t *testing.T, renderedOutput, expectedVLLMOutput string) 
 	t.Fail() // Mark test as failed
 }
 
+// TestFetchChatTemplateLocalPath tests fetching chat templates from local paths.
+func TestFetchChatTemplateLocalPath(t *testing.T) {
+	wrapper := getGlobalWrapper()
+
+	// Get the path to the test model tokenizer
+	// The testdata directory is in pkg/tokenization/testdata
+	testModelPath := "../../tokenization/testdata/test-model"
+
+	request := preprocessing.FetchChatTemplateRequest{
+		Model:       testModelPath,
+		IsLocalPath: true,
+	}
+
+	// Fetch the chat template
+	template, templateVars, err := wrapper.FetchChatTemplate(context.Background(), request)
+
+	// Assertions
+	require.NoError(t, err, "FetchChatTemplate should not return an error for local path")
+	assert.NotEmpty(t, template, "ChatTemplate should not be empty")
+	assert.NotNil(t, templateVars, "ChatTemplate vars should not be nil")
+
+	// Verify the template contains expected content
+	assert.Contains(t, template, "messages", "ChatTemplate should contain messages variable")
+	t.Logf("Fetched local template: %s", template)
+	t.Logf("Template vars: %+v", templateVars)
+}
+
+// TestRenderChatTemplateWithLocalTemplate tests rendering with a locally fetched template.
+func TestRenderChatTemplateWithLocalTemplate(t *testing.T) {
+	wrapper := getGlobalWrapper()
+
+	// Get the path to the test model tokenizer
+	testModelPath := "../../tokenization/testdata/test-model"
+
+	// First, fetch the template
+	fetchRequest := preprocessing.FetchChatTemplateRequest{
+		Model:       testModelPath,
+		IsLocalPath: true,
+	}
+
+	template, templateVars, err := wrapper.FetchChatTemplate(context.Background(), fetchRequest)
+	require.NoError(t, err, "FetchChatTemplate should not return an error")
+
+	// Now render a conversation using the fetched template
+	renderRequest := &preprocessing.RenderJinjaTemplateRequest{
+		Conversations: []preprocessing.ChatMessage{
+			{Role: "user", Content: "Hello from local tokenizer!"},
+			{Role: "assistant", Content: "Hi! I'm using a locally loaded template."},
+		},
+		ChatTemplate:       template,
+		ChatTemplateKWArgs: templateVars,
+	}
+
+	response, err := wrapper.RenderChatTemplate(context.Background(), renderRequest)
+	require.NoError(t, err, "RenderChatTemplate should not return an error")
+	assert.NotNil(t, response, "Response should not be nil")
+	assert.NotEmpty(t, response.RenderedChats, "Rendered chats should not be empty")
+
+	// Verify the rendered content
+	rendered := response.RenderedChats[0]
+	assert.Contains(t, rendered, "Hello from local tokenizer!", "Rendered content should contain user message")
+	assert.Contains(t, rendered, "Hi! I'm using a locally loaded template.", "Rendered content should contain assistant message")
+
+	t.Logf("Rendered chat with local template:\n%s", rendered)
+}
+
+// TestFetchChatTemplateLocalPathCaching tests that local templates are cached properly.
+func TestFetchChatTemplateLocalPathCaching(t *testing.T) {
+	wrapper := getGlobalWrapper()
+
+	// Clear caches first
+	err := preprocessing.ClearCaches(context.Background())
+	require.NoError(t, err, "Failed to clear caches")
+
+	testModelPath := "../../tokenization/testdata/test-model"
+	request := preprocessing.FetchChatTemplateRequest{
+		Model:       testModelPath,
+		IsLocalPath: true,
+	}
+
+	// First call - cache miss
+	start := time.Now()
+	template1, vars1, err := wrapper.FetchChatTemplate(context.Background(), request)
+	duration1 := time.Since(start)
+	require.NoError(t, err, "First call should not return an error")
+
+	// Second call - cache hit
+	start = time.Now()
+	template2, vars2, err := wrapper.FetchChatTemplate(context.Background(), request)
+	duration2 := time.Since(start)
+	require.NoError(t, err, "Second call should not return an error")
+
+	// Verify results are identical
+	assert.Equal(t, template1, template2, "Cached and non-cached templates should be identical")
+	assert.Equal(t, vars1, vars2, "Cached and non-cached vars should be identical")
+
+	// Cache hit should be faster
+	t.Logf("First call (cache miss): %v, Second call (cache hit): %v, Speedup: %.1fx",
+		duration1, duration2, float64(duration1)/float64(duration2))
+	assert.Less(t, duration2, duration1, "Cache hit should be faster than cache miss")
+}
+
+// TestFetchChatTemplateLocalPathWithFile tests loading from a specific tokenizer.json file path.
+func TestFetchChatTemplateLocalPathWithFile(t *testing.T) {
+	wrapper := getGlobalWrapper()
+
+	// Test with the full path to tokenizer.json
+	//nolint:gosec // This is a test file path, not a credential
+	testTokenizerPath := "../../tokenization/testdata/test-model/tokenizer.json"
+
+	request := preprocessing.FetchChatTemplateRequest{
+		Model:       testTokenizerPath,
+		IsLocalPath: true,
+	}
+
+	// Fetch the chat template - should extract directory and load from there
+	template, templateVars, err := wrapper.FetchChatTemplate(context.Background(), request)
+
+	// Assertions
+	require.NoError(t, err, "FetchChatTemplate should handle file path and extract directory")
+	assert.NotEmpty(t, template, "ChatTemplate should not be empty")
+	assert.NotNil(t, templateVars, "ChatTemplate vars should not be nil")
+	assert.Contains(t, template, "messages", "ChatTemplate should contain messages variable")
+
+	t.Logf("Fetched template from file path: %s", template)
+}
+
+// TestFetchChatTemplateLocalPathNonExistent tests error handling for non-existent local paths.
+func TestFetchChatTemplateLocalPathNonExistent(t *testing.T) {
+	wrapper := getGlobalWrapper()
+
+	request := preprocessing.FetchChatTemplateRequest{
+		Model:       "/non/existent/path",
+		IsLocalPath: true,
+	}
+
+	// This should return an error
+	template, templateVars, err := wrapper.FetchChatTemplate(context.Background(), request)
+
+	// Assertions
+	assert.Error(t, err, "FetchChatTemplate should return an error for non-existent path")
+	assert.Empty(t, template, "ChatTemplate should be empty on error")
+	assert.Nil(t, templateVars, "ChatTemplate vars should be nil on error")
+
+	t.Logf("Expected error for non-existent path: %v", err)
+}
+
 // TestMain provides a controlled setup and teardown for tests in this package.
 func TestMain(m *testing.M) {
 	// Create a new processor to handle initialization.

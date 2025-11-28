@@ -129,14 +129,15 @@ def render_jinja_template(request_json):
 
 def get_model_chat_template(request_json):
     """
-    Load a tokenizer from Hugging Face Hub and return its chat template string and required variables.
+    Load a tokenizer from Hugging Face Hub or local path and return its chat template string and required variables.
     Args:
         request_json (str): JSON string containing the request parameters:
-            - model (str): The model ID or path.
+            - model (str): The model ID or path (HF model ID, local directory path, or path to tokenizer file).
             - chat_template (str, optional): The template name or string to use.
             - tools (list[dict], optional): Tool schemas to pass.
             - revision (str, optional): Model revision.
             - token (str, optional): Hugging Face token for private models.
+            - is_local_path (bool, optional): Whether the model is a local path (default: False).
     Returns:
         str: JSON string containing 'template' and 'kwargs' keys, aligning with the Go response struct.
     """
@@ -152,13 +153,14 @@ def get_model_chat_template(request_json):
     tools = request.get("tools")
     revision = request.get("revision")
     token = request.get("token")
+    is_local_path = request.get("is_local_path", False)
 
     if not model_name:
         print("[Python] get_model_chat_template ERROR - model_name is required")
         raise ValueError("model_name is required in request")
 
     # Create cache key
-    cache_key = f"{model_name}:{revision or 'main'}:{token or 'none'}"
+    cache_key = f"{model_name}:{revision or 'main'}:{token or 'none'}:{is_local_path}"
 
     # Check cache first
     lock = _get_cache_lock()
@@ -172,9 +174,26 @@ def get_model_chat_template(request_json):
 
     # Import the modules we need
     from transformers import AutoTokenizer
+    import os
 
-    # Load from Hugging Face
-    tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision, token=token, trust_remote_code=True)
+    # Determine if we're loading from local path or HuggingFace
+    if is_local_path:
+        # For local paths, model_name can be either a directory containing tokenizer files
+        # or a path to a specific tokenizer file. Ensure we extract the directory if needed.
+        if os.path.isfile(model_name):
+            # If it's a file path (tokenizer.json), get the directory
+            tokenizer_dir = os.path.dirname(model_name)
+        else:
+            # If it's already a directory, use it directly
+            tokenizer_dir = model_name
+
+        print(f"[Python] Loading tokenizer from local path: {tokenizer_dir}")
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, local_files_only=True, trust_remote_code=True)
+    else:
+        # Load from Hugging Face
+        print(f"[Python] Loading tokenizer from HuggingFace: {model_name}")
+        tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision, token=token, trust_remote_code=True)
+
     template = tokenizer.chat_template if chat_template is None else chat_template
 
     # Collect special tokens
