@@ -19,7 +19,6 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.uber.org/multierr v1.11.0
 	golang.org/x/net v0.38.0
-	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.5
 	k8s.io/apimachinery v0.33.0
