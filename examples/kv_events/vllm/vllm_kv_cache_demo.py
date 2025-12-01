@@ -1,5 +1,17 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+# Copyright 2025 The llm-d Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import asyncio
 import json
 import os
@@ -140,12 +152,10 @@ async def main(with_lora: bool):
 
     if with_lora:
         print("\n--- Request With Alice LoRA ---")
-        outputs = llm.generate(
-            [prompt], lora_request=LoRARequest(LORA_NAME, 1, lora_path)
-        )
+        llm.generate([prompt], lora_request=LoRARequest(LORA_NAME, 1, lora_path))
     else:
         print("\n--- Request to Base model (no LoRA) ---")
-        outputs = llm.generate([prompt])
+        llm.generate([prompt])
 
     print("--- Inference Complete. Waiting for Listener Task ---")
 
