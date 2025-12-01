@@ -24,12 +24,9 @@ from vllm.distributed.kv_events import (
 from vllm.engine.arg_utils import EngineArgs
 from vllm.lora.request import LoRARequest
 
-# Update these constants at the top of the file
 MODEL_NAME = "Qwen/Qwen3-0.6B"  # Small Qwen model that supports LoRA
 ZMQ_TOPIC = f"kv@localhost@{MODEL_NAME}"
 ZMQ_PORT = 5557
-
-# LoRA configuration - using one from your working example
 LORA_MODEL = "charent/self_cognition_Alice"  # Working LoRA adapter
 LORA_NAME = "Alice"
 
@@ -57,7 +54,6 @@ def create_llm():
     kv_events_config = KVEventsConfig(
         enable_kv_cache_events=True,
         publisher="zmq",
-        # The publisher endpoint is where the listener connects
         endpoint=f"tcp://*:{ZMQ_PORT}",
         topic=ZMQ_TOPIC,
     )
@@ -136,7 +132,6 @@ async def main(with_lora: bool):
     llm = create_llm()
     print("--- LLM Initialization Complete ---")
 
-    # Update the prompts for better Qwen performance
     prompt = """
     Anarchism is a political philosophy and movement that is sceptical of authority and rejects all involuntary, coercive forms of hierarchy. Anarchism calls for the abolition of the state, which it holds to be unnecessary, undesirable, and harmful. As a historically left-wing movement, placed on the farthest left of the political spectrum, it is usually described alongside communalism and libertarian Marxism as the libertarian wing (libertarian socialism) of the socialist movement, and has a strong historical association with anti-capitalism and socialism.
     Humans lived in societies without formal hierarchies long before the establishment of formal states, realms, or empires. With the rise of organised hierarchical bodies, scepticism toward authority also rose. Although traces of anarchist thought are found throughout history, modern anarchism emerged from the Enlightenment. During the latter half of the 19th and the first decades of the 20th century, the anarchist movement flourished in most parts of the world and had a significant role in workers' struggles for emancipation. Various anarchist schools of thought formed during this period. Anarchists have taken part in several revolutions, most notably in the Paris Commune, the Russian Civil War and the Spanish Civil War, whose end marked the end of the classical era of anarchism. In the last decades of the 20th and into the 21st century, the anarchist movement has been resurgent once more.
