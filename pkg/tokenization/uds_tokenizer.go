@@ -222,11 +222,11 @@ func (u *UdsTokenizer) executeRequest(
 	return nil, lastErr
 }
 
-// processResponse handles the HTTP response, checking status code and reading the body
+// processResponse handles the HTTP response, checking status code and reading the body.
 func (u *UdsTokenizer) processResponse(resp *http.Response, cancel context.CancelFunc) ([]byte, error) {
 	defer cancel()
 
-	// For 200 status codes, don't retry
+	// For 200 status codes, don't retry.
 	if resp.StatusCode == http.StatusOK {
 		// Read the response before canceling the context
 		body, readErr := io.ReadAll(resp.Body)
