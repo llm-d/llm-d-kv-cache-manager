@@ -116,23 +116,13 @@ func (u *UdsTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.O
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
+	respBody, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+		return nil, nil, fmt.Errorf("tokenize request failed: %w", err)
 	}
 
 	var tokenized TokenizedInput
-	if err := json.Unmarshal(body, &tokenized); err != nil {
+	if err := json.Unmarshal(respBody, &tokenized); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -159,22 +149,11 @@ func (u *UdsTokenizer) RenderChatTemplate(
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
+	respBody, err := u.executeRequest(req, defaultTimeout, defaultMaxRetries)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute request: %w", err)
+		return "", fmt.Errorf("chat-template request failed: %w", err)
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return string(body), nil
+	return string(respBody), nil
 }
 
 func (u *UdsTokenizer) Type() string {
@@ -182,9 +161,11 @@ func (u *UdsTokenizer) Type() string {
 }
 
 // executeRequest executes an HTTP request with timeout and retry logic.
-func (u *UdsTokenizer) executeRequest(req *http.Request,
-	timeout time.Duration, maxRetries int,
-) (*http.Response, error) {
+func (u *UdsTokenizer) executeRequest(
+	req *http.Request,
+	timeout time.Duration,
+	maxRetries int,
+) ([]byte, error) {
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
@@ -193,28 +174,38 @@ func (u *UdsTokenizer) executeRequest(req *http.Request,
 	}
 
 	// Try the request up to maxRetries+1 times
-	var lastErr error
 	delay := initialRetryDelay
+	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Create a context with timeout
 		ctx, cancel := context.WithTimeout(req.Context(), timeout)
-		req = req.WithContext(ctx)
+		reqWithCtx := req.WithContext(ctx)
 
 		// Execute the request
-		resp, err := u.httpClient.Do(req)
-		lastErr = err
-
-		cancel()
+		resp, err := u.httpClient.Do(reqWithCtx)
 
 		// If no error, check status code
 		if err == nil {
-			// For non-5xx status codes, don't retry
-			if resp.StatusCode < 500 {
-				return resp, nil
+			// For 200 status codes, don't retry
+			if resp.StatusCode == http.StatusOK {
+				// Read the response before canceling the context
+				body, readErr := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				cancel()
+				if readErr == nil {
+					return body, nil
+				}
+				lastErr = fmt.Errorf("failed to read response body: %w", readErr)
+			} else {
+				lastErr = fmt.Errorf("server returned status %d", resp.StatusCode)
+				// Close the response body before retrying
+				resp.Body.Close()
+				cancel()
 			}
-			// Close the response body before retrying
-			resp.Body.Close()
+		} else {
+			lastErr = err
+			cancel()
 		}
 
 		// If this was the last attempt, break
@@ -227,13 +218,17 @@ func (u *UdsTokenizer) executeRequest(req *http.Request,
 		delay *= 2 // Exponential backoff
 
 		// Add some jitter to prevent thundering herd
-		jitter, err := rand.Int(rand.Reader, big.NewInt(int64(delay/2)))
-		if err != nil {
+		jitter, randErr := rand.Int(rand.Reader, big.NewInt(int64(delay/2)))
+		if randErr != nil {
 			// Fallback to using the full delay without jitter
 			jitter = big.NewInt(int64(delay / 2))
 		}
 		delay += time.Duration(jitter.Int64())
 	}
-
-	return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("request failed after %d attempts", maxRetries+1)
+	} else {
+		lastErr = fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
+	}
+	return nil, lastErr
 }
