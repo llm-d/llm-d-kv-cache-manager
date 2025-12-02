@@ -185,24 +185,13 @@ func (u *UdsTokenizer) executeRequest(
 		// Execute the request
 		resp, err := u.httpClient.Do(reqWithCtx)
 
-		// If no error, check status code
+		// Process the response if no error occurred
 		if err == nil {
-			// For 200 status codes, don't retry
-			if resp.StatusCode == http.StatusOK {
-				// Read the response before canceling the context
-				body, readErr := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				cancel()
-				if readErr == nil {
-					return body, nil
-				}
-				lastErr = fmt.Errorf("failed to read response body: %w", readErr)
-			} else {
-				lastErr = fmt.Errorf("server returned status %d", resp.StatusCode)
-				// Close the response body before retrying
-				resp.Body.Close()
-				cancel()
+			body, processErr := u.processResponse(resp, cancel)
+			if processErr == nil {
+				return body, nil
 			}
+			lastErr = processErr
 		} else {
 			lastErr = err
 			cancel()
@@ -231,4 +220,25 @@ func (u *UdsTokenizer) executeRequest(
 		lastErr = fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
 	}
 	return nil, lastErr
+}
+
+// processResponse handles the HTTP response, checking status code and reading the body
+func (u *UdsTokenizer) processResponse(resp *http.Response, cancel context.CancelFunc) ([]byte, error) {
+	defer cancel()
+
+	// For 200 status codes, don't retry
+	if resp.StatusCode == http.StatusOK {
+		// Read the response before canceling the context
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr == nil {
+			return body, nil
+		}
+		return nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	// For non-200 status codes, close the response body and return an error
+	errorMsg := fmt.Errorf("server returned status %d", resp.StatusCode)
+	resp.Body.Close()
+	return nil, errorMsg
 }
