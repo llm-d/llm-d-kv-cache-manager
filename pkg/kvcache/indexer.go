@@ -138,7 +138,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 ) (map[string]float64, error) {
 	// Start tracing span for main operation
 	tracer := telemetry.Tracer()
-	ctx, span := tracer.Start(ctx, "kvcache.manager.get_scores",
+	ctx, span := tracer.Start(ctx, "llm_d.kv_cache_manager.get_scores",
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
@@ -146,7 +146,8 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	// Set initial attributes
 	span.SetAttributes(
 		attribute.String("gen_ai.request.model", modelName),
-		attribute.Int("kvcache.pod_count", len(podIdentifiers)),
+		attribute.Int("llm_d.kv_cache_manager.pod_count", len(podIdentifiers)),
+		attribute.StringSlice("llm_d.kv_cache_manager.considered_pods", podIdentifiers),
 	)
 
 	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
@@ -158,13 +159,13 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
 	if len(blockKeys) == 0 {
 		traceLogger.Info("no block keys found, returning empty scores")
-		span.SetAttributes(attribute.Int("kvcache.block_keys.count", 0))
+		span.SetAttributes(attribute.Int("llm_d.kv_cache_manager.block_keys.count", 0))
 		span.SetStatus(codes.Ok, "")
 		//nolint:nilnil // no need to return an error
 		return nil, nil
 	}
 
-	span.SetAttributes(attribute.Int("kvcache.block_keys.count", len(blockKeys)))
+	span.SetAttributes(attribute.Int("llm_d.kv_cache_manager.block_keys.count", len(blockKeys)))
 	traceLogger.Info("found tokens", "tokens", tokens, "block-keys", blockKeys)
 
 	// 3. query kvblock indexer for pods (with child span)
@@ -182,7 +183,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	for _, pods := range keyToPods {
 		totalBlocksAvailable += len(pods)
 	}
-	span.SetAttributes(attribute.Int("kvcache.total_blocks_available", totalBlocksAvailable))
+	span.SetAttributes(attribute.Int("llm_d.kv_cache_manager.total_blocks_available", totalBlocksAvailable))
 
 	// 4. score pods (with child span)
 	podScores, err := k.scoreWithSpan(ctx, blockKeys, keyToPods)
@@ -195,9 +196,11 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 
 	// Calculate hit ratio (pods with non-zero scores / total pods)
 	podsWithHits := 0
-	for _, score := range podScores {
+	podsWithHitsList := []string{}
+	for pod, score := range podScores {
 		if score > 0 {
 			podsWithHits++
+			podsWithHitsList = append(podsWithHitsList, pod)
 		}
 	}
 	hitRatio := 0.0
@@ -205,8 +208,9 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 		hitRatio = float64(podsWithHits) / float64(len(podIdentifiers))
 	}
 	span.SetAttributes(
-		attribute.Float64("kvcache.hit_ratio", hitRatio),
-		attribute.Int("kvcache.pods_with_hits", podsWithHits),
+		attribute.Float64("llm_d.kv_cache_manager.hit_ratio", hitRatio),
+		attribute.Int("llm_d.kv_cache_manager.pods_with_hits", podsWithHits),
+		attribute.StringSlice("llm_d.kv_cache_manager.pods_with_hits_list", podsWithHitsList),
 	)
 
 	span.SetStatus(codes.Ok, "")
@@ -216,14 +220,14 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 // lookupWithSpan wraps kvBlockIndex.Lookup with a tracing span
 func (k *Indexer) lookupWithSpan(ctx context.Context, blockKeys []kvblock.Key, podSet sets.Set[string]) (map[kvblock.Key][]kvblock.PodEntry, error) {
 	tracer := telemetry.Tracer()
-	ctx, span := tracer.Start(ctx, "kvcache.storage.lookup",
+	ctx, span := tracer.Start(ctx, "llm_d.kv_cache_manager.storage.lookup",
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 	defer span.End()
 
 	span.SetAttributes(
-		attribute.Int("kvcache.lookup.block_count", len(blockKeys)),
-		attribute.Int("kvcache.lookup.pod_filter_count", podSet.Len()),
+		attribute.Int("llm_d.kv_cache_manager.lookup.block_count", len(blockKeys)),
+		attribute.Int("llm_d.kv_cache_manager.lookup.pod_filter_count", podSet.Len()),
 	)
 
 	result, err := k.kvBlockIndex.Lookup(ctx, blockKeys, podSet)
@@ -243,8 +247,8 @@ func (k *Indexer) lookupWithSpan(ctx context.Context, blockKeys []kvblock.Key, p
 	cacheHit := blocksFound > 0
 
 	span.SetAttributes(
-		attribute.Bool("kvcache.lookup.cache_hit", cacheHit),
-		attribute.Int("kvcache.lookup.blocks_found", blocksFound),
+		attribute.Bool("llm_d.kv_cache_manager.lookup.cache_hit", cacheHit),
+		attribute.Int("llm_d.kv_cache_manager.lookup.blocks_found", blocksFound),
 	)
 
 	span.SetStatus(codes.Ok, "")
@@ -254,14 +258,14 @@ func (k *Indexer) lookupWithSpan(ctx context.Context, blockKeys []kvblock.Key, p
 // scoreWithSpan wraps kvBlockScorer.Score with a tracing span
 func (k *Indexer) scoreWithSpan(ctx context.Context, keys []kvblock.Key, keyToPods map[kvblock.Key][]kvblock.PodEntry) (map[string]float64, error) {
 	tracer := telemetry.Tracer()
-	ctx, span := tracer.Start(ctx, "kvcache.scorer.compute",
+	ctx, span := tracer.Start(ctx, "llm_d.kv_cache_manager.scorer.compute",
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 	defer span.End()
 
 	span.SetAttributes(
-		attribute.String("kvcache.scorer.algorithm", string(k.kvBlockScorer.Strategy())),
-		attribute.Int("kvcache.scorer.key_count", len(keys)),
+		attribute.String("llm_d.kv_cache_manager.scorer.algorithm", string(k.kvBlockScorer.Strategy())),
+		attribute.Int("llm_d.kv_cache_manager.scorer.key_count", len(keys)),
 	)
 
 	scores, err := k.kvBlockScorer.Score(keys, keyToPods)
@@ -284,9 +288,9 @@ func (k *Indexer) scoreWithSpan(ctx context.Context, keys []kvblock.Key, keyToPo
 		avgScore := totalScore / float64(len(scores))
 
 		span.SetAttributes(
-			attribute.Float64("kvcache.score.max", maxScore),
-			attribute.Float64("kvcache.score.avg", avgScore),
-			attribute.Int("kvcache.scorer.pods_scored", len(scores)),
+			attribute.Float64("llm_d.kv_cache_manager.score.max", maxScore),
+			attribute.Float64("llm_d.kv_cache_manager.score.avg", avgScore),
+			attribute.Int("llm_d.kv_cache_manager.scorer.pods_scored", len(scores)),
 		)
 	}
 
