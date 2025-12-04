@@ -42,12 +42,13 @@ func TestCostAwareIndexBehavior(t *testing.T) {
 
 func TestCostAwareIndexSize(t *testing.T) {
 	// first key
-	key1 := Key{ModelName: "test-model", ChunkHash: 111}
+	engineKey1 := Key{ModelName: "test-model", ChunkHash: 32490241}
+	requestKey1 := Key{ModelName: "test-model", ChunkHash: 18986637}
 	entry1 := PodEntry{PodIdentifier: "pod1", DeviceTier: "gpu"}
 
 	costPodCache := &CostPodCache{}
 	costPodCache.Add(entry1)
-	cost := costPodCache.CalculateByteSize(key1.String())
+	cost := costPodCache.CalculateByteSize(requestKey1.String())
 
 	// Test with small size to verify eviction
 	cfg := DefaultCostAwareMemoryIndexConfig()
@@ -58,27 +59,29 @@ func TestCostAwareIndexSize(t *testing.T) {
 
 	ctx := t.Context()
 
-	err = index.Add(ctx, []Key{key1}, []PodEntry{entry1})
+	err = index.Add(ctx, []Key{engineKey1}, []Key{requestKey1}, []PodEntry{entry1})
 	assert.NoError(t, err)
 
 	// Add second key
-	key2 := Key{ModelName: "test-model", ChunkHash: 222}
-	err = index.Add(ctx, []Key{key2}, []PodEntry{{PodIdentifier: "pod2", DeviceTier: "gpu"}})
+	engineKey2 := Key{ModelName: "test-model", ChunkHash: 48712468}
+	requestKey2 := Key{ModelName: "test-model", ChunkHash: 87654321}
+	err = index.Add(ctx, []Key{engineKey2}, []Key{requestKey2}, []PodEntry{{PodIdentifier: "pod2", DeviceTier: "gpu"}})
 	require.NoError(t, err)
 
 	// Add third key - should evict the first one due to LRU
-	key3 := Key{ModelName: "test-model", ChunkHash: 333}
-	err = index.Add(ctx, []Key{key3}, []PodEntry{{PodIdentifier: "pod3", DeviceTier: "cpu"}})
+	engineKey3 := Key{ModelName: "test-model", ChunkHash: 96187092}
+	requestKey3 := Key{ModelName: "test-model", ChunkHash: 56789012}
+	err = index.Add(ctx, []Key{engineKey3}, []Key{requestKey3}, []PodEntry{{PodIdentifier: "pod3", DeviceTier: "cpu"}})
 	require.NoError(t, err)
 
 	// Lookup should only return the last two keys
-	podsPerKey, err := index.Lookup(ctx, []Key{key1, key2, key3}, nil)
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey1, requestKey2, requestKey3}, nil)
 	require.NoError(t, err)
 
-	assert.Len(t, podsPerKey, 1) // Only key3 should be present
-	assert.Len(t, podsPerKey[key3], 1)
+	assert.Len(t, podsPerKey, 1) // Only requestKey3 should be present
+	assert.Len(t, podsPerKey[requestKey3], 1)
 
-	assert.Contains(t, podsPerKey[key3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
+	assert.Contains(t, podsPerKey[requestKey3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }
 
 func TestSizeHumanize(t *testing.T) {
