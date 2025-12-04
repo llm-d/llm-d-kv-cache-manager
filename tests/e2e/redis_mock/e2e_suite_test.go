@@ -102,22 +102,26 @@ func (s *KVCacheSuite) SetupTest() {
 	go s.indexer.Run(s.ctx)
 }
 
-// promptToKeys tokenizes a prompt and returns its corresponding KV block keys.
-func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
+// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys.
+func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string) ([]kvblock.Key, []kvblock.Key) {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, model)
-	s.Require().NotEmpty(blockKeys)
+	requestKeys := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
+	s.Require().NotEmpty(requestKeys)
 
-	return blockKeys
+	engineKeys := s.tokensProcessor.TokensToKVBlockKeys(&kvblock.Key{ModelName: model, ChunkHash: 1}, tokens, model)
+	s.Require().NotEmpty(engineKeys)
+
+	return engineKeys, requestKeys
 }
 
-func (s *KVCacheSuite) addEntriesToIndex(blockKeys []kvblock.Key, podList []string) {
-	s.Require().NotEmpty(blockKeys)
+func (s *KVCacheSuite) addEntriesToIndex(engineKeys []kvblock.Key, requestKeys []kvblock.Key, podList []string) {
+	s.Require().NotEmpty(engineKeys)
+	s.Require().NotEmpty(requestKeys)
 
 	// Add entries to the indexer
-	err := s.kvBlockIndex.Add(s.ctx, blockKeys, utils.SliceMap(podList, func(pod string) kvblock.PodEntry {
+	err := s.kvBlockIndex.Add(s.ctx, engineKeys, requestKeys, utils.SliceMap(podList, func(pod string) kvblock.PodEntry {
 		return kvblock.PodEntry{
 			PodIdentifier: pod,
 			DeviceTier:    "gpu",
