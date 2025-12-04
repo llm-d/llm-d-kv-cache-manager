@@ -111,8 +111,8 @@ func (s *KVCacheSuite) TestCacheHit() {
 	prompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 	fakePodList := []string{s.Pod1IP}
 
-	blockKeys := s.promptToKeys(prompt, defaultModelName)
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	engineKeys, requestKeys := s.promptToEngineAndRequestKeys(prompt, defaultModelName)
+	s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 
 	pods, err := s.indexer.GetPodScores(s.ctx, nil, prompt, defaultModelName, fakePodList)
 	s.Require().NoError(err)
@@ -139,7 +139,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	midPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
 	shortPrompt := "lorem ipsum dolor sit amet, consectetur adipiscing elit."
 
-	fullPromptBlockKeys := s.promptToKeys(fullPrompt, defaultModelName)
+	fullPromptEngineKeys, fullPromptRequestKeys := s.promptToEngineAndRequestKeys(fullPrompt, defaultModelName)
 	fakePodList := []string{s.Pod1IP}
 
 	// Test 1: Full prompt (no match expected)
@@ -148,7 +148,7 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
 
-	s.addEntriesToIndex(fullPromptBlockKeys, fakePodList)
+	s.addEntriesToIndex(fullPromptEngineKeys, fullPromptRequestKeys, fakePodList)
 
 	// Test 2: mid-length prompt(should return a match)
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, defaultModelName, []string{s.Pod1IP})
@@ -163,8 +163,8 @@ func (s *KVCacheSuite) TestPrefixReduction() {
 
 	s.Len(pods, len(fakePodList), "expected pod scores length to match candidate pods")
 	s.T().Logf("Received pod scores: %+v", pods)
-	shortPromptBlockKeys := s.promptToKeys(shortPrompt, defaultModelName)
-	s.Equal(int(pods[s.Pod1IP]), len(shortPromptBlockKeys), "all short-prompt block keys should have been indexed")
+	_, shortPromptRequestKeys := s.promptToEngineAndRequestKeys(shortPrompt, defaultModelName)
+	s.Equal(int(pods[s.Pod1IP]), len(shortPromptRequestKeys), "all short-prompt block keys should have been indexed")
 }
 
 // TestPrefixExpansion tests that prompts longer than the cached prefix still return partial match scores.
@@ -183,25 +183,25 @@ func (s *KVCacheSuite) TestPrefixExpansion() {
 	s.T().Logf("Received pod scores: %+v", pods)
 	s.Empty(pods, "expected no pod scores")
 
-	shortPromptBlockKeys := s.promptToKeys(shortPrompt, modelName)
-	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
+	shortPromptEngineKeys, shortPromptRequestKeys := s.promptToEngineAndRequestKeys(shortPrompt, modelName)
+	s.addEntriesToIndex(shortPromptEngineKeys, shortPromptRequestKeys, fakePodList)
 
 	// Test 2: mid prompt
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(int(pods[s.Pod1IP]), len(shortPromptBlockKeys), "expected pod score to equal number of short prompt block keys")
+	s.Equal(int(pods[s.Pod1IP]), len(shortPromptRequestKeys), "expected pod score to equal number of short prompt block keys")
 
-	midPromptBlockKeys := s.promptToKeys(midPrompt, modelName)
-	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
+	midPromptEngineKeys, midPromptRequestKeys := s.promptToEngineAndRequestKeys(midPrompt, modelName)
+	s.addEntriesToIndex(midPromptEngineKeys, midPromptRequestKeys, fakePodList)
 
 	// Test 3: full prompt
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, fullPrompt, modelName, []string{s.Pod1IP})
 	s.Require().NoError(err)
 
 	s.T().Logf("Received pod scores: %+v", pods)
-	s.Equal(int(pods[s.Pod1IP]), len(midPromptBlockKeys), "expected pod score to equal number of mid prompt block keys")
+	s.Equal(int(pods[s.Pod1IP]), len(midPromptRequestKeys), "expected pod score to equal number of mid prompt block keys")
 }
 
 func (s *KVCacheSuite) TestLongPrefixExpansion() {
@@ -223,8 +223,8 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.Empty(pods, "expected no pod scores")
 
 	// Add entries to the index for the short prompt
-	shortPromptBlockKeys := s.promptToKeys(shortPrompt, modelName)
-	s.addEntriesToIndex(shortPromptBlockKeys, fakePodList)
+	shortPromptEngineKeys, shortPromptRequestKeys := s.promptToEngineAndRequestKeys(shortPrompt, modelName)
+	s.addEntriesToIndex(shortPromptEngineKeys, shortPromptRequestKeys, fakePodList)
 
 	// Test 2: mid prompt (should return partial match if indexer picks it up)
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, midPrompt, modelName, []string{s.Pod1IP})
@@ -233,8 +233,8 @@ func (s *KVCacheSuite) TestLongPrefixExpansion() {
 	s.True(len(pods) > 0, "expected at least one pod score for mid prompt")
 
 	// Add entries to the index for the mid prompt
-	midPromptBlockKeys := s.promptToKeys(midPrompt, modelName)
-	s.addEntriesToIndex(midPromptBlockKeys, fakePodList)
+	midPromptEngineKeys, midPromptRequestKeys := s.promptToEngineAndRequestKeys(midPrompt, modelName)
+	s.addEntriesToIndex(midPromptEngineKeys, midPromptRequestKeys, fakePodList)
 
 	// Test 3: long prompt (should return higher score)
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, longPrompt, modelName, []string{s.Pod1IP})
@@ -281,7 +281,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.Require().NotEmpty(flattenedPrompt, "Flattened prompt should not be empty")
 
 	// Step 4: Use the flattened prompt for KV-cache lookup (similar to TestBasicE2E).
-	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
+	engineKeys, requestKeys := s.promptToEngineAndRequestKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
 	// First lookup - should return no scores initially.
@@ -291,7 +291,7 @@ func (s *KVCacheSuite) TestChatCompletionsE2E() {
 	s.Empty(pods, "expected no pod scores on first lookup")
 
 	// Add entries to the index.
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 
 	// Second lookup - should return scores.
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
@@ -355,7 +355,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.Require().Greater(len(flattenedPrompt), 1000, "Long conversation should produce substantial output")
 
 	// Step 4: Test KV-cache with the long flattened prompt.
-	blockKeys := s.promptToKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
+	engineKeys, requestKeys := s.promptToEngineAndRequestKeys(flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct")
 	fakePodList := []string{s.Pod1IP}
 
 	// First lookup.
@@ -365,7 +365,7 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.Empty(pods, "expected no pod scores on first lookup")
 
 	// Add entries to the index.
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 
 	// Second lookup.
 	pods, err = s.indexer.GetPodScores(s.ctx, nil, flattenedPrompt, "ibm-granite/granite-3.3-8b-instruct", []string{s.Pod1IP})
@@ -400,12 +400,10 @@ func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
 	s.T().Logf("Local tokenizer produced %d tokens for prompt", len(tokens))
 
 	// Convert tokens to KV block keys
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
-	s.Require().NotEmpty(blockKeys)
-	s.T().Logf("Generated %d KV block keys", len(blockKeys))
+	engineKeys, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName)
 
 	// Add entries to the index - this verifies the local tokenizer produces valid block keys
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 
 	// Verify that we can retrieve the entries we just added using GetPodScores
 	pods, err := s.indexer.GetPodScores(s.ctx, nil, prompt, modelName, fakePodList)
@@ -417,8 +415,8 @@ func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
 	// Also verify that tokenizing the same prompt again produces same block keys
 	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
 	s.Require().NoError(err)
-	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, modelName)
-	s.Require().Equal(blockKeys, blockKeys2, "same prompt should produce same block keys")
+	requestKeys2 := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens2, modelName)
+	s.Require().Equal(requestKeys, requestKeys2, "same prompt should produce same block keys")
 
 	s.T().Logf("Local tokenizer E2E test completed successfully")
 }
@@ -453,9 +451,9 @@ func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
 	s.Require().Equal(len(tokens1), len(offsets1), "tokens and offsets should have same length")
 	s.T().Logf("Local tokenizer produced %d tokens", len(tokens1))
 
-	blockKeys1 := s.tokensProcessor.TokensToKVBlockKeys(tokens1, "test-model")
-	s.addEntriesToIndex(blockKeys1, fakePodList)
-	s.T().Logf("Successfully added %d block keys from local tokenizer to index", len(blockKeys1))
+	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, "test-model")
+	s.addEntriesToIndex(engineKeys1, requestKeys1, fakePodList)
+	s.T().Logf("Successfully added %d block keys from local tokenizer to index", len(engineKeys1))
 
 	// Test 2: Use HF tokenizer fallback (model not in local mapping)
 	tokens2, offsets2, err := composite.Encode(prompt, defaultModelName)
@@ -464,9 +462,9 @@ func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
 	s.Require().Equal(len(tokens2), len(offsets2), "tokens and offsets should have same length")
 	s.T().Logf("HF tokenizer (fallback) produced %d tokens", len(tokens2))
 
-	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, defaultModelName)
-	s.addEntriesToIndex(blockKeys2, fakePodList)
-	s.T().Logf("Successfully added %d block keys from HF tokenizer to index", len(blockKeys2))
+	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, defaultModelName)
+	s.addEntriesToIndex(engineKeys2, requestKeys2, fakePodList)
+	s.T().Logf("Successfully added %d block keys from HF tokenizer to index", len(engineKeys2))
 
 	// Test 3: Verify error case when model doesn't exist in either tokenizer
 	_, _, err = composite.Encode(prompt, "non-existent-model")
@@ -516,17 +514,16 @@ func (s *KVCacheSuite) TestHFCacheStructureDiscoveryE2E() {
 	s.T().Logf("HF cache auto-discovery produced %d tokens for model %q", len(tokens), modelName)
 
 	// Convert tokens to KV block keys
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, modelName)
-	s.Require().NotEmpty(blockKeys)
+	engineKeys1, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName)
 
 	// Add entries to the index
-	s.addEntriesToIndex(blockKeys, fakePodList)
+	s.addEntriesToIndex(engineKeys1, requestKeys, fakePodList)
 
 	// Verify retrieval
 	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
 	s.Require().NoError(err)
-	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, modelName)
-	s.Require().Equal(blockKeys, blockKeys2, "same prompt should produce same block keys")
+	requestKeys2 := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens2, modelName)
+	s.Require().Equal(requestKeys, requestKeys2, "same prompt should produce same block keys")
 
 	s.T().Logf("HF cache structure discovery E2E test completed successfully")
 }
@@ -571,8 +568,8 @@ func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
 	s.Require().NotEmpty(tokens1)
 	s.T().Logf("HF cache model %q produced %d tokens", hfModelName, len(tokens1))
 
-	blockKeys1 := s.tokensProcessor.TokensToKVBlockKeys(tokens1, hfModelName)
-	s.addEntriesToIndex(blockKeys1, fakePodList)
+	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, hfModelName)
+	s.addEntriesToIndex(engineKeys1, requestKeys1, fakePodList)
 
 	// Test 2: Custom structure model should be accessible as "simple/nested/model"
 	customModelName := "simple/nested/model"
@@ -581,8 +578,8 @@ func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
 	s.Require().NotEmpty(tokens2)
 	s.T().Logf("Custom structure model %q produced %d tokens", customModelName, len(tokens2))
 
-	blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, customModelName)
-	s.addEntriesToIndex(blockKeys2, fakePodList)
+	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, customModelName)
+	s.addEntriesToIndex(engineKeys2, requestKeys2, fakePodList)
 
 	// Both should work independently
 	s.Require().Equal(len(tokens1), len(tokens2), "same tokenizer should produce same number of tokens")
@@ -654,14 +651,12 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateE2E() {
 			s.T().Logf("Local tokenizer produced %d tokens from rendered chat template", len(tokens))
 
 			// Step 3: Convert tokens to KV block keys
-			blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, tc.modelName)
-			s.Require().NotEmpty(blockKeys, "Block keys should not be empty")
-			s.T().Logf("Generated %d KV block keys from rendered conversation", len(blockKeys))
+			engineKeys, requestKeys := s.promptToEngineAndRequestKeys(renderedPrompt, tc.modelName)
+			s.T().Logf("Generated %d KV block keys from rendered conversation", len(requestKeys))
 
 			// Step 4: Add to index and verify retrieval (full KV-cache flow)
 			fakePodList := []string{s.Pod1IP}
-			s.addEntriesToIndex(blockKeys, fakePodList)
-
+			s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 			// Verify retrieval using GetPodScores with the rendered prompt
 			pods, err := s.indexer.GetPodScores(s.ctx, nil, renderedPrompt, tc.modelName, fakePodList)
 			s.Require().NoError(err)
@@ -679,8 +674,8 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateE2E() {
 
 			tokens2, _, err := localTokenizer.Encode(renderedPrompt2, tc.modelName)
 			s.Require().NoError(err)
-			blockKeys2 := s.tokensProcessor.TokensToKVBlockKeys(tokens2, tc.modelName)
-			s.Require().Equal(blockKeys, blockKeys2, "Same conversation should produce same block keys")
+			requestKeys2 := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens2, tc.modelName)
+			s.Require().Equal(requestKeys, requestKeys2, "Same conversation should produce same block keys")
 
 			s.T().Logf("Local tokenizer chat template E2E test completed successfully")
 		})
@@ -736,9 +731,9 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 			s.T().Logf("Short prompt length: %d chars", len(shortPrompt))
 			shortTokens, _, err := localTokenizer.Encode(shortPrompt, tc.modelName)
 			s.Require().NoError(err)
-			shortBlockKeys := s.tokensProcessor.TokensToKVBlockKeys(shortTokens, tc.modelName)
-			s.addEntriesToIndex(shortBlockKeys, fakePodList)
-			s.T().Logf("Short conversation: %d tokens, %d block keys", len(shortTokens), len(shortBlockKeys))
+			shortEngineKeys, shortRequestKeys := s.promptToEngineAndRequestKeys(shortPrompt, tc.modelName)
+			s.addEntriesToIndex(shortEngineKeys, shortRequestKeys, fakePodList)
+			s.T().Logf("Short conversation: %d tokens, %d block keys", len(shortTokens), len(shortRequestKeys))
 
 			// Extend the conversation (simulating a multi-turn chat)
 			// Add more turns to make it longer, but still under truncation limits
@@ -766,8 +761,8 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 			extendedTokens, _, err := localTokenizer.Encode(extendedPrompt, tc.modelName)
 			s.Require().NoError(err)
 
-			extendedBlockKeys := s.tokensProcessor.TokensToKVBlockKeys(extendedTokens, tc.modelName)
-			s.T().Logf("Extended conversation: %d tokens, %d block keys", len(extendedTokens), len(extendedBlockKeys))
+			extendedEngineKeys, extendedRequestKeys := s.promptToEngineAndRequestKeys(extendedPrompt, tc.modelName)
+			s.T().Logf("Extended conversation: %d tokens, %d block keys", len(extendedTokens), len(extendedRequestKeys))
 
 			// Some tokenizers use fixed-length encoding with padding (e.g., 512 tokens)
 			// In this case, both short and extended prompts may have the same token count
@@ -785,12 +780,12 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 					"Extended conversation should have more tokens")
 				// Verify that the extended conversation shares a prefix with the short conversation
 				// (this is important for KV-cache reuse in multi-turn scenarios)
-				s.Require().True(len(shortBlockKeys) < len(extendedBlockKeys),
+				s.Require().True(len(shortRequestKeys) < len(extendedRequestKeys),
 					"Extended conversation should have more block keys than short conversation")
 			}
 
 			// Add extended conversation to index
-			s.addEntriesToIndex(extendedBlockKeys, fakePodList)
+			s.addEntriesToIndex(extendedEngineKeys, extendedRequestKeys, fakePodList)
 
 			// Verify that querying with the short conversation still works (prefix sharing in KV-cache)
 			pods, err := s.indexer.GetPodScores(s.ctx, nil, shortPrompt, tc.modelName, fakePodList)
@@ -864,9 +859,9 @@ func (s *KVCacheSuite) TestLocalVsHFChatTemplateConsistency() {
 			s.T().Logf("Local tokenizer: rendered=%d chars, tokens=%d", len(localRendered), len(localTokens))
 
 			// Add to index and verify with GetPodScores
-			blockKeys := s.tokensProcessor.TokensToKVBlockKeys(localTokens, tc.modelName)
+			engineKeys, requestKeys := s.promptToEngineAndRequestKeys(localRendered, tc.modelName)
 			fakePodList := []string{s.Pod1IP}
-			s.addEntriesToIndex(blockKeys, fakePodList)
+			s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 
 			pods, err := s.indexer.GetPodScores(s.ctx, nil, localRendered, tc.modelName, fakePodList)
 			s.Require().NoError(err)
@@ -999,14 +994,13 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateLongConversation() {
 			s.T().Logf("Long conversation produced %d tokens", len(tokens))
 
 			// Convert to block keys
-			blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, tc.modelName)
-			s.Require().NotEmpty(blockKeys)
-			s.T().Logf("Generated %d block keys from long conversation", len(blockKeys))
+			engineKeys, requestKeys := s.promptToEngineAndRequestKeys(renderedPrompt, tc.modelName)
+			s.Require().NotEmpty(requestKeys)
+			s.T().Logf("Generated %d block keys from long conversation", len(requestKeys))
 
 			// Add to index
 			fakePodList := []string{s.Pod1IP}
-			s.addEntriesToIndex(blockKeys, fakePodList)
-
+			s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
 			// Verify retrieval using GetPodScores
 			// Note: This works now because the test suite uses a composite tokenizer that includes the local models
 			pods, err := s.indexer.GetPodScores(s.ctx, nil, renderedPrompt, tc.modelName, fakePodList)

@@ -65,22 +65,23 @@ func testCommonIndexBehavior(t *testing.T, indexFactory func(t *testing.T) Index
 // testBasicAddAndLookup tests basic Add and Lookup functionality.
 func testBasicAddAndLookup(t *testing.T, ctx context.Context, index Index) {
 	t.Helper()
-	key := Key{ModelName: "test-model", ChunkHash: 12345}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 55269488}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 10633516}
 	entries := []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
 	}
 
 	// Add entries
-	err := index.Add(ctx, []Key{key}, entries)
+	err := index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries)
 	require.NoError(t, err)
 
 	// Lookup all entries
-	podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.Contains(t, podsPerKey, key)
-	assert.ElementsMatch(t, podsPerKey[key], []PodEntry{
+	assert.Contains(t, podsPerKey, requestKey)
+	assert.ElementsMatch(t, podsPerKey[requestKey], []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
 	})
@@ -91,7 +92,8 @@ func testBasicAddAndLookup(t *testing.T, ctx context.Context, index Index) {
 // treating them as separate entries in the index.
 func testDuplicatePodHandling(t *testing.T, ctx context.Context, index Index) {
 	t.Helper()
-	key := Key{ModelName: "test-model", ChunkHash: 54321}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 91642125}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 61519471}
 
 	// First batch of entries
 	entries1 := []PodEntry{
@@ -99,7 +101,7 @@ func testDuplicatePodHandling(t *testing.T, ctx context.Context, index Index) {
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
 	}
 
-	err := index.Add(ctx, []Key{key}, entries1)
+	err := index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries1)
 	require.NoError(t, err)
 
 	// Second batch with one duplicate pod but different tier
@@ -109,15 +111,15 @@ func testDuplicatePodHandling(t *testing.T, ctx context.Context, index Index) {
 		{PodIdentifier: "pod3", DeviceTier: "gpu"},
 	}
 
-	err = index.Add(ctx, []Key{key}, entries2)
+	err = index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries2)
 	require.NoError(t, err)
 
 	// Lookup and verify the behavior with duplicates
 	// Note: The index currently preserves duplicate pod identifiers as separate entries
-	podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.Contains(t, podsPerKey, key)
+	assert.Contains(t, podsPerKey, requestKey)
 
 	// Should contain all pod entries, including duplicates with different tiers
 	// Expected: pod1(gpu), pod2(gpu), pod2(cpu), pod3(gpu)
@@ -127,44 +129,45 @@ func testDuplicatePodHandling(t *testing.T, ctx context.Context, index Index) {
 		{PodIdentifier: "pod2", DeviceTier: "cpu"},
 		{PodIdentifier: "pod3", DeviceTier: "gpu"},
 	}
-	assert.ElementsMatch(t, podsPerKey[key], expected)
+	assert.ElementsMatch(t, podsPerKey[requestKey], expected)
 }
 
 // testFilteredLookup tests lookup with pod identifier filtering.
 // This verifies that the index can filter results based on specific pod identifiers.
 func testFilteredLookup(t *testing.T, ctx context.Context, index Index) {
 	t.Helper()
-	key := Key{ModelName: "test-model", ChunkHash: 98765}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 93788608}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 55204205}
 	entries := []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
 		{PodIdentifier: "pod3", DeviceTier: "gpu"},
 	}
 
-	err := index.Add(ctx, []Key{key}, entries)
+	err := index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries)
 	require.NoError(t, err)
 
 	// Lookup with filter - should only return pod1
 	filterSet := sets.New("pod1")
-	podsPerKey, err := index.Lookup(ctx, []Key{key}, filterSet)
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, filterSet)
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.Contains(t, podsPerKey, key)
-	assert.Equal(t, []PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}}, podsPerKey[key])
+	assert.Contains(t, podsPerKey, requestKey)
+	assert.Equal(t, []PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}}, podsPerKey[requestKey])
 
 	// Lookup with multiple filters
 	filterSet = sets.New("pod1", "pod3")
-	podsPerKey, err = index.Lookup(ctx, []Key{key}, filterSet)
+	podsPerKey, err = index.Lookup(ctx, []Key{requestKey}, filterSet)
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.ElementsMatch(t, podsPerKey[key], []PodEntry{
+	assert.ElementsMatch(t, podsPerKey[requestKey], []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod3", DeviceTier: "gpu"},
 	})
 
 	// Lookup with non-existent pod filter should return empty result
 	filterSet = sets.New("pod999")
-	podsPerKey, err = index.Lookup(ctx, []Key{key}, filterSet)
+	podsPerKey, err = index.Lookup(ctx, []Key{requestKey}, filterSet)
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 0) // No matching pods found
 }
@@ -173,7 +176,8 @@ func testFilteredLookup(t *testing.T, ctx context.Context, index Index) {
 // Verifies that specific pod entries can be removed from the index.
 func testEvictBasic(t *testing.T, ctx context.Context, index Index) {
 	t.Helper()
-	key := Key{ModelName: "test-model", ChunkHash: 11111}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 17434655}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 59244875}
 	entries := []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
@@ -181,7 +185,7 @@ func testEvictBasic(t *testing.T, ctx context.Context, index Index) {
 	}
 
 	// Add entries
-	err := index.Add(ctx, []Key{key}, entries)
+	err := index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries)
 	require.NoError(t, err)
 
 	// Evict specific pod entries (note: eviction is based on pod identifier only)
@@ -190,26 +194,27 @@ func testEvictBasic(t *testing.T, ctx context.Context, index Index) {
 		{PodIdentifier: "pod3", DeviceTier: "cpu"}, // Device tier may differ from stored entry
 	}
 
-	err = index.Evict(ctx, key, evictEntries)
+	err = index.Evict(ctx, engineKey, evictEntries)
 	require.NoError(t, err)
 
 	// Verify that pod1 was evicted but pod2 and pod3 remain
 	// Note: pod3 remains because eviction only matched pod identifier, not device tier
-	podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.Contains(t, podsPerKey, key)
+	assert.Contains(t, podsPerKey, requestKey)
 	expected := []PodEntry{
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
 		{PodIdentifier: "pod3", DeviceTier: "gpu"},
 	}
-	assert.ElementsMatch(t, expected, podsPerKey[key])
+	assert.ElementsMatch(t, expected, podsPerKey[requestKey])
 }
 
 // testConcurrentOperations tests thread safety with concurrent operations.
 func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 	t.Helper()
-	key := Key{ModelName: "test-model", ChunkHash: 1000}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 38894120}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 72568158}
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1000)
@@ -224,35 +229,35 @@ func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 				switch operationIndex % 3 {
 				case 0: // Add
 					entries := []PodEntry{{PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex), DeviceTier: "gpu"}}
-					if err := index.Add(ctx, []Key{key}, entries); err != nil {
+					if err := index.Add(ctx, []Key{engineKey}, []Key{requestKey}, entries); err != nil {
 						errChan <- err
 					}
 				case 1: // Lookup
-					podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+					podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 					if err != nil {
 						errChan <- err
 					}
-					assert.Contains(t, podsPerKey, key)
+					assert.Contains(t, podsPerKey, requestKey)
 					expectedPod := PodEntry{
 						PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-1),
 						DeviceTier:    "gpu",
 					}
-					assert.Contains(t, podsPerKey[key], expectedPod)
+					assert.Contains(t, podsPerKey[requestKey], expectedPod)
 				case 2: // Evict
 					entries := []PodEntry{{PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-2), DeviceTier: "gpu"}}
-					if err := index.Evict(ctx, key, entries); err != nil {
+					if err := index.Evict(ctx, engineKey, entries); err != nil {
 						errChan <- err
 					}
-					podsPerKey, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+					podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 					if err != nil {
 						errChan <- err
 					}
-					if _, ok := podsPerKey[key]; ok {
+					if _, ok := podsPerKey[requestKey]; ok {
 						evictedPod := PodEntry{
 							PodIdentifier: fmt.Sprintf("pod-%d-%d", id, operationIndex-2),
 							DeviceTier:    "gpu",
 						}
-						assert.NotContains(t, podsPerKey[key], evictedPod)
+						assert.NotContains(t, podsPerKey[requestKey], evictedPod)
 					}
 				}
 			}
@@ -268,6 +273,6 @@ func testConcurrentOperations(t *testing.T, ctx context.Context, index Index) {
 	}
 
 	// Verify index still works
-	_, err := index.Lookup(ctx, []Key{key}, sets.Set[string]{})
+	_, err := index.Lookup(ctx, []Key{requestKey}, sets.Set[string]{})
 	require.NoError(t, err)
 }

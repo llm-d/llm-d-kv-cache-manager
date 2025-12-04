@@ -69,23 +69,25 @@ type Message struct {
 // Pool is a sharded worker pool that processes events from a ZMQ subscriber.
 // It ensures that events for the same PodIdentifier are processed in order.
 type Pool struct {
-	queues      []workqueue.TypedRateLimitingInterface[*Message]
-	concurrency int // can replace use with len(queues)
-	subscriber  *zmqSubscriber
-	index       kvblock.Index
-	wg          sync.WaitGroup
+	queues         []workqueue.TypedRateLimitingInterface[*Message]
+	concurrency    int // can replace use with len(queues)
+	subscriber     *zmqSubscriber
+	index          kvblock.Index
+	tokenProcessor kvblock.TokenProcessor
+	wg             sync.WaitGroup
 }
 
 // NewPool creates a Pool with a sharded worker setup.
-func NewPool(cfg *Config, index kvblock.Index) *Pool {
+func NewPool(cfg *Config, index kvblock.Index, tokenProcessor kvblock.TokenProcessor) *Pool {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
 
 	p := &Pool{
-		queues:      make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
-		concurrency: cfg.Concurrency,
-		index:       index,
+		queues:         make([]workqueue.TypedRateLimitingInterface[*Message], cfg.Concurrency),
+		concurrency:    cfg.Concurrency,
+		index:          index,
+		tokenProcessor: tokenProcessor,
 	}
 
 	for i := 0; i < p.concurrency; i++ {
@@ -262,7 +264,7 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 			podEntries := []kvblock.PodEntry{{PodIdentifier: podIdentifier, DeviceTier: deviceTier}}
 
 			// Create a slice to hold the processed keys.
-			keys := make([]kvblock.Key, 0, len(ev.BlockHashes))
+			engineKeys := make([]kvblock.Key, 0, len(ev.BlockHashes))
 
 			// Iterate over the hashes, convert each one to uint64, and create a key.
 			for _, rawHash := range ev.BlockHashes {
@@ -271,12 +273,31 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 					debugLogger.Error(err, "Failed to convert block hash for BlockStored event", "rawHash", rawHash)
 					continue
 				}
-				keys = append(keys, kvblock.Key{ModelName: modelName, ChunkHash: hash})
+				engineKeys = append(engineKeys, kvblock.Key{ModelName: modelName, ChunkHash: hash})
 			}
 
+			var parentRequestKey *kvblock.Key
+			if ev.ParentBlockHash != nil {
+				hash, err := getHashAsUint64(ev.ParentBlockHash)
+				if err != nil {
+					debugLogger.Error(err, "Failed to convert parent block hash for BlockStored event",
+						"rawHash", ev.ParentBlockHash)
+					continue
+				}
+
+				parentEngineKey := kvblock.Key{ModelName: modelName, ChunkHash: hash}
+
+				key, err := p.index.GetRequestKey(ctx, parentEngineKey)
+				if err == nil {
+					parentRequestKey = &key
+				}
+			}
+
+			requestKeys := p.tokenProcessor.TokensToKVBlockKeys(parentRequestKey, ev.TokenIds, modelName)
+
 			// Only proceed if we have valid keys to add.
-			if len(keys) > 0 {
-				if err := p.index.Add(ctx, keys, podEntries); err != nil {
+			if len(engineKeys) > 0 {
+				if err := p.index.Add(ctx, engineKeys, requestKeys, podEntries); err != nil {
 					debugLogger.Error(err, "Failed to add event to index",
 						"podIdentifier", podIdentifier, "event", ev)
 					continue // Continue processing other events even if one fails
@@ -301,8 +322,8 @@ func (p *Pool) digestEvents(ctx context.Context, podIdentifier, modelName string
 					debugLogger.Error(err, "Failed to convert block hash for BlockRemoved event", "rawHash", rawHash)
 					continue
 				}
-				key := kvblock.Key{ModelName: modelName, ChunkHash: hash}
-				if err := p.index.Evict(ctx, key, podEntries); err != nil {
+				engineKey := kvblock.Key{ModelName: modelName, ChunkHash: hash}
+				if err := p.index.Evict(ctx, engineKey, podEntries); err != nil {
 					debugLogger.Error(err, "Failed to remove event from index",
 						"podIdentifier", podIdentifier, "event", ev)
 					continue // Continue processing other events even if one fails

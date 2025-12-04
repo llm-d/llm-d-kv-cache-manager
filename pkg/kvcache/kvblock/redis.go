@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -150,10 +151,10 @@ var _ Index = &RedisIndex{}
 // It returns:
 // 1. A map where the keys are those in (1) and the values are pod-identifiers.
 // 2. An error if any occurred during the operation.
-func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
+func (r *RedisIndex) Lookup(ctx context.Context, requestKeys []Key,
 	podIdentifierSet sets.Set[string],
 ) (map[Key][]PodEntry, error) {
-	if len(keys) == 0 {
+	if len(requestKeys) == 0 {
 		return make(map[Key][]PodEntry), nil
 	}
 
@@ -162,10 +163,10 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 
 	// pipeline for single RTT
 	pipe := r.RedisClient.Pipeline()
-	results := make([]*redis.StringSliceCmd, len(keys))
+	results := make([]*redis.StringSliceCmd, len(requestKeys))
 
 	// queue an HKeys command for each key in the pipeline
-	for i, key := range keys {
+	for i, key := range requestKeys {
 		// HKeys gets all field names
 		results[i] = pipe.HKeys(ctx, key.String())
 	}
@@ -178,7 +179,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 	filterPods := len(podIdentifierSet) > 0 // predicate for filtering
 
 	for idx, cmd := range results {
-		key := keys[idx]
+		key := requestKeys[idx]
 
 		// cmd.Result() returns the slice of strings (pod IDs) which is the first layer in the mapping
 		pods, cmdErr := cmd.Result()
@@ -210,14 +211,20 @@ func (r *RedisIndex) Lookup(ctx context.Context, keys []Key,
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
-func (r *RedisIndex) Add(ctx context.Context, keys []Key, entries []PodEntry) error {
-	if len(keys) == 0 || len(entries) == 0 {
-		return nil
+func (r *RedisIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error {
+	if len(engineKeys) == 0 || len(requestKeys) == 0 || len(entries) == 0 {
+		return fmt.Errorf("no keys or entries provided for adding to index")
+	}
+	if len(engineKeys) != len(requestKeys) {
+		return fmt.Errorf("mismatch between engine keys and request keys length")
 	}
 
 	pipe := r.RedisClient.Pipeline()
-	for _, key := range keys {
-		redisKey := key.String()
+	for i, requestKey := range requestKeys {
+		redisKey := requestKey.String()
+
+		// Store engineKey -> requestKey mapping
+		pipe.Set(ctx, redisEngineKey(engineKeys[i]), redisKey, 0)
 		for _, entry := range entries {
 			// Use HSet to add the pod identifier as a field in the hash
 			pipe.HSet(ctx, redisKey, entry.String(), "")
@@ -232,8 +239,13 @@ func (r *RedisIndex) Add(ctx context.Context, keys []Key, entries []PodEntry) er
 }
 
 // Evict removes a key and its associated pod entries from the index backend.
-func (r *RedisIndex) Evict(ctx context.Context, key Key, entries []PodEntry) error {
-	redisKey := key.String()
+func (r *RedisIndex) Evict(ctx context.Context, engineKey Key, entries []PodEntry) error {
+	requestKey, err := r.GetRequestKey(ctx, engineKey)
+	if err != nil {
+		return nil
+	}
+
+	redisKey := requestKey.String()
 	pipe := r.RedisClient.Pipeline()
 
 	for _, entry := range entries {
@@ -245,5 +257,42 @@ func (r *RedisIndex) Evict(ctx context.Context, key Key, entries []PodEntry) err
 		return fmt.Errorf("failed to evict entries from Redis: %w", err)
 	}
 
+	lenCmd := r.RedisClient.HLen(ctx, redisKey)
+	if lenCmd.Err() != nil {
+		return fmt.Errorf("failed to get length of Redis hash: %w", lenCmd.Err())
+	}
+
+	if lenCmd.Val() == 0 {
+		if err := r.RedisClient.Del(ctx, redisEngineKey(engineKey)).Err(); err != nil {
+			return fmt.Errorf("failed to delete engine key mapping from Redis: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (r *RedisIndex) GetRequestKey(ctx context.Context, engineKey Key) (Key, error) {
+	val, err := r.RedisClient.Get(ctx, redisEngineKey(engineKey)).Result()
+	if err != nil {
+		return Key{}, err
+	}
+
+	parts := strings.Split(val, "@")
+	if len(parts) != 2 {
+		return Key{}, fmt.Errorf("invalid key format stored: %s", val)
+	}
+
+	hash, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return Key{}, fmt.Errorf("invalid hash format: %s", parts[1])
+	}
+
+	return Key{
+		ModelName: parts[0],
+		ChunkHash: hash,
+	}, nil
+}
+
+func redisEngineKey(engineKey Key) string {
+	return "engine:" + engineKey.String()
 }
