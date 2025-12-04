@@ -28,13 +28,17 @@
 
 #include <cuda_runtime.h>
 
-#include "buffer.hpp"  // defines PinnedBuffer + get_gpu_numa_node + get_cpus_in_numa_node
+#include "buffer.hpp"
 #include "debug_utils.hpp"
 
 // Thread-local storage used by each I/O thread
 extern thread_local size_t thread_stream_idx;
 
-// ThreadPool class
+// ThreadPool class is a thread pool used for parallel file offloading. Each
+// worker thread handles one file end-to-end: reading or writing the file,
+// staging data through its own thread-local staging buffer, and launching the
+// GPU copy on a dedicated CUDA stream. This enables many files to be processed
+// concurrently with full I/O–GPU overlap.
 class ThreadPool {
    public:
     ThreadPool(int threads, size_t pinned_buffer_mb, int tp_rank, int device_id);
@@ -71,7 +75,10 @@ auto ThreadPool::enqueue(F&& f) -> std::future<std::invoke_result_t<F>> {
         std::unique_lock<std::mutex> lock(queue_mutex);
 
         // Reject new tasks if the pool is shutting down
-        if (stop) throw std::runtime_error("enqueue on stopped ThreadPool");
+        if (stop) {
+            std::cerr << "[WARN] ThreadPool is stopping. Rejecting new task.\n";
+            return std::future<return_type>();  // empty future
+        }
 
         // Push the task wrapper into the queue
         tasks.emplace([task]() { (*task)(); });
