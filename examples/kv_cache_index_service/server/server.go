@@ -59,8 +59,11 @@ func (s *IndexerService) AddSampleDataToIndexer(ctx context.Context, modelName s
 		{PodIdentifier: "pod-3", DeviceTier: "cpu"},
 	}
 
+	// For this example, requestKeys are identical to engineKeys (sampleKeys)
+	requestKeys := sampleKeys
+
 	// Add the sample data to the index
-	return s.indexer.KVBlockIndex().Add(ctx, sampleKeys, podEntries)
+	return s.indexer.KVBlockIndex().Add(ctx, sampleKeys, requestKeys, podEntries)
 }
 
 // GetPodScores implements the GetPodScores RPC method.

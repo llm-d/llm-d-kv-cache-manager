@@ -140,7 +140,10 @@ func demonstrateValkeyOperations(ctx context.Context, indexer *kvcache.Indexer) 
 		}
 	})
 
-	err = indexer.KVBlockIndex().Add(ctx, promptKeys, podEntries)
+	// In this example, requestKeys are identical to engineKeys (promptKeys)
+	requestKeys := promptKeys
+
+	err = indexer.KVBlockIndex().Add(ctx, promptKeys, requestKeys, podEntries)
 	if err != nil {
 		return fmt.Errorf("failed to add cache entries: %w", err)
 	}
