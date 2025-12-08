@@ -106,7 +106,9 @@ func (s *KVCacheSuite) SetupTest() {
 // If tokenizer is provided, it will be used instead of the suite's default tokenizer.
 //
 //nolint:nonamedreturns // named returns keep gocritic unnamedResult satisfied while allowing compact return
-func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string, tokenizer ...tokenization.Tokenizer) (engineKeys, requestKeys []kvblock.Key) {
+func (s *KVCacheSuite) promptToEngineAndRequestKeys(
+	prompt, model string, tokenizer ...tokenization.Tokenizer,
+) (engineKeys, requestKeys []kvblock.Key) {
 	var tok tokenization.Tokenizer
 	if len(tokenizer) > 0 && tokenizer[0] != nil {
 		tok = tokenizer[0]
