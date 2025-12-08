@@ -513,8 +513,8 @@ func (s *KVCacheSuite) TestHFCacheStructureDiscoveryE2E() {
 	s.Require().Equal(len(tokens), len(offsets), "tokens and offsets should have same length")
 	s.T().Logf("HF cache auto-discovery produced %d tokens for model %q", len(tokens), modelName)
 
-	// Convert tokens to KV block keys
-	engineKeys1, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName)
+	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
+	engineKeys1, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName, localTokenizer)
 
 	// Add entries to the index
 	s.addEntriesToIndex(engineKeys1, requestKeys, fakePodList)
@@ -568,7 +568,8 @@ func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
 	s.Require().NotEmpty(tokens1)
 	s.T().Logf("HF cache model %q produced %d tokens", hfModelName, len(tokens1))
 
-	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, hfModelName)
+	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
+	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, hfModelName, localTokenizer)
 	s.addEntriesToIndex(engineKeys1, requestKeys1, fakePodList)
 
 	// Test 2: Custom structure model should be accessible as "simple/nested/model"
@@ -578,7 +579,8 @@ func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
 	s.Require().NotEmpty(tokens2)
 	s.T().Logf("Custom structure model %q produced %d tokens", customModelName, len(tokens2))
 
-	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, customModelName)
+	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
+	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, customModelName, localTokenizer)
 	s.addEntriesToIndex(engineKeys2, requestKeys2, fakePodList)
 
 	// Both should work independently

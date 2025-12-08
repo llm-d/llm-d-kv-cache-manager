@@ -82,6 +82,12 @@ func NewCostAwareMemoryIndex(cfg *CostAwareMemoryIndexConfig) (*CostAwareMemoryI
 }
 
 // CostAwareMemoryIndex implements the Index interface using Ristretto cache for cost-aware memory management.
+// The two caches below are kept in sync:
+//   - data: requestKey -> pod cache (cost-bound by Ristretto MaxCost)
+//   - requestKeys: engineKey -> requestKey (LRU to cap mapping size)
+//
+// Add always writes both maps; Evict removes pods and, when empty, removes
+// both the requestKey entry and its engineKey mapping to avoid dangling keys.
 type CostAwareMemoryIndex struct {
 	// data holds the mapping of request keys to sets of pod identifiers.
 	data *ristretto.Cache[string, *CostPodCache]
@@ -291,6 +297,8 @@ func (m *CostAwareMemoryIndex) Evict(ctx context.Context, engineKey Key, entries
 	return nil
 }
 
+// GetRequestKey returns the requestKey associated with the given engineKey.
+// Returns an error if the engineKey is not mapped (e.g., evicted earlier).
 func (m *CostAwareMemoryIndex) GetRequestKey(ctx context.Context, engineKey Key) (Key, error) {
 	requestKey, found := m.requestKeys.Get(engineKey)
 	if !found {

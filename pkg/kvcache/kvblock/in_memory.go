@@ -259,6 +259,8 @@ func (m *InMemoryIndex) Evict(ctx context.Context, engineKey Key, entries []PodE
 	return nil
 }
 
+// GetRequestKey returns the requestKey associated with the given engineKey.
+// Returns an error if the engineKey mapping is missing (e.g., already evicted).
 func (m *InMemoryIndex) GetRequestKey(ctx context.Context, engineKey Key) (Key, error) {
 	requestKey, found := m.requestKeys.Get(engineKey)
 	if !found {

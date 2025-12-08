@@ -102,11 +102,19 @@ func (s *KVCacheSuite) SetupTest() {
 	go s.indexer.Run(s.ctx)
 }
 
-// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys
+// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys.
+// If tokenizer is provided, it will be used instead of the suite's default tokenizer.
 //
 //nolint:nonamedreturns // named returns keep gocritic unnamedResult satisfied while allowing compact return
-func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string) (engineKeys, requestKeys []kvblock.Key) {
-	tokens, _, err := s.tokenizer.Encode(prompt, model)
+func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string, tokenizer ...tokenization.Tokenizer) (engineKeys, requestKeys []kvblock.Key) {
+	var tok tokenization.Tokenizer
+	if len(tokenizer) > 0 && tokenizer[0] != nil {
+		tok = tokenizer[0]
+	} else {
+		tok = s.tokenizer
+	}
+
+	tokens, _, err := tok.Encode(prompt, model)
 	s.Require().NoError(err)
 
 	requestKeys = s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
