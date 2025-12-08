@@ -154,7 +154,7 @@ func (c *CostPodCache) CalculateByteSize(keyStr string) int64 {
 var _ Index = &CostAwareMemoryIndex{}
 
 // Add adds a set of keys and their associated pod entries to the index backend.
-func (m *CostAwareMemoryIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error {
+func (m *CostAwareMemoryIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -211,7 +211,7 @@ func (r *RedisIndex) Lookup(ctx context.Context, requestKeys []Key,
 }
 
 // Add adds a set of keys and their associated pod entries to the index backend.
-func (r *RedisIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error {
+func (r *RedisIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error {
 	if len(engineKeys) == 0 || len(requestKeys) == 0 || len(entries) == 0 {
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
@@ -242,7 +242,7 @@ func (r *RedisIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Ke
 func (r *RedisIndex) Evict(ctx context.Context, engineKey Key, entries []PodEntry) error {
 	requestKey, err := r.GetRequestKey(ctx, engineKey)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	redisKey := requestKey.String()

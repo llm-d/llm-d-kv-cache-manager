@@ -138,8 +138,10 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 	// For this simple example, requestKeys == engineKeys
 	requestKeys := engineKeys
 
-	_ = kvCacheIndexer.KVBlockIndex().Add(ctx, engineKeys, requestKeys,
-		[]kvblock.PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}})
+	if err := kvCacheIndexer.KVBlockIndex().Add(ctx, engineKeys, requestKeys,
+		[]kvblock.PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}}); err != nil {
+		return err
+	}
 
 	// Sleep 3 secs
 	time.Sleep(3 * time.Second)

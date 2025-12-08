@@ -32,7 +32,7 @@ func NewInstrumentedIndex(next Index) Index {
 	return &instrumentedIndex{next: next}
 }
 
-func (m *instrumentedIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error {
+func (m *instrumentedIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error {
 	err := m.next.Add(ctx, engineKeys, requestKeys, entries)
 	metrics.Admissions.Add(float64(len(requestKeys)))
 	return err

@@ -127,7 +127,7 @@ type Index interface {
 	// 2. An error if any occurred during the operation.
 	Lookup(ctx context.Context, requestKeys []Key, podIdentifierSet sets.Set[string]) (map[Key][]PodEntry, error)
 	// Add adds a set of engineKeys/requestKeys and their associated pod entries to the index backend.
-	Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error
+	Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error
 	// Evict removes an engineKey and its associated pod entries from the index backend.
 	Evict(ctx context.Context, engineKey Key, entries []PodEntry) error
 	// GetRequestKey returns the requestKey associated with the given engineKey.

@@ -102,21 +102,23 @@ func (s *KVCacheSuite) SetupTest() {
 	go s.indexer.Run(s.ctx)
 }
 
-// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys.
-func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string) ([]kvblock.Key, []kvblock.Key) {
+// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys
+//
+//nolint:nonamedreturns // named returns keep gocritic unnamedResult satisfied while allowing compact return
+func (s *KVCacheSuite) promptToEngineAndRequestKeys(prompt, model string) (engineKeys, requestKeys []kvblock.Key) {
 	tokens, _, err := s.tokenizer.Encode(prompt, model)
 	s.Require().NoError(err)
 
-	requestKeys := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
+	requestKeys = s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
 	s.Require().NotEmpty(requestKeys)
 
-	engineKeys := s.tokensProcessor.TokensToKVBlockKeys(&kvblock.Key{ModelName: model, ChunkHash: 1}, tokens, model)
+	engineKeys = s.tokensProcessor.TokensToKVBlockKeys(&kvblock.Key{ModelName: model, ChunkHash: 1}, tokens, model)
 	s.Require().NotEmpty(engineKeys)
 
 	return engineKeys, requestKeys
 }
 
-func (s *KVCacheSuite) addEntriesToIndex(engineKeys []kvblock.Key, requestKeys []kvblock.Key, podList []string) {
+func (s *KVCacheSuite) addEntriesToIndex(engineKeys, requestKeys []kvblock.Key, podList []string) {
 	s.Require().NotEmpty(engineKeys)
 	s.Require().NotEmpty(requestKeys)
 

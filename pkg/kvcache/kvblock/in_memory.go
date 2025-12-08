@@ -146,7 +146,7 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, requestKeys []Key,
 }
 
 // Add adds a set of engineKeys/requestKeys and their associated pod entries to the index backend.
-func (m *InMemoryIndex) Add(ctx context.Context, engineKeys []Key, requestKeys []Key, entries []PodEntry) error {
+func (m *InMemoryIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error {
 	if len(engineKeys) == 0 || len(requestKeys) == 0 || len(entries) == 0 {
 		return fmt.Errorf("no keys or entries provided for adding to index")
 	}
