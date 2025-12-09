@@ -176,7 +176,7 @@ func (m *CostAwareMemoryIndex) Add(ctx context.Context, engineKeys, requestKeys 
 	for i, requestKey := range requestKeys {
 		engineKey := engineKeys[i]
 
-		// 1. Store engineKey -> requestKey mapping
+		// Store engineKey -> requestKey mapping
 		m.requestKeys.Add(engineKey, requestKey)
 
 		keyStr := requestKey.String()

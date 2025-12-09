@@ -61,15 +61,15 @@ func NewInMemoryIndex(cfg *InMemoryIndexConfig) (*InMemoryIndex, error) {
 		return nil, fmt.Errorf("failed to initialize in-memory index: %w", err)
 	}
 
-	requestKeys, err := lru.New[Key, Key](cfg.Size)
+	engineToRequestKeys, err := lru.New[Key, Key](cfg.Size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize in-memory engine key map: %w", err)
 	}
 
 	return &InMemoryIndex{
-		data:         cache,
-		requestKeys:  requestKeys,
-		podCacheSize: cfg.PodCacheSize,
+		data:                cache,
+		engineToRequestKeys: engineToRequestKeys,
+		podCacheSize:        cfg.PodCacheSize,
 	}, nil
 }
 
@@ -77,8 +77,8 @@ func NewInMemoryIndex(cfg *InMemoryIndexConfig) (*InMemoryIndex, error) {
 type InMemoryIndex struct {
 	// data holds the mapping of requestKeys to sets of pod identifiers.
 	data *lru.Cache[Key, *PodCache]
-	// requestKeys holds the mapping of engineKeys to requestKeys.
-	requestKeys *lru.Cache[Key, Key]
+	// engineToRequestKeys holds the mapping of engineKeys to requestKeys.
+	engineToRequestKeys *lru.Cache[Key, Key]
 	// podCacheSize is the maximum number of pod entries per key.
 	podCacheSize int
 }
@@ -114,10 +114,10 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, requestKeys []Key,
 	podsPerKey := make(map[Key][]PodEntry)
 	highestHitIdx := 0
 
-	for idx, key := range requestKeys {
-		if pods, found := m.data.Get(key); found { //nolint:nestif // TODO: can this be optimized?
+	for idx, requestKey := range requestKeys {
+		if pods, found := m.data.Get(requestKey); found { //nolint:nestif // TODO: can this be optimized?
 			if pods == nil || pods.cache.Len() == 0 {
-				traceLogger.Info("no pods found for key, cutting search", "key", key)
+				traceLogger.Info("no pods found for key, cutting search", "key", requestKey)
 				return podsPerKey, nil // early stop since prefix-chain breaks here
 			}
 
@@ -125,17 +125,17 @@ func (m *InMemoryIndex) Lookup(ctx context.Context, requestKeys []Key,
 
 			if podIdentifierSet.Len() == 0 {
 				// If no pod identifiers are provided, return all pods
-				podsPerKey[key] = pods.cache.Keys()
+				podsPerKey[requestKey] = pods.cache.Keys()
 			} else {
 				// Filter pods based on the provided pod identifiers
 				for _, pod := range pods.cache.Keys() {
 					if podIdentifierSet.Has(pod.PodIdentifier) {
-						podsPerKey[key] = append(podsPerKey[key], pod)
+						podsPerKey[requestKey] = append(podsPerKey[requestKey], pod)
 					}
 				}
 			}
 		} else {
-			traceLogger.Info("key not found in index", "key", key)
+			traceLogger.Info("key not found in index", "key", requestKey)
 		}
 	}
 
@@ -160,7 +160,7 @@ func (m *InMemoryIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, 
 		engineKey := engineKeys[i]
 
 		// 1. Store engineKey -> requestKey mapping
-		m.requestKeys.Add(engineKey, requestKey)
+		m.engineToRequestKeys.Add(engineKey, requestKey)
 
 		// 2. Store requestKey -> PodCache mapping
 		var podCache *PodCache
@@ -216,7 +216,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, engineKey Key, entries []PodE
 
 	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvblock.InMemoryIndex.Evict")
 
-	requestKey, found := m.requestKeys.Get(engineKey)
+	requestKey, found := m.engineToRequestKeys.Get(engineKey)
 	if !found {
 		traceLogger.Info("engineKey not found in index, nothing to evict", "engineKey", engineKey)
 		return nil
@@ -225,7 +225,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, engineKey Key, entries []PodE
 	podCache, found := m.data.Get(requestKey)
 	if !found || podCache == nil {
 		traceLogger.Info("requestKey not found in index, cleaning up engineKey", "requestKey", requestKey, "engineKey", engineKey)
-		m.requestKeys.Remove(engineKey)
+		m.engineToRequestKeys.Remove(engineKey)
 		return nil
 	}
 
@@ -250,7 +250,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, engineKey Key, entries []PodE
 
 			if stillEmpty {
 				m.data.Remove(requestKey)
-				m.requestKeys.Remove(engineKey)
+				m.engineToRequestKeys.Remove(engineKey)
 				traceLogger.Info("removed requestKey from index as no pods remain", "requestKey", requestKey, "engineKey", engineKey)
 			}
 		}
@@ -262,7 +262,7 @@ func (m *InMemoryIndex) Evict(ctx context.Context, engineKey Key, entries []PodE
 // GetRequestKey returns the requestKey associated with the given engineKey.
 // Returns an error if the engineKey mapping is missing (e.g., already evicted).
 func (m *InMemoryIndex) GetRequestKey(ctx context.Context, engineKey Key) (Key, error) {
-	requestKey, found := m.requestKeys.Get(engineKey)
+	requestKey, found := m.engineToRequestKeys.Get(engineKey)
 	if !found {
 		return Key{}, fmt.Errorf("engine key not found: %s", engineKey.String())
 	}
