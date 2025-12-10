@@ -24,8 +24,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
+	preprocessing "github.com/llm-d/llm-d-kv-cache/pkg/preprocessing/chat_completions"
+	"github.com/llm-d/llm-d-kv-cache/pkg/tokenization"
 )
 
 // ChatMessage represents a single message in a conversation.

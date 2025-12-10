@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	. "github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	. "github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
 )
 
 // testCommonIndexBehavior runs a comprehensive test suite for any Index implementation.

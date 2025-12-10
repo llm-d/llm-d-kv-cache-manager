@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/metrics"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 

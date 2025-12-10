@@ -19,7 +19,7 @@ package kvcache
 import (
 	"fmt"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 

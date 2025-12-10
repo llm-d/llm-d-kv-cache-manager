@@ -18,8 +18,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
+	"github.com/llm-d/llm-d-kv-cache/examples/testdata"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
