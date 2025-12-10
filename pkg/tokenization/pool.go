@@ -69,6 +69,7 @@ type tokenizationResponse struct {
 type Task struct {
 	RenderReq *preprocessing.RenderJinjaTemplateRequest
 	Prompt    string
+	ModelName string
 	ResultCh  chan<- tokenizationResponse // nil => fire-and-forget
 }
 
