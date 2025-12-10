@@ -400,7 +400,7 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateE2E() {
 			testModelDir, err := filepath.Abs(tc.modelDir)
 			s.Require().NoError(err)
 
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tc.modelName, tokenization.LocalTokenizerConfig{
 				ModelTokenizerMap: map[string]string{
 					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
 				},
@@ -493,7 +493,7 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 			testModelDir, err := filepath.Abs(tc.modelDir)
 			s.Require().NoError(err)
 
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tc.modelName, tokenization.LocalTokenizerConfig{
 				ModelTokenizerMap: map[string]string{
 					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
 				},
@@ -590,7 +590,7 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateErrorHandling() {
 	testModelDir, err := filepath.Abs("testdata/test-model")
 	s.Require().NoError(err)
 
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer("test-model", tokenization.LocalTokenizerConfig{
 		ModelTokenizerMap: map[string]string{
 			"test-model": filepath.Join(testModelDir, "tokenizer.json"),
 		},
