@@ -1,4 +1,4 @@
-module github.com/llm-d/llm-d-kv-cache-manager
+module github.com/llm-d/llm-d-kv-cache
 
 go 1.24.1
 

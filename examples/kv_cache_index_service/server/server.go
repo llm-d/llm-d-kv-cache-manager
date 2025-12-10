@@ -18,12 +18,12 @@ import (
 	"context"
 	"fmt"
 
-	indexerpb "github.com/llm-d/llm-d-kv-cache-manager/api"
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvevents"
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	indexerpb "github.com/llm-d/llm-d-kv-cache/api"
+	"github.com/llm-d/llm-d-kv-cache/examples/testdata"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvblock"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/kvevents"
+	"github.com/llm-d/llm-d-kv-cache/pkg/utils"
 )
 
 // IndexerService implements the IndexerServiceServer interface.

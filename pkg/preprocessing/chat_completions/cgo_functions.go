@@ -28,7 +28,7 @@ import (
 	*/
 	"C"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils/logging"
+	"github.com/llm-d/llm-d-kv-cache/pkg/utils/logging"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 

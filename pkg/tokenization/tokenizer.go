@@ -30,8 +30,8 @@ import (
 	"go.uber.org/multierr"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
-	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
+	"github.com/llm-d/llm-d-kv-cache/pkg/kvcache/metrics"
+	preprocessing "github.com/llm-d/llm-d-kv-cache/pkg/preprocessing/chat_completions"
 )
 
 // tokenizersCacheSize is the size of the LRU cache for tokenizers.

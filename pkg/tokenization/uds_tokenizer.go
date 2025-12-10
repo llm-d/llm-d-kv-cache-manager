@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/daulet/tokenizers"
-	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
+	preprocessing "github.com/llm-d/llm-d-kv-cache/pkg/preprocessing/chat_completions"
 	"golang.org/x/net/http2"
 )
 

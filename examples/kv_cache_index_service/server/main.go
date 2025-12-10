@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/helper"
-	"github.com/llm-d/llm-d-kv-cache-manager/examples/testdata"
+	"github.com/llm-d/llm-d-kv-cache/examples/helper"
+	"github.com/llm-d/llm-d-kv-cache/examples/testdata"
 	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	indexerpb "github.com/llm-d/llm-d-kv-cache-manager/api"
+	indexerpb "github.com/llm-d/llm-d-kv-cache/api"
 )
 
 const servicerAddr = ":50051"
