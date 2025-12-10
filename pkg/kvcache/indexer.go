@@ -34,6 +34,10 @@ import (
 // The configuration cover the different components found in the Indexer
 // module.
 type Config struct {
+	// BaseModelName is the canonical base model identifier.
+	// Used to distinguish base-model requests from LoRA-adapted requests
+	// to ensure consistent key generation.
+	BaseModelName        string                        `json:"baseModelName"`
 	PrefixStoreConfig    *prefixstore.Config           `json:"prefixStoreConfig"`
 	TokenProcessorConfig *kvblock.TokenProcessorConfig `json:"tokenProcessorConfig"`
 	KVBlockIndexConfig   *kvblock.IndexConfig          `json:"kvBlockIndexConfig"`
@@ -50,6 +54,7 @@ func NewDefaultConfig() (*Config, error) {
 	}
 
 	return &Config{
+		BaseModelName:        "",
 		PrefixStoreConfig:    prefixstore.DefaultConfig(),
 		TokenProcessorConfig: kvblock.DefaultTokenProcessorConfig(),
 		KVBlockIndexConfig:   kvblock.DefaultIndexConfig(),
@@ -74,7 +79,16 @@ type Indexer struct {
 // NewKVCacheIndexer creates a KVCacheIndex given a Config.
 func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 	logger := log.FromContext(ctx)
-	if config != nil && config.TokenProcessorConfig != nil {
+
+	if config == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	if config.BaseModelName == "" {
+		return nil, fmt.Errorf("config.BaseModelName cannot be empty")
+	}
+
+	if config.TokenProcessorConfig != nil {
 		logger.Info("NewKVCacheIndexer config", "blockSize", config.TokenProcessorConfig.BlockSize)
 	}
 
@@ -97,7 +111,7 @@ func NewKVCacheIndexer(ctx context.Context, config *Config) (*Indexer, error) {
 		return nil, fmt.Errorf("failed to create KVBlockScorer: %w", err)
 	}
 
-	tokenizersPool, err := tokenization.NewTokenizationPool(config.TokenizersPoolConfig, tokensIndexer)
+	tokenizersPool, err := tokenization.NewTokenizationPool(config.BaseModelName, config.TokenizersPoolConfig, tokensIndexer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tokenizers pool: %w", err)
 	}
@@ -135,7 +149,7 @@ func (k *Indexer) GetPodScores(ctx context.Context, renderReq *preprocessing.Ren
 	traceLogger := log.FromContext(ctx).V(logging.TRACE).WithName("kvcache.GetPodScores")
 
 	// 1. tokenize prompt
-	tokens := k.tokenizersPool.Tokenize(renderReq, prompt, modelName)
+	tokens := k.tokenizersPool.Tokenize(renderReq, prompt)
 
 	// 2. get block keys
 	blockKeys := k.tokensProcessor.TokensToKVBlockKeys(nil, tokens, modelName)

@@ -26,17 +26,11 @@ import (
 	"time"
 
 	"github.com/daulet/tokenizers"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/multierr"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/metrics"
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 )
-
-// tokenizersCacheSize is the size of the LRU cache for tokenizers.
-// 1 tokenizer per base-model (NOT LoRAs).
-const tokenizersCacheSize = 20
 
 // Tokenizer interface defines the methods for tokenization.
 type Tokenizer interface {
@@ -268,32 +262,22 @@ type tokenizerProvider interface {
 	getFetchChatTemplateRequest(modelName string) (preprocessing.FetchChatTemplateRequest, error)
 }
 
-// CachedTokenizer implements the Tokenizer interface using
-// tokenizerProvider to get the tokenizer.
-// The implementation wraps an LRU-cache for holding loaded per-model
-// tokenizers.
+// CachedTokenizer implements the Tokenizer interface for a specific model.
+// It holds a single tokenizer instance that is initialized at creation time
+// for the target model, providing efficient tokenization without caching overhead.
 type CachedTokenizer struct {
-	cache                *lru.Cache[string, *tokenizers.Tokenizer]
-	group                singleflight.Group
+	tokenizer            *tokenizers.Tokenizer
 	tokenizerProvider    tokenizerProvider
 	chatTemplateRenderer *preprocessing.ChatTemplatingProcessor
 }
 
 // NewCachedHFTokenizer creates a new instance of CachedTokenizer downloading tokenizer configs from HuggingFace with
 // the provided configuration.
-func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
-	var cfg tokenizers.TokenizerConfigOption
-
-	if config != nil && config.TokenizersCacheDir != "" {
-		cfg = tokenizers.WithCacheDir(config.TokenizersCacheDir)
-	}
-	if config != nil && config.HuggingFaceToken != "" {
-		cfg = tokenizers.WithAuthToken(config.HuggingFaceToken)
-	}
-
-	tokenizersCache, err := lru.New[string, *tokenizers.Tokenizer](tokenizersCacheSize)
+func NewCachedHFTokenizer(modelID string, config *HFTokenizerConfig) (Tokenizer, error) {
+	tokenizerProvider := newHFTokenizerProvider(config)
+	tokenizer, err := tokenizerProvider.get(modelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tokenizer cache: %w", err)
+		return nil, fmt.Errorf("failed to get tokenizer for model %q: %w", modelID, err)
 	}
 
 	chatTemplateRenderer := preprocessing.NewChatTemplatingProcessor()
@@ -303,11 +287,8 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 	}
 
 	return &CachedTokenizer{
-		cache: tokenizersCache,
-		tokenizerProvider: &hfTokenizerProvider{
-			cfgOpt:    cfg,
-			authToken: config.HuggingFaceToken,
-		},
+		tokenizer:            tokenizer,
+		tokenizerProvider:    tokenizerProvider,
 		chatTemplateRenderer: chatTemplateRenderer,
 	}, nil
 }
@@ -320,16 +301,19 @@ func NewCachedHFTokenizer(config *HFTokenizerConfig) (Tokenizer, error) {
 //   - Pre-loaded models in containerized deployments
 //   - Reducing startup latency by avoiding downloads
 //
-// The tokenizer uses an LRU cache to keep frequently used tokenizers in memory,
-// avoiding repeated file I/O for the same models.
-func NewCachedLocalTokenizer(config LocalTokenizerConfig) (Tokenizer, error) {
-	tokenizersCache, err := lru.New[string, *tokenizers.Tokenizer](tokenizersCacheSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tokenizer cache: %w", err)
-	}
-
+// The tokenizer is initialized for a specific model at creation time,
+// providing direct access without caching overhead.
+func NewCachedLocalTokenizer(modelName string, config LocalTokenizerConfig) (Tokenizer, error) {
 	if err := discoverLocalTokenizerMap(&config); err != nil {
 		return nil, fmt.Errorf("failed to discover local tokenizer map: %w", err)
+	}
+
+	tokenizerProvider := &localTokenizerProvider{
+		cfg: config,
+	}
+	tokenizer, err := tokenizerProvider.get(modelName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tokenizer for model map: %w", err)
 	}
 
 	chatTemplater := preprocessing.NewChatTemplatingProcessor()
@@ -339,35 +323,12 @@ func NewCachedLocalTokenizer(config LocalTokenizerConfig) (Tokenizer, error) {
 	}
 
 	return &CachedTokenizer{
-		cache: tokenizersCache,
+		tokenizer: tokenizer,
 		tokenizerProvider: &localTokenizerProvider{
 			cfg: config,
 		},
 		chatTemplateRenderer: chatTemplater,
 	}, nil
-}
-
-func (t *CachedTokenizer) get(modelName string) (*tokenizers.Tokenizer, error) {
-	tokenizer, ok := t.cache.Get(modelName)
-	if !ok {
-		result, err, shared := t.group.Do(modelName, func() (any, error) {
-			return t.tokenizerProvider.get(modelName)
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		tokenizer, ok = result.(*tokenizers.Tokenizer)
-		if !ok {
-			return nil, fmt.Errorf("unexpected tokenizer type from singleflight result")
-		}
-
-		if !shared {
-			// Only add to cache if this goroutine actually loaded the tokenizer
-			t.cache.Add(modelName, tokenizer)
-		}
-	}
-	return tokenizer, nil
 }
 
 func (t *CachedTokenizer) RenderChatTemplate(
@@ -397,18 +358,14 @@ func (t *CachedTokenizer) RenderChatTemplate(
 }
 
 // Encode converts a string into token IDs.
+// The modelName parameter is ignored since this tokenizer is bound to a specific model.
 func (t *CachedTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
-	tokenizer, err := t.get(modelName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get tokenizer for model %q: %w", modelName, err)
-	}
-
 	encodeOptions := []tokenizers.EncodeOption{
 		tokenizers.WithReturnTypeIDs(),
 		tokenizers.WithReturnOffsets(),
 	}
 
-	resp := tokenizer.EncodeWithOptions(input, false, encodeOptions...)
+	resp := t.tokenizer.EncodeWithOptions(input, false, encodeOptions...)
 	return resp.IDs, resp.Offsets, nil
 }
 
@@ -432,6 +389,23 @@ func getTokenizerCacheDir() string {
 type hfTokenizerProvider struct {
 	cfgOpt    tokenizers.TokenizerConfigOption
 	authToken string
+}
+
+// newHFTokenizerProvider creates a new hfTokenizerProvider with the given configuration.
+func newHFTokenizerProvider(config *HFTokenizerConfig) *hfTokenizerProvider {
+	var cfg tokenizers.TokenizerConfigOption
+
+	if config != nil && config.TokenizersCacheDir != "" {
+		cfg = tokenizers.WithCacheDir(config.TokenizersCacheDir)
+	}
+	if config != nil && config.HuggingFaceToken != "" {
+		cfg = tokenizers.WithAuthToken(config.HuggingFaceToken)
+	}
+
+	return &hfTokenizerProvider{
+		cfgOpt:    cfg,
+		authToken: config.HuggingFaceToken,
+	}
 }
 
 // getTokenizer downloads and returns a tokenizer from HuggingFace for the specified model.

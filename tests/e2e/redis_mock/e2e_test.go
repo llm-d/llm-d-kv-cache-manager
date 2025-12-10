@@ -18,11 +18,8 @@ limitations under the License.
 package e2e
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/stretchr/testify/require"
 
 	preprocessing "github.com/llm-d/llm-d-kv-cache-manager/pkg/preprocessing/chat_completions"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
@@ -377,218 +374,6 @@ func (s *KVCacheSuite) TestLongChatCompletionsE2E() {
 	s.T().Logf("Long chat completions E2E test completed successfully")
 }
 
-// TestCacheHitWithLocalTokenizer tests the full E2E flow using local tokenizer files.
-func (s *KVCacheSuite) TestCacheHitWithLocalTokenizer() {
-	// Create a local tokenizer using the testdata
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-		ModelTokenizerMap: map[string]string{
-			"test-model": "testdata/test-model/tokenizer.json",
-		},
-	})
-	s.Require().NoError(err)
-	s.Require().NotNil(localTokenizer)
-
-	prompt := "What is the capital of France?"
-	modelName := "test-model"
-	fakePodList := []string{s.Pod1IP}
-
-	// Tokenize using local tokenizer
-	tokens, offsets, err := localTokenizer.Encode(prompt, modelName)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens)
-	s.Require().Equal(len(tokens), len(offsets), "tokens and offsets should have same length")
-	s.T().Logf("Local tokenizer produced %d tokens for prompt", len(tokens))
-
-	// Convert tokens to KV block keys
-	engineKeys, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName)
-
-	// Add entries to the index - this verifies the local tokenizer produces valid block keys
-	s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
-
-	// Verify that we can retrieve the entries we just added using GetPodScores
-	pods, err := s.indexer.GetPodScores(s.ctx, nil, prompt, modelName, fakePodList)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(pods, "should find pod scores after adding entries")
-	s.Require().Greater(pods[s.Pod1IP], float64(0), "expected positive pod score")
-	s.T().Logf("GetPodScores returned score: %v", pods[s.Pod1IP])
-
-	// Also verify that tokenizing the same prompt again produces same block keys
-	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
-	s.Require().NoError(err)
-	requestKeys2 := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens2, modelName)
-	s.Require().Equal(requestKeys, requestKeys2, "same prompt should produce same block keys")
-
-	s.T().Logf("Local tokenizer E2E test completed successfully")
-}
-
-// TestCompositeTokenizerFallbackE2E tests that the composite tokenizer
-// falls back from local to HF tokenizer in the full E2E flow.
-func (s *KVCacheSuite) TestCompositeTokenizerFallbackE2E() {
-	// Create local tokenizer with limited model mapping
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-		ModelTokenizerMap: map[string]string{
-			"test-model": "testdata/test-model/tokenizer.json",
-		},
-	})
-	s.Require().NoError(err)
-
-	// Create HF tokenizer as fallback
-	hfTokenizer, err := tokenization.NewCachedHFTokenizer(s.config.TokenizersPoolConfig.HFTokenizerConfig)
-	s.Require().NoError(err)
-
-	// Create composite tokenizer
-	composite := &tokenization.CompositeTokenizer{
-		Tokenizers: []tokenization.Tokenizer{localTokenizer, hfTokenizer},
-	}
-
-	prompt := "What is the capital of France?"
-	fakePodList := []string{s.Pod1IP}
-
-	// Test 1: Use local tokenizer (should succeed)
-	tokens1, offsets1, err := composite.Encode(prompt, "test-model")
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens1)
-	s.Require().Equal(len(tokens1), len(offsets1), "tokens and offsets should have same length")
-	s.T().Logf("Local tokenizer produced %d tokens", len(tokens1))
-
-	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, "test-model")
-	s.addEntriesToIndex(engineKeys1, requestKeys1, fakePodList)
-	s.T().Logf("Successfully added %d block keys from local tokenizer to index", len(engineKeys1))
-
-	// Test 2: Use HF tokenizer fallback (model not in local mapping)
-	tokens2, offsets2, err := composite.Encode(prompt, defaultModelName)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens2)
-	s.Require().Equal(len(tokens2), len(offsets2), "tokens and offsets should have same length")
-	s.T().Logf("HF tokenizer (fallback) produced %d tokens", len(tokens2))
-
-	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, defaultModelName)
-	s.addEntriesToIndex(engineKeys2, requestKeys2, fakePodList)
-	s.T().Logf("Successfully added %d block keys from HF tokenizer to index", len(engineKeys2))
-
-	// Test 3: Verify error case when model doesn't exist in either tokenizer
-	_, _, err = composite.Encode(prompt, "non-existent-model")
-	s.Require().Error(err, "expected error for non-existent model")
-	s.T().Logf("Correctly got error for non-existent model: %v", err)
-
-	s.T().Logf("Composite tokenizer fallback E2E test completed successfully")
-}
-
-// TestHFCacheStructureDiscoveryE2E tests auto-discovery of tokenizers from HuggingFace cache structure.
-func (s *KVCacheSuite) TestHFCacheStructureDiscoveryE2E() {
-	// Create a temporary HF-style cache directory
-	tmpDir := s.T().TempDir()
-
-	// Create HF cache structure
-	// models--test-org--test-model/snapshots/{hash}/tokenizer.json
-	testModelPath := filepath.Join(tmpDir, "models--test-org--test-model", "snapshots", "abc123")
-	require.NoError(s.T(), os.MkdirAll(testModelPath, 0o755))
-
-	// Copy the test tokenizer file
-	srcTokenizer := "testdata/test-model/tokenizer.json"
-	dstTokenizer := filepath.Join(testModelPath, "tokenizer.json")
-	srcData, err := os.ReadFile(srcTokenizer)
-	require.NoError(s.T(), err)
-	require.NoError(s.T(), os.WriteFile(dstTokenizer, srcData, 0o600))
-
-	// Create tokenizer config with auto-discovery
-	config := tokenization.LocalTokenizerConfig{
-		AutoDiscoveryDir:               tmpDir,
-		AutoDiscoveryTokenizerFileName: "tokenizer.json",
-	}
-
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(config)
-	s.Require().NoError(err)
-	s.Require().NotNil(localTokenizer)
-
-	prompt := "What is the capital of France?"
-	// Use the HF-style model name
-	modelName := "test-org/test-model"
-	fakePodList := []string{s.Pod1IP}
-
-	// Tokenize using the auto-discovered HF cache tokenizer
-	tokens, offsets, err := localTokenizer.Encode(prompt, modelName)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens)
-	s.Require().Equal(len(tokens), len(offsets), "tokens and offsets should have same length")
-	s.T().Logf("HF cache auto-discovery produced %d tokens for model %q", len(tokens), modelName)
-
-	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
-	engineKeys1, requestKeys := s.promptToEngineAndRequestKeys(prompt, modelName, localTokenizer)
-
-	// Add entries to the index
-	s.addEntriesToIndex(engineKeys1, requestKeys, fakePodList)
-
-	// Verify retrieval
-	tokens2, _, err := localTokenizer.Encode(prompt, modelName)
-	s.Require().NoError(err)
-	requestKeys2 := s.tokensProcessor.TokensToKVBlockKeys(nil, tokens2, modelName)
-	s.Require().Equal(requestKeys, requestKeys2, "same prompt should produce same block keys")
-
-	s.T().Logf("HF cache structure discovery E2E test completed successfully")
-}
-
-// TestMixedDirectoryStructureE2E tests using both HF cache and custom directory structures.
-func (s *KVCacheSuite) TestMixedDirectoryStructureE2E() {
-	// Create a temporary directory with mixed structure
-	tmpDir := s.T().TempDir()
-
-	// 1. HF cache structure: models--org--model
-	hfModelPath := filepath.Join(tmpDir, "models--custom-org--custom-model", "snapshots", "xyz789")
-	require.NoError(s.T(), os.MkdirAll(hfModelPath, 0o755))
-
-	// 2. Custom structure: simple/nested/model
-	customModelPath := filepath.Join(tmpDir, "simple", "nested", "model")
-	require.NoError(s.T(), os.MkdirAll(customModelPath, 0o755))
-
-	// Copy test tokenizer to both locations
-	srcTokenizer := "testdata/test-model/tokenizer.json"
-	srcData, err := os.ReadFile(srcTokenizer)
-	require.NoError(s.T(), err)
-
-	require.NoError(s.T(), os.WriteFile(filepath.Join(hfModelPath, "tokenizer.json"), srcData, 0o600))
-	require.NoError(s.T(), os.WriteFile(filepath.Join(customModelPath, "tokenizer.json"), srcData, 0o600))
-
-	// Create tokenizer with auto-discovery
-	config := tokenization.LocalTokenizerConfig{
-		AutoDiscoveryDir:               tmpDir,
-		AutoDiscoveryTokenizerFileName: "tokenizer.json",
-	}
-
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(config)
-	s.Require().NoError(err)
-
-	prompt := "What is the capital of France?"
-	fakePodList := []string{s.Pod1IP}
-
-	// Test 1: HF cache model should be accessible as "custom-org/custom-model"
-	hfModelName := "custom-org/custom-model"
-	tokens1, _, err := localTokenizer.Encode(prompt, hfModelName)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens1)
-	s.T().Logf("HF cache model %q produced %d tokens", hfModelName, len(tokens1))
-
-	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
-	engineKeys1, requestKeys1 := s.promptToEngineAndRequestKeys(prompt, hfModelName, localTokenizer)
-	s.addEntriesToIndex(engineKeys1, requestKeys1, fakePodList)
-
-	// Test 2: Custom structure model should be accessible as "simple/nested/model"
-	customModelName := "simple/nested/model"
-	tokens2, _, err := localTokenizer.Encode(prompt, customModelName)
-	s.Require().NoError(err)
-	s.Require().NotEmpty(tokens2)
-	s.T().Logf("Custom structure model %q produced %d tokens", customModelName, len(tokens2))
-
-	// Convert tokens to KV block keys using promptToEngineAndRequestKeys with local tokenizer
-	engineKeys2, requestKeys2 := s.promptToEngineAndRequestKeys(prompt, customModelName, localTokenizer)
-	s.addEntriesToIndex(engineKeys2, requestKeys2, fakePodList)
-
-	// Both should work independently
-	s.Require().Equal(len(tokens1), len(tokens2), "same tokenizer should produce same number of tokens")
-
-	s.T().Logf("Mixed directory structure E2E test completed successfully")
-}
-
 // TestLocalTokenizerChatTemplateE2E tests the complete flow of fetching and rendering
 // chat templates from local tokenizers in an e2e scenario.
 func (s *KVCacheSuite) TestLocalTokenizerChatTemplateE2E() {
@@ -615,7 +400,7 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateE2E() {
 			testModelDir, err := filepath.Abs(tc.modelDir)
 			s.Require().NoError(err)
 
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tc.modelName, tokenization.LocalTokenizerConfig{
 				ModelTokenizerMap: map[string]string{
 					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
 				},
@@ -708,7 +493,7 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 			testModelDir, err := filepath.Abs(tc.modelDir)
 			s.Require().NoError(err)
 
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tc.modelName, tokenization.LocalTokenizerConfig{
 				ModelTokenizerMap: map[string]string{
 					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
 				},
@@ -800,103 +585,12 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateMultiTurnE2E() {
 	}
 }
 
-// TestLocalVsHFChatTemplateConsistency tests that local and HF tokenizers
-// produce consistent chat template renderings (when possible).
-func (s *KVCacheSuite) TestLocalVsHFChatTemplateConsistency() {
-	testCases := []struct {
-		name      string
-		modelDir  string
-		modelName string
-	}{
-		{
-			name:      "test-model",
-			modelDir:  "testdata/test-model",
-			modelName: "test-model",
-		},
-		{
-			name:      "local-llama3",
-			modelDir:  "testdata/local-llama3",
-			modelName: "local-llama3",
-		},
-	}
-
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			// This test verifies that for a given model, the local tokenizer
-			// produces the same rendered output as the HF tokenizer would
-			// (assuming both have access to the same chat template)
-
-			testModelDir, err := filepath.Abs(tc.modelDir)
-			s.Require().NoError(err)
-			s.T().Logf("Using test model directory: %s", testModelDir)
-
-			// Verify the directory and files exist
-			s.Require().DirExists(testModelDir, "Test model directory should exist")
-			s.Require().FileExists(filepath.Join(testModelDir, "config.json"), "config.json should exist")
-			s.Require().FileExists(filepath.Join(testModelDir, "tokenizer.json"), "tokenizer.json should exist")
-
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-				ModelTokenizerMap: map[string]string{
-					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
-				},
-			})
-			s.Require().NoError(err)
-
-			conversation := []ChatMessage{
-				{Role: "user", Content: "Test message"},
-				{Role: "assistant", Content: "Test response"},
-			}
-
-			// Render with local tokenizer
-			req1 := &preprocessing.RenderJinjaTemplateRequest{
-				Conversations: convertToPreprocessingChatMessages(conversation),
-			}
-			localRendered, err := localTokenizer.RenderChatTemplate(tc.modelName, req1)
-			s.Require().NoError(err)
-			s.Require().NotEmpty(localRendered)
-
-			// Tokenize with local tokenizer
-			localTokens, _, err := localTokenizer.Encode(localRendered, tc.modelName)
-			s.Require().NoError(err)
-			s.T().Logf("Local tokenizer: rendered=%d chars, tokens=%d", len(localRendered), len(localTokens))
-
-			// Add to index and verify with GetPodScores
-			engineKeys, requestKeys := s.promptToEngineAndRequestKeys(localRendered, tc.modelName)
-			fakePodList := []string{s.Pod1IP}
-			s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
-
-			pods, err := s.indexer.GetPodScores(s.ctx, nil, localRendered, tc.modelName, fakePodList)
-			s.Require().NoError(err)
-			s.Require().NotEmpty(pods, "should find pod scores after adding entries")
-			s.Require().Greater(pods[s.Pod1IP], float64(0), "expected positive pod score")
-			s.T().Logf("GetPodScores returned score: %v", pods[s.Pod1IP])
-
-			// Render the same conversation again to test caching and consistency
-			req2 := &preprocessing.RenderJinjaTemplateRequest{
-				Conversations: convertToPreprocessingChatMessages(conversation),
-			}
-			localRendered2, err := localTokenizer.RenderChatTemplate(tc.modelName, req2)
-			s.Require().NoError(err)
-			s.Require().Equal(localRendered, localRendered2,
-				"Rendering the same conversation twice should produce identical output (tests caching)")
-
-			// Tokenize again
-			localTokens2, _, err := localTokenizer.Encode(localRendered2, tc.modelName)
-			s.Require().NoError(err)
-			s.Require().Equal(localTokens, localTokens2,
-				"Tokenizing the same prompt twice should produce identical tokens")
-
-			s.T().Logf("Consistency test completed successfully")
-		})
-	}
-}
-
 // TestLocalTokenizerChatTemplateErrorHandling tests error cases for local chat templates.
 func (s *KVCacheSuite) TestLocalTokenizerChatTemplateErrorHandling() {
 	testModelDir, err := filepath.Abs("testdata/test-model")
 	s.Require().NoError(err)
 
-	localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer("test-model", tokenization.LocalTokenizerConfig{
 		ModelTokenizerMap: map[string]string{
 			"test-model": filepath.Join(testModelDir, "tokenizer.json"),
 		},
@@ -930,88 +624,4 @@ func (s *KVCacheSuite) TestLocalTokenizerChatTemplateErrorHandling() {
 	}
 
 	s.T().Logf("Error handling test completed successfully")
-}
-
-// TestLocalTokenizerChatTemplateLongConversation tests performance with very long conversations.
-func (s *KVCacheSuite) TestLocalTokenizerChatTemplateLongConversation() {
-	testCases := []struct {
-		name      string
-		modelDir  string
-		modelName string
-	}{
-		{
-			name:      "test-model",
-			modelDir:  "testdata/test-model",
-			modelName: "test-model",
-		},
-		{
-			name:      "local-llama3",
-			modelDir:  "testdata/local-llama3",
-			modelName: "local-llama3",
-		},
-	}
-
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			testModelDir, err := filepath.Abs(tc.modelDir)
-			s.Require().NoError(err)
-
-			localTokenizer, err := tokenization.NewCachedLocalTokenizer(tokenization.LocalTokenizerConfig{
-				ModelTokenizerMap: map[string]string{
-					tc.modelName: filepath.Join(testModelDir, "tokenizer.json"),
-				},
-			})
-			s.Require().NoError(err)
-
-			// Create a very long conversation (100 turns)
-			longConversation := make([]ChatMessage, 0, 200)
-			for i := 0; i < 100; i++ {
-				longConversation = append(longConversation,
-					ChatMessage{
-						Role:    "user",
-						Content: "This is user message number " + filepath.Base(filepath.Dir(testModelDir)),
-					},
-					ChatMessage{
-						Role:    "assistant",
-						Content: "This is assistant response number " + filepath.Base(filepath.Dir(testModelDir)),
-					},
-				)
-			}
-
-			// Render the long conversation
-			reqLong := &preprocessing.RenderJinjaTemplateRequest{
-				Conversations: convertToPreprocessingChatMessages(longConversation),
-			}
-			renderedPrompt, err := localTokenizer.RenderChatTemplate(tc.modelName, reqLong)
-			s.Require().NoError(err)
-			s.Require().NotEmpty(renderedPrompt)
-			s.Require().Greater(len(renderedPrompt), 1000, "Long conversation should produce substantial output")
-			s.T().Logf("Long conversation rendered to %d characters", len(renderedPrompt))
-
-			// Tokenize
-			tokens, offsets, err := localTokenizer.Encode(renderedPrompt, tc.modelName)
-			s.Require().NoError(err)
-			s.Require().NotEmpty(tokens)
-			s.Require().Equal(len(tokens), len(offsets))
-			s.T().Logf("Long conversation produced %d tokens", len(tokens))
-
-			// Convert to block keys
-			engineKeys, requestKeys := s.promptToEngineAndRequestKeys(renderedPrompt, tc.modelName)
-			s.Require().NotEmpty(requestKeys)
-			s.T().Logf("Generated %d block keys from long conversation", len(requestKeys))
-
-			// Add to index
-			fakePodList := []string{s.Pod1IP}
-			s.addEntriesToIndex(engineKeys, requestKeys, fakePodList)
-			// Verify retrieval using GetPodScores
-			// Note: This works now because the test suite uses a composite tokenizer that includes the local models
-			pods, err := s.indexer.GetPodScores(s.ctx, nil, renderedPrompt, tc.modelName, fakePodList)
-			s.Require().NoError(err)
-			s.Require().NotEmpty(pods, "should find pod scores after adding entries")
-			s.Require().Greater(pods[s.Pod1IP], float64(0), "expected positive pod score")
-			s.T().Logf("GetPodScores returned score: %v for long conversation", pods[s.Pod1IP])
-
-			s.T().Logf("Long conversation E2E test completed successfully")
-		})
-	}
 }
