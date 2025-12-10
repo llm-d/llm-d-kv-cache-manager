@@ -51,8 +51,8 @@ Thumbs.db
 # Env/config
 .env
 .env.*
-config.yaml
-config.json
+/config.yaml
+/config.json
 
 # cgo build output (if any)
 *.a
@@ -63,7 +63,7 @@ _cgo_*
 
 # Gopls and tools
 .gopls/
-hack/tools
+/hack/tools
 
 # Tokenizer binaries
-lib
+/lib

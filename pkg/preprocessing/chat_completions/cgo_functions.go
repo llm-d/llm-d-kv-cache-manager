@@ -83,6 +83,7 @@ type FetchChatTemplateRequest struct {
 	Tools        []interface{} `json:"tools,omitempty"`
 	Revision     string        `json:"revision,omitempty"`
 	Token        string        `json:"token,omitempty"`
+	IsLocalPath  bool          `json:"is_local_path,omitempty"`
 }
 
 // FetchChatTemplateResponse represents the response from fetching a chat template.

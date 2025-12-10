@@ -123,13 +123,15 @@ type Index interface {
 	// If the podIdentifierSet is empty, all pods are returned.
 	//
 	// It returns:
-	// 1. A map where the keys are those in (1) and the values are pod-identifiers.
+	// 1. A map where the keys are those in requestKeys and the values are pod-identifiers.
 	// 2. An error if any occurred during the operation.
-	Lookup(ctx context.Context, keys []Key, podIdentifierSet sets.Set[string]) (map[Key][]PodEntry, error)
-	// Add adds a set of keys and their associated pod entries to the index backend.
-	Add(ctx context.Context, keys []Key, entries []PodEntry) error
-	// Evict removes a key and its associated pod entries from the index backend.
-	Evict(ctx context.Context, key Key, entries []PodEntry) error
+	Lookup(ctx context.Context, requestKeys []Key, podIdentifierSet sets.Set[string]) (map[Key][]PodEntry, error)
+	// Add adds a set of engineKeys/requestKeys and their associated pod entries to the index backend.
+	Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error
+	// Evict removes an engineKey and its associated pod entries from the index backend.
+	Evict(ctx context.Context, engineKey Key, entries []PodEntry) error
+	// GetRequestKey returns the requestKey associated with the given engineKey.
+	GetRequestKey(ctx context.Context, engineKey Key) (Key, error)
 }
 
 // Key struct represents a unique identifier for a KV-cache block.

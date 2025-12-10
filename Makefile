@@ -133,6 +133,23 @@ install-python-deps: detect-python ## Sets up the Python virtual environment and
 		exit 1; \
 	}
 
+.PHONY: install-hf-cli
+install-hf-cli:
+	@if command -v hf >/dev/null 2>&1; then \
+		echo "✅ HuggingFace CLI is already installed."; \
+	else \
+		echo "Installing HuggingFace CLI..."; \
+		curl -LsSf https://hf.co/cli/install.sh | bash; \
+		echo "✅ HuggingFace CLI installed."; \
+	fi
+
+.PHONY: download-local-llama3
+download-local-llama3: install-hf-cli
+	hf download --exclude "*safetensors" \
+		--local-dir ./tests/e2e/redis_mock/testdata/local-llama3 \
+		--revision "c5c6b5700a4178ef1fdae2ae37827382b90eb400" \
+		RedHatAI/Meta-Llama-3-8B-Instruct-FP8
+
 ##@ Precommit code checks
 .PHONY: precommit lint tidy-go copr-fix
 precommit: tidy-go lint copr-fix
@@ -148,6 +165,15 @@ lint:
 copr-fix:
 	@echo "Adding copyright headers..."
 	@docker run -i --rm -v $(shell pwd):/github/workspace apache/skywalking-eyes header fix
+
+clang:
+	@echo "Running clang-format..."
+	@find kv_connectors -type f \( \
+	    -name "*.cu" -o -name "*.cuh" -o \
+	    -name "*.cc" -o -name "*.cpp" -o \
+	    -name "*.hpp" -o -name "*.h" \
+	\) -exec clang-format -i {} +
+
 
 ##@ Development
 
@@ -166,7 +192,7 @@ unit-test: download-tokenizer install-python-deps download-zmq ## Run unit tests
 	@go test -v ./pkg/...
 
 .PHONY: e2e-test
-e2e-test: download-tokenizer install-python-deps download-zmq ## Run end-to-end tests
+e2e-test: download-tokenizer download-local-llama3 install-python-deps download-zmq ## Run end-to-end tests
 	@printf "\033[33;1m==== Running e2e tests ====\033[0m\n"
 	@go test -v ./tests/...
 

@@ -38,11 +38,11 @@ func DefaultConfig() *Config {
 // TODO: generalize interface to a generic prefix-based store.
 type Indexer interface {
 	// AddTokenization adds the full tokenization of a string to the
-	// indexer for a given model.
+	// indexer.
 	// The function assumes tokens and offsets are of the same length.
 	// The function assumes that tokens will not be mutated after the call.
-	AddTokenization(modelName string, prompt string, tokens []uint32, offsets []tokenizers.Offset) error
+	AddTokenization(prompt string, tokens []uint32, offsets []tokenizers.Offset) error
 	// FindLongestContainedTokens finds the sequence of contained tokens for
 	// the longest matching prefix, along with the coverage ratio of the prompt.
-	FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64)
+	FindLongestContainedTokens(prompt string) ([]uint32, float64)
 }

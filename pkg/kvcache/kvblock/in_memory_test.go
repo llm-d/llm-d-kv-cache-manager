@@ -29,7 +29,9 @@ import (
 func createInMemoryIndexForTesting(t *testing.T) Index {
 	t.Helper()
 	cfg := DefaultInMemoryIndexConfig()
-	cfg.PodCacheSize = 100 // for testConcurrentOperations
+	// Set PodCacheSize to 500 to accommodate testConcurrentOperations
+	// (100 goroutines * 4 pods each = 400 max concurrent pods)
+	cfg.PodCacheSize = 500
 	index, err := NewInMemoryIndex(cfg)
 	require.NoError(t, err)
 	return index
@@ -52,29 +54,32 @@ func TestInMemoryIndexSize(t *testing.T) {
 	ctx := t.Context()
 
 	// Add first key
-	key1 := Key{ModelName: "test-model", ChunkHash: 111}
-	err = index.Add(ctx, []Key{key1}, []PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}})
+	engineKey1 := Key{ModelName: "test-model", ChunkHash: 72735753}
+	requestKey1 := Key{ModelName: "test-model", ChunkHash: 79215516}
+	err = index.Add(ctx, []Key{engineKey1}, []Key{requestKey1}, []PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}})
 	require.NoError(t, err)
 
 	// Add second key
-	key2 := Key{ModelName: "test-model", ChunkHash: 222}
-	err = index.Add(ctx, []Key{key2}, []PodEntry{{PodIdentifier: "pod2", DeviceTier: "gpu"}})
+	engineKey2 := Key{ModelName: "test-model", ChunkHash: 41341092}
+	requestKey2 := Key{ModelName: "test-model", ChunkHash: 12871930}
+	err = index.Add(ctx, []Key{engineKey2}, []Key{requestKey2}, []PodEntry{{PodIdentifier: "pod2", DeviceTier: "gpu"}})
 	require.NoError(t, err)
 
 	// Add third key - should evict the first one due to LRU
-	key3 := Key{ModelName: "test-model", ChunkHash: 333}
-	err = index.Add(ctx, []Key{key3}, []PodEntry{{PodIdentifier: "pod3", DeviceTier: "cpu"}})
+	engineKey3 := Key{ModelName: "test-model", ChunkHash: 34012886}
+	requestKey3 := Key{ModelName: "test-model", ChunkHash: 69914638}
+	err = index.Add(ctx, []Key{engineKey3}, []Key{requestKey3}, []PodEntry{{PodIdentifier: "pod3", DeviceTier: "cpu"}})
 	require.NoError(t, err)
 
 	// Lookup should only return the last two keys
-	podsPerKey, err := index.Lookup(ctx, []Key{key1, key2, key3}, nil)
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey1, requestKey2, requestKey3}, nil)
 	require.NoError(t, err)
 
 	assert.Len(t, podsPerKey, 2) // Only key2 and key3 should be present
-	assert.Len(t, podsPerKey[key2], 1)
-	assert.Len(t, podsPerKey[key3], 1)
-	assert.Contains(t, podsPerKey[key2], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
-	assert.Contains(t, podsPerKey[key3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
+	assert.Len(t, podsPerKey[requestKey2], 1)
+	assert.Len(t, podsPerKey[requestKey3], 1)
+	assert.Contains(t, podsPerKey[requestKey2], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
+	assert.Contains(t, podsPerKey[requestKey3], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }
 
 func TestInMemoryIndexPodCacheSize(t *testing.T) {
@@ -88,7 +93,8 @@ func TestInMemoryIndexPodCacheSize(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test PodCacheSize limit: add more pods than the limit for one key
-	key := Key{ModelName: "test-model", ChunkHash: 111}
+	engineKey := Key{ModelName: "test-model", ChunkHash: 28409753}
+	requestKey := Key{ModelName: "test-model", ChunkHash: 51374550}
 	pods := []PodEntry{
 		{PodIdentifier: "pod1", DeviceTier: "gpu"},
 		{PodIdentifier: "pod2", DeviceTier: "gpu"},
@@ -97,14 +103,14 @@ func TestInMemoryIndexPodCacheSize(t *testing.T) {
 
 	ctx := t.Context()
 
-	err = index.Add(ctx, []Key{key}, pods)
+	err = index.Add(ctx, []Key{engineKey}, []Key{requestKey}, pods)
 	require.NoError(t, err)
 
 	// Lookup should only return 2 pods (pod2 and pod3), pod1 should be evicted
-	podsPerKey, err := index.Lookup(ctx, []Key{key}, nil)
+	podsPerKey, err := index.Lookup(ctx, []Key{requestKey}, nil)
 	require.NoError(t, err)
 	assert.Len(t, podsPerKey, 1)
-	assert.Len(t, podsPerKey[key], 2, "Should only have 2 pods due to PodCacheSize limit")
-	assert.Contains(t, podsPerKey[key], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
-	assert.Contains(t, podsPerKey[key], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
+	assert.Len(t, podsPerKey[requestKey], 2, "Should only have 2 pods due to PodCacheSize limit")
+	assert.Contains(t, podsPerKey[requestKey], PodEntry{PodIdentifier: "pod2", DeviceTier: "gpu"})
+	assert.Contains(t, podsPerKey[requestKey], PodEntry{PodIdentifier: "pod3", DeviceTier: "cpu"})
 }

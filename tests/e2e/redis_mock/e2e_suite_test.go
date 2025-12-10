@@ -19,14 +19,16 @@ package e2e
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
+	"github.com/go-logr/logr/testr"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/kvcache/kvblock"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/tokenization"
 	"github.com/llm-d/llm-d-kv-cache-manager/pkg/utils"
+	"github.com/stretchr/testify/suite"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -53,7 +55,13 @@ type KVCacheSuite struct {
 
 // SetupTest initializes the mock Redis, tokenizer, config, and starts the indexer before each test.
 func (s *KVCacheSuite) SetupTest() {
+	// Initialize controller-runtime logger with test logger
+	// This will display logs in test output with -v flag
+	testLogger := testr.New(s.T())
+	log.SetLogger(testLogger)
+
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.ctx = log.IntoContext(s.ctx, testLogger)
 
 	var err error
 	s.Require().NoError(err)
@@ -65,8 +73,24 @@ func (s *KVCacheSuite) SetupTest() {
 	s.config.PrefixStoreConfig.BlockSize = 4
 	s.config.TokenProcessorConfig.BlockSize = 4
 
-	s.tokenizer, err = tokenization.NewCachedHFTokenizer(defaultModelName, s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	// Configure the indexer's tokenization pool to support local models
+	// This is needed because GetPodScores uses the indexer's internal pool for tokenization
+	testDataPath, err := filepath.Abs("testdata")
 	s.Require().NoError(err)
+
+	s.config.TokenizersPoolConfig.LocalTokenizerConfig.AutoDiscoveryDir = testDataPath
+
+	// Create a composite tokenizer for direct use in tests (not used by the indexer)
+	localTokenizer, err := tokenization.NewCachedLocalTokenizer(defaultModelName, *s.config.TokenizersPoolConfig.LocalTokenizerConfig)
+	s.Require().NoError(err)
+
+	hfTokenizer, err := tokenization.NewCachedHFTokenizer(defaultModelName, s.config.TokenizersPoolConfig.HFTokenizerConfig)
+	s.Require().NoError(err)
+
+	// Use composite tokenizer: try local first, then fall back to HF
+	s.tokenizer = &tokenization.CompositeTokenizer{
+		Tokenizers: []tokenization.Tokenizer{localTokenizer, hfTokenizer},
+	}
 
 	s.tokensProcessor = kvblock.NewChunkedTokenDatabase(s.config.TokenProcessorConfig)
 
@@ -79,22 +103,38 @@ func (s *KVCacheSuite) SetupTest() {
 	go s.indexer.Run(s.ctx)
 }
 
-// promptToKeys tokenizes a prompt and returns its corresponding KV block keys.
-func (s *KVCacheSuite) promptToKeys(prompt, model string) []kvblock.Key {
-	tokens, _, err := s.tokenizer.Encode(prompt, model)
+// promptToEngineAndRequestKeys tokenizes a prompt and returns its corresponding KV block keys.
+// If tokenizer is provided, it will be used instead of the suite's default tokenizer.
+//
+//nolint:nonamedreturns // named returns keep gocritic unnamedResult satisfied while allowing compact return
+func (s *KVCacheSuite) promptToEngineAndRequestKeys(
+	prompt, model string, tokenizer ...tokenization.Tokenizer,
+) (engineKeys, requestKeys []kvblock.Key) {
+	var tok tokenization.Tokenizer
+	if len(tokenizer) > 0 && tokenizer[0] != nil {
+		tok = tokenizer[0]
+	} else {
+		tok = s.tokenizer
+	}
+
+	tokens, _, err := tok.Encode(prompt, model)
 	s.Require().NoError(err)
 
-	blockKeys := s.tokensProcessor.TokensToKVBlockKeys(tokens, model)
-	s.Require().NotEmpty(blockKeys)
+	requestKeys = s.tokensProcessor.TokensToKVBlockKeys(nil, tokens, model)
+	s.Require().NotEmpty(requestKeys)
 
-	return blockKeys
+	engineKeys = s.tokensProcessor.TokensToKVBlockKeys(&kvblock.Key{ModelName: model, ChunkHash: 1}, tokens, model)
+	s.Require().NotEmpty(engineKeys)
+
+	return engineKeys, requestKeys
 }
 
-func (s *KVCacheSuite) addEntriesToIndex(blockKeys []kvblock.Key, podList []string) {
-	s.Require().NotEmpty(blockKeys)
+func (s *KVCacheSuite) addEntriesToIndex(engineKeys, requestKeys []kvblock.Key, podList []string) {
+	s.Require().NotEmpty(engineKeys)
+	s.Require().NotEmpty(requestKeys)
 
 	// Add entries to the indexer
-	err := s.kvBlockIndex.Add(s.ctx, blockKeys, utils.SliceMap(podList, func(pod string) kvblock.PodEntry {
+	err := s.kvBlockIndex.Add(s.ctx, engineKeys, requestKeys, utils.SliceMap(podList, func(pod string) kvblock.PodEntry {
 		return kvblock.PodEntry{
 			PodIdentifier: pod,
 			DeviceTier:    "gpu",

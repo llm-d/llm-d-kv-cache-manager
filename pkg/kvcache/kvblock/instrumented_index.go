@@ -32,21 +32,21 @@ func NewInstrumentedIndex(next Index) Index {
 	return &instrumentedIndex{next: next}
 }
 
-func (m *instrumentedIndex) Add(ctx context.Context, keys []Key, entries []PodEntry) error {
-	err := m.next.Add(ctx, keys, entries)
-	metrics.Admissions.Add(float64(len(keys)))
+func (m *instrumentedIndex) Add(ctx context.Context, engineKeys, requestKeys []Key, entries []PodEntry) error {
+	err := m.next.Add(ctx, engineKeys, requestKeys, entries)
+	metrics.Admissions.Add(float64(len(requestKeys)))
 	return err
 }
 
-func (m *instrumentedIndex) Evict(ctx context.Context, key Key, entries []PodEntry) error {
-	err := m.next.Evict(ctx, key, entries)
+func (m *instrumentedIndex) Evict(ctx context.Context, engineKey Key, entries []PodEntry) error {
+	err := m.next.Evict(ctx, engineKey, entries)
 	metrics.Evictions.Add(float64(len(entries)))
 	return err
 }
 
 func (m *instrumentedIndex) Lookup(
 	ctx context.Context,
-	keys []Key,
+	requestKeys []Key,
 	podIdentifierSet sets.Set[string],
 ) (map[Key][]PodEntry, error) {
 	timer := prometheus.NewTimer(metrics.LookupLatency)
@@ -54,7 +54,7 @@ func (m *instrumentedIndex) Lookup(
 
 	metrics.LookupRequests.Inc()
 
-	pods, err := m.next.Lookup(ctx, keys, podIdentifierSet)
+	pods, err := m.next.Lookup(ctx, requestKeys, podIdentifierSet)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +62,10 @@ func (m *instrumentedIndex) Lookup(
 	go recordHitMetrics(pods)
 
 	return pods, nil
+}
+
+func (m *instrumentedIndex) GetRequestKey(ctx context.Context, engineKey Key) (Key, error) {
+	return m.next.GetRequestKey(ctx, engineKey)
 }
 
 func recordHitMetrics(keyToPods map[Key][]PodEntry) {

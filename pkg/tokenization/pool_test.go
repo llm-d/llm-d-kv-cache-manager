@@ -62,19 +62,23 @@ func (m *MockTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.
 	return args.Get(0).([]uint32), args.Get(1).([]tokenizers.Offset), args.Error(2) //nolint:errcheck // return mocked values
 }
 
+func (m *MockTokenizer) Type() string {
+	return "mock"
+}
+
 // MockIndexer implements the prefixstore.Indexer interface for testing.
 type MockIndexer struct {
 	mock.Mock
 }
 
-func (m *MockIndexer) AddTokenization(modelName, prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
-	args := m.Called(modelName, prompt, tokens, offsets)
+func (m *MockIndexer) AddTokenization(prompt string, tokens []uint32, offsets []tokenizers.Offset) error {
+	args := m.Called(prompt, tokens, offsets)
 	return args.Error(0)
 }
 
 //nolint:gocritic // unnamedResult: tokens and overlapRatio are self-explanatory from context
-func (m *MockIndexer) FindLongestContainedTokens(prompt, modelName string) ([]uint32, float64) {
-	args := m.Called(prompt, modelName)
+func (m *MockIndexer) FindLongestContainedTokens(prompt string) ([]uint32, float64) {
+	args := m.Called(prompt)
 	tokens := args.Get(0).([]uint32) //nolint:errcheck // unused mock
 	return tokens, 0.0
 }
@@ -100,12 +104,12 @@ func TestPool_ProcessTask(t *testing.T) {
 	expectedOffsets := []tokenizers.Offset{{0, 5}, {6, 11}}
 
 	// Mock FindLongestContainedTokens to return low overlap ratio
-	mockIndexer.On("FindLongestContainedTokens", task.Prompt, testModelName).Return([]uint32{}, 0.0)
+	mockIndexer.On("FindLongestContainedTokens", task.Prompt).Return([]uint32{}, 0.0)
 
 	mockTokenizer.On("Encode", task.Prompt, testModelName).Return(expectedTokens, expectedOffsets, nil)
 
 	// Verify that indexer receives exactly the same tokens and offsets that tokenizer returned
-	mockIndexer.On("AddTokenization", testModelName, task.Prompt, expectedTokens, expectedOffsets).Return(nil)
+	mockIndexer.On("AddTokenization", task.Prompt, expectedTokens, expectedOffsets).Return(nil)
 
 	// Execute
 	err := pool.processTask(task)
@@ -127,8 +131,8 @@ func TestPool_RunIntegration(t *testing.T) {
 
 	// Setup mock expectations for each prompt
 	for _, prompt := range prompts {
-		mockIndexer.On("FindLongestContainedTokens", prompt, testModelName).Return([]uint32{}, 0.0)
-		mockIndexer.On("AddTokenization", testModelName, prompt,
+		mockIndexer.On("FindLongestContainedTokens", prompt).Return([]uint32{}, 0.0)
+		mockIndexer.On("AddTokenization", prompt,
 			mock.Anything, mock.Anything).Return(nil).Once()
 	}
 

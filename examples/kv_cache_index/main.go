@@ -129,13 +129,19 @@ func runPrompts(ctx context.Context, kvCacheIndexer *kvcache.Indexer) error {
 	logger.Info("Got pods", "pods", pods)
 
 	// Add entries in kvblock.Index manually
-	//nolint // skip linting for this example
-	_ = kvCacheIndexer.KVBlockIndex().Add(ctx, utils.SliceMap(testdata.PromptHashes, func(h uint64) kvblock.Key {
+	engineKeys := utils.SliceMap(testdata.PromptHashes, func(h uint64) kvblock.Key {
 		return kvblock.Key{
 			ModelName: modelName,
 			ChunkHash: h,
 		}
-	}), []kvblock.PodEntry{{"pod1", "gpu"}})
+	})
+	// For this simple example, requestKeys == engineKeys
+	requestKeys := engineKeys
+
+	if err := kvCacheIndexer.KVBlockIndex().Add(ctx, engineKeys, requestKeys,
+		[]kvblock.PodEntry{{PodIdentifier: "pod1", DeviceTier: "gpu"}}); err != nil {
+		return err
+	}
 
 	// Sleep 3 secs
 	time.Sleep(3 * time.Second)

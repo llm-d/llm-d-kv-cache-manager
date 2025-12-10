@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo add-apt-repository ppa:deadsnakes/ppa -y
-          sudo apt-get install -y libzmq3-dev pkg-config python3.12 python3.12-dev python3.12-venv
+          sudo apt-get install -y libzmq3-dev pkg-config python3.12 python3.12-dev python3.12-venv clang-format
 
       - name: Sanity check repo contents
         run: ls -la
@@ -66,10 +66,12 @@ jobs:
           export CGO_CFLAGS="$(python3.12-config --cflags) -I./lib"
           export CGO_LDFLAGS="$(python3.12-config --ldflags --embed) -L./lib -ltokenizers -ldl -lm"
           export CGO_ENABLED=1
-          
+
           # Now run the linting command from the Makefile
           make precommit
 
+      - name: Run C/C++/CUDA formatting check
+        run: make clang
       - name: Run make build
         shell: bash
         run: |
