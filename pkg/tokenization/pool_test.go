@@ -332,7 +332,7 @@ func BenchmarkSyncTokenizationStress(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		prompt := generateRandomSentence(benchmarkWordLength, benchmarkMaxWords, rng)
 		model := benchmarkModels[i%len(benchmarkModels)]
-		_, _ = pool.Tokenize(nil, prompt, model) //nolint
+		_, _ = pool.Tokenize(nil, prompt, model) //nolint:errcheck
 	}
 
 	b.StopTimer()

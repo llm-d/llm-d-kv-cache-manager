@@ -205,6 +205,9 @@ func (fe FatalInitError) Error() string {
 	return fmt.Sprintf("fatal init error: %s", fe.err.Error())
 }
 
+func (fe FatalInitError) Unwrap() error {
+	return fe.err
+}
 // processTask tokenizes the prompt and updates the indexer.
 // It sends exactly one response (success or error) if ResultCh is provided.
 func (pool *Pool) processTask(task Task) error {
