@@ -397,6 +397,10 @@ func (t *CachedTokenizer) RenderChatTemplate(
 }
 
 // Encode converts a string into token IDs.
+// When addSpecialTokens is true, the tokenizer will add special tokens (like BOS/EOS)
+// according to the tokenizer configuration (tokenizer.json and tokenizer_config.json).
+// This behavior matches vLLM's default tokenization with add_special_tokens=True,
+// ensuring consistent hash computation for prefix caching.
 func (t *CachedTokenizer) Encode(input, modelName string) ([]uint32, []tokenizers.Offset, error) {
 	tokenizer, err := t.get(modelName)
 	if err != nil {
@@ -408,7 +412,12 @@ func (t *CachedTokenizer) Encode(input, modelName string) ([]uint32, []tokenizer
 		tokenizers.WithReturnOffsets(),
 	}
 
-	resp := tokenizer.EncodeWithOptions(input, false, encodeOptions...)
+	// Use addSpecialTokens=true to match vLLM's default behavior.
+	// vLLM calls tokenizer.encode() with add_special_tokens=True (the default),
+	// which respects the tokenizer_config.json settings (add_bos_token, add_eos_token).
+	// Using true here ensures the token sequence matches vLLM's for consistent
+	// prefix cache hash computation.
+	resp := tokenizer.EncodeWithOptions(input, true, encodeOptions...)
 	return resp.IDs, resp.Offsets, nil
 }
 
