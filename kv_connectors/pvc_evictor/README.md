@@ -119,6 +119,8 @@ Most filesystems use `relatime` (relative atime) which only updates access time 
 **Disk Usage Calculation:**
 The evictor uses `statvfs()` for performance instead of the more accurate `du` scan. Usage is calculated as `used / (used + available)`, where available space excludes filesystem blocks reserved for privileged users. Cleanup thresholds therefore reflect the capacity available to the cache writer, as in `df`. Filesystem metadata and block allocation can make usage differ from a `du` scan.
 
+Status and deletion-event logs report this capacity as `usable` (`used + available`), with the full filesystem capacity reported separately as `total`.
+
 ## Configuration
 
 Key settings (see [CONFIGURATION.md](CONFIGURATION.md) for complete reference):
