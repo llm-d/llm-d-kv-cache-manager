@@ -117,7 +117,9 @@ If the PVC reaches 100% before deletion frees space, vLLM cache writes will fail
 Most filesystems use `relatime` (relative atime) which only updates access time if the file wasn't accessed in the past 24 hours. This means recently accessed files may appear "cold" and be deleted if they were last accessed more than 24 hours ago, even if accessed multiple times since then.
 
 **Disk Usage Calculation:**
-The evictor uses `statvfs()` for performance instead of the more accurate `du` scan. This provides real-time usage percentages but may differ slightly from `du` output due to filesystem metadata overhead and block allocation differences.
+The evictor uses `statvfs()` for performance instead of the more accurate `du` scan. Usage is calculated as `used / (used + available)`, where available space excludes filesystem blocks reserved for privileged users. Cleanup thresholds therefore reflect the capacity available to the cache writer, as in `df`. Filesystem metadata and block allocation can make usage differ from a `du` scan.
+
+Status and deletion-event logs report this capacity as `usable` (`used + available`), with the full filesystem capacity reported separately as `total`.
 
 ## Configuration
 
