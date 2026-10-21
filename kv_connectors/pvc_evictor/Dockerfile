@@ -2,6 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # llmd_fs_backend.event_publisher: required when STORAGE_EVENTS_ENDPOINT is set (#605 BlockRemoved).
 # Crawler discovery is path-only (#611) and does not import FileMapper/vLLM.
 # Build from kv_connectors/: podman build -f pvc_evictor/Dockerfile -t pvc-evictor:tag .
